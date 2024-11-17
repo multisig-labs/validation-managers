@@ -1,16 +1,27 @@
+export ETH_RPC_URL := env_var_or_default("ETH_RPC_URL", "http://127.0.0.1:9650")
+export MNEMONIC := env_var_or_default("MNEMONIC", "test test test test test test test test test test test junk")
+# First key from MNEMONIC
+export PRIVATE_KEY := env_var_or_default("PRIVATE_KEY", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+
 # Autoload a .env if one exists
 set dotenv-load
-
-# VERSION := `grep "const Version " pkg/version/version.go | sed -E 's/.*"(.+)"$$/\1/'`
-# GIT_COMMIT := `git rev-parse HEAD`
-# BUILD_DATE := `date '+%Y-%m-%d'`
-# VERSION_PATH := "github.com/multisig-labs/panopticon/pkg/version"
-# LDFLAGS := "-s -w " + "-X " + VERSION_PATH + ".BuildDate=" + BUILD_DATE + " -X " + VERSION_PATH + ".Version=" + VERSION + " -X " + VERSION_PATH + ".GitCommit=" + GIT_COMMIT
 
 # Print out some help
 default:
 	@just --list --unsorted
-
+	
 setup:
 	git submodule update --init --recursive
+
+build:
+	forge build
+
+# Run forge unit tests
+test contract="." test="." *flags="":
+	@# Using date here to give some randomness to tests that use block.timestamp
+	forge test --allow-failure --block-timestamp `date '+%s'` --match-contract {{contract}} --match-test {{test}} {{flags}}
+
+# Run forge unit tests forking $ETH_RPC_URL
+test-fork contract="." test="." *flags="":
+	forge test --fork-url=${ETH_RPC_URL} --allow-failure --match-contract {{contract}} --match-test {{test}} {{flags}}
 
