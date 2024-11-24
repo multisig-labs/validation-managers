@@ -14,6 +14,11 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
 
     uint256 private _nextTokenId;
     mapping(bytes32 => mapping(address => uint256)) private _collectionToAddressToToken;
+    // Collection to metadata (JSON)
+    mapping(bytes32 => string) private _collectionToMetadata;
+    // Token to metadata (JSON)
+    mapping(uint256 => string) private _tokenToMetadata;
+
     string private _baseTokenURI;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -33,14 +38,6 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
         _grantRole(MINTER_ROLE, minter);
         _grantRole(UPGRADER_ROLE, upgrader);
         _baseTokenURI = baseTokenURI;
-    }
-
-    function setBaseURI(string memory baseTokenURI) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _baseTokenURI = baseTokenURI;
-    }
-
-    function _baseURI() internal view override returns (string memory) {
-        return _baseTokenURI;
     }
 
     function tokenByCollection(address account, bytes32 collection) public view returns (uint256) {
@@ -71,6 +68,30 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
     function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
         require(auth == address(0) || to == address(0), "This a Soulbound token. It cannot be transferred.");
         return super._update(to, tokenId, auth);
+    }
+
+    function setBaseURI(string memory baseTokenURI) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _baseTokenURI = baseTokenURI;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        return _baseTokenURI;
+    }
+
+    function setCollectionMetadata(bytes32 collection, string memory metadata) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _collectionToMetadata[collection] = metadata;
+    }
+
+    function getCollectionMetadata(bytes32 collection) public view returns (string memory) {
+        return _collectionToMetadata[collection];
+    }
+
+    function setTokenMetadata(uint256 tokenId, string memory metadata) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _tokenToMetadata[tokenId] = metadata;
+    } 
+
+    function getTokenMetadata(uint256 tokenId) public view returns (string memory) {
+        return _tokenToMetadata[tokenId];
     }
 
     function _authorizeUpgrade(address newImplementation)
