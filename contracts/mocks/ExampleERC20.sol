@@ -9,12 +9,8 @@ pragma solidity 0.8.25;
  * THIS IS AN EXAMPLE CONTRACT THAT USES UN-AUDITED CODE.
  * DO NOT USE THIS CODE IN PRODUCTION.
  */
-import {
-  ERC20Burnable,
-  ERC20
-} from "@openzeppelin/contracts@5.0.2/token/ERC20/extensions/ERC20Burnable.sol";
-import {IERC20Mintable} from
-  "@avalabs/teleporter-contracts/validator-manager/interfaces/IERC20Mintable.sol";
+import {IERC20Mintable} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IERC20Mintable.sol";
+import {ERC20, ERC20Burnable} from "@openzeppelin/contracts@5.0.2/token/ERC20/extensions/ERC20Burnable.sol";
 
 contract ExampleERC20 is ERC20Burnable, IERC20Mintable {
   string private constant _TOKEN_NAME = "Mock Token";
@@ -26,9 +22,7 @@ contract ExampleERC20 is ERC20Burnable, IERC20Mintable {
     _mint(msg.sender, 1e28);
   }
 
-  function mint(
-    uint256 amount
-  ) external {
+  function mint(uint256 amount) external {
     // Can only mint 10 at a time.
     require(amount <= _MAX_MINT, "ExampleERC20: max mint exceeded");
 
