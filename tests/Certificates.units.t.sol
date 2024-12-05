@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts@5.0.2/proxy/ERC1967/ERC1967Proxy.sol";
 import {Certificates} from "../contracts/tokens/Certificates.sol";
 import {Strings} from "@openzeppelin/contracts@5.0.2/utils/Strings.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 contract CertificatesUnitTest is Test {
     Certificates public certificates;
@@ -121,6 +122,26 @@ contract CertificatesUnitTest is Test {
         certificates.safeMint(alice, collection);
     }
 
+    function test_safeMint_duplicateCollection() public {
+        address alice = makeAddr("alice");
+        bytes32 collection = "collection_1";
+
+        // First mint should succeed
+        vm.prank(admin);
+        certificates.safeMint(alice, collection);
+
+        // Second mint to same collection/address should fail
+        vm.prank(admin);
+        vm.expectRevert(
+            "This collection already has a token for this address."
+        );
+        certificates.safeMint(alice, collection);
+
+        // Verify only one token exists
+        assertEq(certificates.balanceOf(alice), 1);
+        assertEq(certificates.tokenByCollection(alice, collection), 1);
+    }
+
     // Test burning
     function test_burnForCollection() public {
         address alice = makeAddr("alice");
@@ -233,5 +254,55 @@ contract CertificatesUnitTest is Test {
         vm.prank(admin);
         vm.expectRevert();
         certificates.burnForUser(alice, collection);
+    }
+
+    // Test supportsInterface
+    function test_supportsInterface() public {
+        // ERC721 interface ID
+
+        bytes4 erc721InterfaceId = 0x80ac58cd;
+        // IAccessControl interface ID
+        bytes4 accessControlInterfaceId = 0x7965db0b;
+
+        assertTrue(
+            certificates.supportsInterface(erc721InterfaceId),
+            "Should support ERC721 interface"
+        );
+        assertTrue(
+            certificates.supportsInterface(accessControlInterfaceId),
+            "Should support AccessControl interface"
+        );
+    }
+
+    // Test non-supported interface
+    function test_supportsInterface_unsupported() public {
+        // Random interface ID
+        bytes4 randomInterfaceId = 0x12345678;
+
+        assertFalse(
+            certificates.supportsInterface(randomInterfaceId),
+            "Should not support random interface"
+        );
+    }
+
+    // Test upgrade authorization
+    function test_upgradeAuthorization() public {
+        // Deploy a new implementation
+        Certificates newImplementation = new Certificates();
+
+        // Test upgrade with authorized account
+        vm.prank(admin);
+        certificates.upgradeToAndCall(address(newImplementation), "");
+    }
+
+    function test_upgradeAuthorization_unauthorized() public {
+        // Deploy a new implementation
+        Certificates newImplementation = new Certificates();
+        address unauthorized = makeAddr("unauthorized");
+
+        // Test upgrade with unauthorized account
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        certificates.upgradeToAndCall(address(newImplementation), "");
     }
 }
