@@ -4,13 +4,10 @@ pragma solidity 0.8.25;
 
 import {BaseTest} from "./BaseTest.sol";
 
+import {NFTStakingManager} from "../contracts/validator-manager/NFTStakingManager.sol";
 import {ICMInitializable} from "@avalabs/teleporter-contracts/utilities/ICMInitializable.sol";
-import {ERC20TokenStakingManager} from "@avalabs/teleporter-contracts/validator-manager/ERC20TokenStakingManager.sol";
-
 import {ExampleRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/ExampleRewardCalculator.sol";
-
 import {ValidatorMessages} from "@avalabs/teleporter-contracts/validator-manager/ValidatorMessages.sol";
-import {IERC20Mintable} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IERC20Mintable.sol";
 import {PoSValidatorManagerSettings} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
 import {IRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {
@@ -23,53 +20,63 @@ import {
   ValidatorRegistrationInput,
   ValidatorStatus
 } from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {ExampleERC20} from "@mocks/ExampleERC20.sol";
-
+import {IERC721Errors} from "@openzeppelin/contracts@5.0.2/interfaces/draft-IERC6093.sol";
+import {ExampleERC721} from "@mocks/ExampleERC721.sol";
+import {MockNativeMinter} from "@mocks/MockNativeMinter.sol";
 import {MockWarpMessenger, WarpMessage} from "@mocks/MockWarpMessenger.sol";
-import {SafeERC20} from "@openzeppelin/contracts@5.0.2/token/ERC20/utils/SafeERC20.sol";
+import {NFTLicenseModule} from "../contracts/validator-manager/NFTLicenseModule.sol";
+import {ValidatorReceipt} from "../contracts/tokens/ValidatorReceipt.sol";
+import {Certificates} from "../contracts/tokens/Certificates.sol";
+import {NFTValidatorManagerSettings} from "../contracts/interfaces/INFTStakingManager.sol";
 
-contract BlackBoxERC20Tests is BaseTest {
-  using SafeERC20 for IERC20Mintable;
-
-  uint256 public constant DEFAULT_MINIMUM_STAKE_AMOUNT = 20e12;
-  uint256 public constant DEFAULT_MAXIMUM_STAKE_AMOUNT = 1e22;
+contract BlackBoxNFTTests is BaseTest {
   uint8 public constant DEFAULT_MAXIMUM_CHURN_PERCENTAGE = 20;
   uint64 public constant DEFAULT_CHURN_PERIOD = 1 hours;
 
-  // ERC20TokenStakingManagerTest constants
-  uint64 public constant DEFAULT_REWARD_RATE = uint64(10);
-  uint16 public constant DEFAULT_MINIMUM_DELEGATION_FEE_BIPS = 100;
-  uint16 public constant DEFAULT_DELEGATION_FEE_BIPS = 150;
-  uint8 public constant DEFAULT_MAXIMUM_STAKE_MULTIPLIER = 4;
-  uint256 public constant DEFAULT_WEIGHT_TO_VALUE_FACTOR = 1e12;
-
-  ERC20TokenStakingManager public app;
-  IERC20Mintable public token;
+  NFTStakingManager public app;
+  ExampleERC721 public nft;
+  ExampleERC721 public receiptNft;
+  Certificates public certificates;
+  NFTLicenseModule public licenseModule;
   IRewardCalculator public rewardCalculator;
   MockWarpMessenger public warp;
+  MockNativeMinter public nativeMinter;
+  address public owner;
+
+  receive() external payable {}
+  fallback() external payable {}
 
   function setUp() public {
+    owner = makeActor("initialOwner");
+
     warp = makeWarpMock();
-    token = new ExampleERC20();
-    app = new ERC20TokenStakingManager(ICMInitializable.Allowed);
-    rewardCalculator = new ExampleRewardCalculator(DEFAULT_REWARD_RATE);
+    nativeMinter = makeNativeMinterMock();
+    nft = new ExampleERC721();
+    receiptNft = new ExampleERC721();
+
+    certificates = new Certificates();
+    certificates.initialize(address(this), address(this), address(this), "https://example.com/");
+
+    licenseModule = new NFTLicenseModule();
+    licenseModule.initialize(address(this));
+    licenseModule.setCertificateNFTAddress(address(certificates));
+    licenseModule.setAllowedNFT(address(nft), uint64(1000));
+
+    app = new NFTStakingManager(ICMInitializable.Allowed);
 
     app.initialize(
-      PoSValidatorManagerSettings({
+      NFTValidatorManagerSettings({
         baseSettings: ValidatorManagerSettings({
           subnetID: DEFAULT_SUBNET_ID,
           churnPeriodSeconds: DEFAULT_CHURN_PERIOD,
           maximumChurnPercentage: DEFAULT_MAXIMUM_CHURN_PERCENTAGE
         }),
-        minimumStakeAmount: DEFAULT_MINIMUM_STAKE_AMOUNT,
-        maximumStakeAmount: DEFAULT_MAXIMUM_STAKE_AMOUNT,
-        minimumStakeDuration: DEFAULT_MINIMUM_STAKE_DURATION,
-        minimumDelegationFeeBips: DEFAULT_MINIMUM_DELEGATION_FEE_BIPS,
-        maximumStakeMultiplier: DEFAULT_MAXIMUM_STAKE_MULTIPLIER,
-        weightToValueFactor: DEFAULT_WEIGHT_TO_VALUE_FACTOR,
-        rewardCalculator: rewardCalculator
+        rewardCalculator: rewardCalculator,
+        licenseModule: licenseModule,
+        validatorReceiptAddress: address(receiptNft),
+        uptimeBlockchainID: DEFAULT_UPTIME_BLOCKCHAIN_ID
       }),
-      token
+      owner
     );
 
     ConversionData memory conversionData = makeDefaultConversionData(address(app));
@@ -82,15 +89,18 @@ contract BlackBoxERC20Tests is BaseTest {
     warp.reset(); // clear out the warp messages
   }
 
-  function testStakeERC20() public {
-    PChainOwner memory pChainOwner = makePChainOwner(makeActor("pChainOwner"));
+  function testStakeNFT() public {
+    address nodeOwner = makeActor("nodeOwner");
+    certificates.mint(nodeOwner, keccak256("KYC"));
+    uint256 nftId = nft.mint(nodeOwner);
+    PChainOwner memory pChainOwner = makePChainOwner(nodeOwner);
     uint64 registrationExpiry = uint64(block.timestamp) + 100;
-    uint256 stakeAmount = 1 ether;
-    token.mint(address(this), stakeAmount);
-    token.approve(address(app), stakeAmount);
 
     bytes memory nodeID = randNodeID();
 
+    vm.startPrank(nodeOwner);
+
+    nft.approve(address(app), nftId);
     bytes32 validationID = app.initializeValidatorRegistration(
       ValidatorRegistrationInput({
         nodeID: nodeID,
@@ -99,10 +109,15 @@ contract BlackBoxERC20Tests is BaseTest {
         remainingBalanceOwner: pChainOwner,
         disableOwner: pChainOwner
       }),
-      DEFAULT_DELEGATION_FEE_BIPS,
-      DEFAULT_MINIMUM_STAKE_DURATION,
-      stakeAmount
+      address(nft),
+      1
     );
+
+    // Check that nft is now owned by the app
+    assertEq(nft.ownerOf(nftId), address(app));
+    // Check that receiptNft is now owned by the nodeOwner
+    uint256 receiptId = app.getValidatorInfo(validationID).receiptId;
+    assertEq(receiptNft.ownerOf(receiptId), nodeOwner);
 
     // Check that the validator registration was started
     Validator memory validator = app.getValidator(validationID);
@@ -125,6 +140,7 @@ contract BlackBoxERC20Tests is BaseTest {
     bytes memory packedUptimeProofMsg = ValidatorMessages.packValidationUptimeMessage(validationID, uint64(block.timestamp) - validator.startedAt);
     (index,) = warp.setWarpMessage(address(0), warp.getBlockchainID(), packedUptimeProofMsg);
     app.submitUptimeProof(validationID, index);
+    assertEq(app.getValidatorInfo(validationID).uptimeSeconds, uint64(block.timestamp) - validator.startedAt);
 
     app.initializeEndValidation(validationID, false, 0);
     validator = app.getValidator(validationID);
@@ -139,7 +155,14 @@ contract BlackBoxERC20Tests is BaseTest {
     validator = app.getValidator(validationID);
     assertEq(uint8(validator.status), uint8(ValidatorStatus.Completed));
 
-    // Check for stake and rewards
-    assertGt(token.balanceOf(address(this)), stakeAmount);
+    // nodeOwner should have their NFT back
+    assertEq(nft.ownerOf(nftId), nodeOwner);
+
+    // receipt NFT should be burned
+    vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, receiptId));
+    receiptNft.ownerOf(receiptId);
+
+    // Check for native token rewards
+    assertGt(address(this).balance, 0);
   }
 }
