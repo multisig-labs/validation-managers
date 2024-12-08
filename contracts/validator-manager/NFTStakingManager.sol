@@ -36,7 +36,7 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
 
   INativeMinter public constant NATIVE_MINTER = INativeMinter(0x0200000000000000000000000000000000000001);
 
-  /// @custom:storage-location erc7201:avalanche-icm.storage.NFTStakingManager
+  /// @custom:storage-location erc7201:gogopool.storage.NFTStakingManagerStorage
   struct NFTStakingManagerStorage {
     INFTLicenseModule _licenseModule;
     /// @notice The address of the validator receipt NFT contract
@@ -48,9 +48,8 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
     mapping(uint256 receiptId => bytes32 validationID) _receiptToValidation;
   }
 
-  // keccak256(abi.encode(uint256(keccak256("avalanche-icm.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
-  // TODO calc this
-  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION = 0x00000000e15e53c3406ea67bfce37dcd26f5152d5492824e43fd5e3c8ac5ab00;
+  // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
+  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION = 0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
 
   event UptimeUpdated(bytes32 indexed validationID, uint64 uptime);
 
