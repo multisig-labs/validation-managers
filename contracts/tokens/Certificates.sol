@@ -40,11 +40,17 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
         _baseTokenURI = baseTokenURI;
     }
 
+    function grantMinterRoleForCollection(bytes32 collection, address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        bytes32 role = keccak256(abi.encode("MINTER_ROLE:", collection));
+        _grantRole(role, account);
+    }
+
     function tokenByCollection(address account, bytes32 collection) public view returns (uint256) {
         return _collectionToAddressToToken[collection][account];
     }
 
-    function mint(address to, bytes32 collection) public onlyRole(MINTER_ROLE) {
+    function mint(address to, bytes32 collection) public {
+        require(_hasMinterRoleForCollection(collection), "Caller is not a minter for this collection.");
         require(_collectionToAddressToToken[collection][to] == 0, "This collection already has a token for this address.");
 
         uint256 tokenId = _nextTokenId++;
@@ -52,12 +58,15 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
         _collectionToAddressToToken[collection][to] = tokenId;
     }
 
-    function burnForUser(address account, bytes32 collection) public onlyRole(MINTER_ROLE) {
+    // This name sux
+    function burnForUser(address account, bytes32 collection) public {
+        require(_hasMinterRoleForCollection(collection), "Caller is not a minter for this collection.");
         uint256 tokenId = _collectionToAddressToToken[collection][account];
         _burn(tokenId);
         delete _collectionToAddressToToken[collection][account];
     }
 
+    // This name sux
     function burnForCollection(bytes32 collection) public {
         uint256 tokenId = _collectionToAddressToToken[collection][_msgSender()];
         require(tokenId != 0, "No token for this collection for this address.");
@@ -99,6 +108,11 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
     onlyRole(UPGRADER_ROLE)
     override
     {}
+
+    function _hasMinterRoleForCollection(bytes32 collection) internal view returns (bool) {
+        bytes32 role = keccak256(abi.encode("MINTER_ROLE:", collection));
+        return hasRole(role, _msgSender());
+    }
 
     // The following functions are overrides required by Solidity.
 

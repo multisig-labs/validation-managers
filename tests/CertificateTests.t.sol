@@ -34,13 +34,16 @@ contract CertificateTests is BaseTest {
 
   function test_mint() public {
     address joe = makeActor("Joe");
-    vm.prank(admin);
+    vm.startPrank(admin);
+    certificates.grantMinterRoleForCollection("collection_1", admin);
     certificates.mint(joe, "collection_1");
+    vm.expectRevert(bytes("Caller is not a minter for this collection."));
+    certificates.mint(joe, "collection_2");
+
     assertEq(certificates.tokenByCollection(joe, "collection_1"), 1);
     assertEq(certificates.ownerOf(1), joe);
     // Standard func that will return 1 regardless of how many collection tokens the user has
     assertEq(certificates.balanceOf(joe), 1);
-    vm.prank(admin);
     certificates.burnForUser(joe, "collection_1");
     assertEq(certificates.balanceOf(joe), 0);
     assertEq(certificates.tokenByCollection(joe, "collection_1"), 0);
@@ -48,8 +51,11 @@ contract CertificateTests is BaseTest {
 
   function test_mint_burn() public {
     address joe = makeActor("Joe");
-    vm.prank(admin);
+    vm.startPrank(admin);
+    certificates.grantMinterRoleForCollection("collection_1", admin);
     certificates.mint(joe, "collection_1");
+    vm.stopPrank();
+
     vm.prank(joe);
     certificates.burnForCollection("collection_1");
     assertEq(certificates.balanceOf(joe), 0);
