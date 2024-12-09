@@ -44,7 +44,7 @@ contract Certificates is Initializable, ERC721Upgradeable, AccessControlUpgradea
         return _collectionToAddressToToken[collection][account];
     }
 
-    function safeMint(address to, bytes32 collection) public onlyRole(MINTER_ROLE) {
+    function mint(address to, bytes32 collection) public onlyRole(MINTER_ROLE) {
         require(_collectionToAddressToToken[collection][to] == 0, "This collection already has a token for this address.");
 
         uint256 tokenId = _nextTokenId++;
