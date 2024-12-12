@@ -8,6 +8,6 @@
 [submodule "lib/subnet-evm"]
 	path = lib/subnet-evm
 	url = https://github.com/ava-labs/subnet-evm
-[submodule "lib/teleporter"]
-	path = lib/teleporter
-	url = https://github.com/ava-labs/teleporter
+[submodule "lib/icm-contracts"]
+	path = lib/icm-contracts
+	url = https://github.com/ava-labs/icm-contracts
