@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.24;
 
-import {INativeMinter} from "@avalabs/subnet-evm-contracts@1.2.0/contracts/interfaces/INativeMinter.sol";
+import {INativeMinter} from "@avalabs/subnet-evm-contracts/contracts/interfaces/INativeMinter.sol";
 import {Test} from "@forge-std/Test.sol";
 
 contract MockNativeMinter is INativeMinter, Test {

@@ -2,9 +2,9 @@
 
 pragma solidity 0.8.25;
 
-import {ExampleRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/ExampleRewardCalculator.sol";
-import {ValidatorManager} from "@avalabs/teleporter-contracts/validator-manager/ValidatorManager.sol";
-import {ValidatorMessages} from "@avalabs/teleporter-contracts/validator-manager/ValidatorMessages.sol";
+import {ExampleRewardCalculator} from "@avalabs/icm-contracts/validator-manager/ExampleRewardCalculator.sol";
+import {ValidatorManager} from "@avalabs/icm-contracts/validator-manager/ValidatorManager.sol";
+import {ValidatorMessages} from "@avalabs/icm-contracts/validator-manager/ValidatorMessages.sol";
 import {
   ConversionData,
   IValidatorManager,
@@ -14,18 +14,18 @@ import {
   ValidatorManagerSettings,
   ValidatorRegistrationInput,
   ValidatorStatus
-} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {IWarpMessenger, WarpMessage} from "@avalabs/subnet-evm-contracts@1.2.0/contracts/interfaces/IWarpMessenger.sol";
+} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {IWarpMessenger, WarpMessage} from "@avalabs/subnet-evm-contracts/contracts/interfaces/IWarpMessenger.sol";
 
-import {INativeMinter} from "@avalabs/subnet-evm-contracts@1.2.0/contracts/interfaces/INativeMinter.sol";
-import {ICMInitializable} from "@avalabs/teleporter-contracts/utilities/ICMInitializable.sol";
+import {INativeMinter} from "@avalabs/subnet-evm-contracts/contracts/interfaces/INativeMinter.sol";
+import {ICMInitializable} from "@avalabs/icm-contracts/utilities/ICMInitializable.sol";
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable@5.0.2/access/OwnableUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable@5.0.2/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable@5.0.2/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import {INFTStakingManager, NFTValidatorManagerSettings, NFTValidatorInfo} from "../interfaces/INFTStakingManager.sol";
 import {ValidatorReceipt} from "../tokens/ValidatorReceipt.sol";

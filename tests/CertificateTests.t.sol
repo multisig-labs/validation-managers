@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 
 import {Certificates} from "../contracts/tokens/Certificates.sol";
 import {BaseTest} from "./BaseTest.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts@5.0.2/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract CertificateTests is BaseTest {
   Certificates public certificates;

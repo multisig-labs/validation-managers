@@ -2,12 +2,12 @@
 
 pragma solidity 0.8.25;
 
-import {ConversionData, InitialValidator, PChainOwner} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {ConversionData, InitialValidator, PChainOwner} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
 import {Test} from "@forge-std/Test.sol";
 import "@forge-std/console2.sol";
 
-import {MockWarpMessenger, WarpMessage} from "@mocks/MockWarpMessenger.sol";
-import {MockNativeMinter} from "@mocks/MockNativeMinter.sol";
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
+import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
 
 contract BaseTest is Test {
   uint256 private randNonce = 0;
@@ -33,7 +33,7 @@ contract BaseTest is Test {
     initialValidators[1] =
       InitialValidator({nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_2, weight: DEFAULT_WEIGHT, blsPublicKey: DEFAULT_BLS_PUBLIC_KEY});
     return ConversionData({
-      subnetID: DEFAULT_SUBNET_ID,
+      l1ID: DEFAULT_SUBNET_ID,
       validatorManagerBlockchainID: DEFAULT_BLOCKCHAIN_ID,
       validatorManagerAddress: validatorManagerAddress,
       initialValidators: initialValidators

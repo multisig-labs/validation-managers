@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.25;
 
-import {IValidatorManager, ValidatorManagerSettings, ValidatorRegistrationInput} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {IRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IRewardCalculator.sol";
+import {IValidatorManager, ValidatorManagerSettings, ValidatorRegistrationInput} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {INFTLicenseModule} from "./INFTLicenseModule.sol";
 
 struct NFTValidatorManagerSettings {

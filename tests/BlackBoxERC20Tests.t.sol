@@ -4,15 +4,14 @@ pragma solidity 0.8.25;
 
 import {BaseTest} from "./BaseTest.sol";
 
-import {ICMInitializable} from "@avalabs/teleporter-contracts/utilities/ICMInitializable.sol";
-import {ERC20TokenStakingManager} from "@avalabs/teleporter-contracts/validator-manager/ERC20TokenStakingManager.sol";
+import {ICMInitializable} from "@avalabs/icm-contracts/utilities/ICMInitializable.sol";
+import {ERC20TokenStakingManager} from "@avalabs/icm-contracts/validator-manager/ERC20TokenStakingManager.sol";
 
-import {ExampleRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/ExampleRewardCalculator.sol";
+import {ExampleRewardCalculator} from "@avalabs/icm-contracts/validator-manager/ExampleRewardCalculator.sol";
 
-import {ValidatorMessages} from "@avalabs/teleporter-contracts/validator-manager/ValidatorMessages.sol";
-import {IERC20Mintable} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IERC20Mintable.sol";
-import {PoSValidatorManagerSettings} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
-import {IRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IRewardCalculator.sol";
+import {ValidatorMessages} from "@avalabs/icm-contracts/validator-manager/ValidatorMessages.sol";
+import {PoSValidatorManagerSettings} from "@avalabs/icm-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
+import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {
   ConversionData,
   IValidatorManager,
@@ -22,11 +21,11 @@ import {
   ValidatorManagerSettings,
   ValidatorRegistrationInput,
   ValidatorStatus
-} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {ExampleERC20} from "@mocks/ExampleERC20.sol";
-
-import {MockWarpMessenger, WarpMessage} from "@mocks/MockWarpMessenger.sol";
-import {SafeERC20} from "@openzeppelin/contracts@5.0.2/token/ERC20/utils/SafeERC20.sol";
+} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {ExampleERC20} from "../contracts/mocks/ExampleERC20.sol";
+import {IERC20Mintable} from "@avalabs/icm-contracts/validator-manager/interfaces/IERC20Mintable.sol";
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract BlackBoxERC20Tests is BaseTest {
   using SafeERC20 for IERC20Mintable;
@@ -44,7 +43,7 @@ contract BlackBoxERC20Tests is BaseTest {
   uint256 public constant DEFAULT_WEIGHT_TO_VALUE_FACTOR = 1e12;
 
   ERC20TokenStakingManager public app;
-  IERC20Mintable public token;
+  ExampleERC20 public token;
   IRewardCalculator public rewardCalculator;
   MockWarpMessenger public warp;
 
@@ -57,7 +56,7 @@ contract BlackBoxERC20Tests is BaseTest {
     app.initialize(
       PoSValidatorManagerSettings({
         baseSettings: ValidatorManagerSettings({
-          subnetID: DEFAULT_SUBNET_ID,
+          l1ID: DEFAULT_SUBNET_ID,
           churnPeriodSeconds: DEFAULT_CHURN_PERIOD,
           maximumChurnPercentage: DEFAULT_MAXIMUM_CHURN_PERCENTAGE
         }),
@@ -67,7 +66,8 @@ contract BlackBoxERC20Tests is BaseTest {
         minimumDelegationFeeBips: DEFAULT_MINIMUM_DELEGATION_FEE_BIPS,
         maximumStakeMultiplier: DEFAULT_MAXIMUM_STAKE_MULTIPLIER,
         weightToValueFactor: DEFAULT_WEIGHT_TO_VALUE_FACTOR,
-        rewardCalculator: rewardCalculator
+        rewardCalculator: rewardCalculator,
+        uptimeBlockchainID: DEFAULT_UPTIME_BLOCKCHAIN_ID
       }),
       token
     );

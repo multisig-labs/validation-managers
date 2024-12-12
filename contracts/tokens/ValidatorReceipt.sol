@@ -2,10 +2,10 @@
 
 pragma solidity ^0.8.25;
 
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable@5.0.2/access/AccessControlUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable@5.0.2/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable@5.0.2/proxy/utils/UUPSUpgradeable.sol";
-import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable@5.0.2/token/ERC721/ERC721Upgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 
 contract ValidatorReceipt is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");

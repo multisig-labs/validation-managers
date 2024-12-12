@@ -5,11 +5,11 @@ pragma solidity 0.8.25;
 import {BaseTest} from "./BaseTest.sol";
 
 import {NFTStakingManager} from "../contracts/validator-manager/NFTStakingManager.sol";
-import {ICMInitializable} from "@avalabs/teleporter-contracts/utilities/ICMInitializable.sol";
-import {ExampleRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/ExampleRewardCalculator.sol";
-import {ValidatorMessages} from "@avalabs/teleporter-contracts/validator-manager/ValidatorMessages.sol";
-import {PoSValidatorManagerSettings} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
-import {IRewardCalculator} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IRewardCalculator.sol";
+import {ICMInitializable} from "@avalabs/icm-contracts/utilities/ICMInitializable.sol";
+import {ExampleRewardCalculator} from "@avalabs/icm-contracts/validator-manager/ExampleRewardCalculator.sol";
+import {ValidatorMessages} from "@avalabs/icm-contracts/validator-manager/ValidatorMessages.sol";
+import {PoSValidatorManagerSettings} from "@avalabs/icm-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
+import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {
   ConversionData,
   IValidatorManager,
@@ -19,11 +19,11 @@ import {
   ValidatorManagerSettings,
   ValidatorRegistrationInput,
   ValidatorStatus
-} from "@avalabs/teleporter-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {IERC721Errors} from "@openzeppelin/contracts@5.0.2/interfaces/draft-IERC6093.sol";
-import {ExampleERC721} from "@mocks/ExampleERC721.sol";
-import {MockNativeMinter} from "@mocks/MockNativeMinter.sol";
-import {MockWarpMessenger, WarpMessage} from "@mocks/MockWarpMessenger.sol";
+} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {ExampleERC721} from "../contracts/mocks/ExampleERC721.sol";
+import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
 import {NFTLicenseModule} from "../contracts/validator-manager/NFTLicenseModule.sol";
 import {ValidatorReceipt} from "../contracts/tokens/ValidatorReceipt.sol";
 import {Certificates} from "../contracts/tokens/Certificates.sol";
@@ -67,7 +67,7 @@ contract BlackBoxNFTTests is BaseTest {
     app.initialize(
       NFTValidatorManagerSettings({
         baseSettings: ValidatorManagerSettings({
-          subnetID: DEFAULT_SUBNET_ID,
+          l1ID: DEFAULT_SUBNET_ID,
           churnPeriodSeconds: DEFAULT_CHURN_PERIOD,
           maximumChurnPercentage: DEFAULT_MAXIMUM_CHURN_PERCENTAGE
         }),
