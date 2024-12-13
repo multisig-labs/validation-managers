@@ -31,7 +31,7 @@ import {Initializable} from
  *
  * @custom:security-contact https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
  */
-abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValidatorManager {
+abstract contract ValidatorManagerForked is Initializable, ContextUpgradeable, IValidatorManager {
     // solhint-disable private-vars-leading-underscore
     /// @custom:storage-location erc7201:avalanche-icm.storage.ValidatorManager
 
