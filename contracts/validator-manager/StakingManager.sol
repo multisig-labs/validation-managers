@@ -13,7 +13,18 @@ import {IWarpMessenger, WarpMessage} from "@avalabs/subnet-evm-contracts/contrac
 import {IACP99ValidatorManager} from "../interfaces/IACP99ValidatorManager.sol";
 import {IStakingManager, StakingInputNFT, StakingInputToken} from "../interfaces/IStakingManager.sol";
 import {ICertificate} from "../interfaces/ICertificate.sol";
+
+
+// TODO https://eips.ethereum.org/EIPS/eip-5753 for locking NFTs?
+// https://eips.ethereum.org/EIPS/eip-5633
+
+
 contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCallReceiver {
+
+  struct NFTData {
+    uint64 weight;
+    bool locked;
+  }
 
   struct ValidatorInfo {
     address owner;
@@ -37,7 +48,8 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable,
   error InvalidStakeAmount(uint256 stakeAmount);
   error InvalidMinStakeDuration(uint64 minStakeDuration);
 
-  struct Storage {
+  /// @custom:storage-location erc7201:gogopool.storage.StakingManagerStorage
+  struct StakingManagerStorage {
     /// @notice The minimum amount of stake required to be a validator.
     uint256 minimumStakeAmount;
     /// @notice The maximum amount of stake allowed to be a validator.
@@ -51,11 +63,7 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable,
     /// @notice Mapping of _keyFrom(nftAddress, nftId) to a defined weight. 
     ///         nftId=0 signifies the default weight for the NFT address.
     ///         If a different weight is specified for the nftId then that weight is used instead of the default.
-    mapping(bytes32 nftAddrAndId => uint64 weight) nftWeights;
-
-    // TODO maybe combine with nftWeights?
-    /// @notice Indicates that an NFT has been used to run a validator. Does not transfer ownership of the NFT due to soulbound licenses.
-    mapping(bytes32 nftAddrAndId => bool locked) lockedNFTs;
+    mapping(bytes32 nftAddrAndId => NFTData) nftData;
 
     /// @notice The reward calculator for this validator manager.
     IRewardCalculator rewardCalculator;
@@ -76,10 +84,10 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable,
   error InvalidLicense(address nftAddress, uint256 nftId);
   error InvalidValidator(address validator);
 
-  // keccak256(abi.encode(uint256(keccak256("avalanche-icm.storage.StakingManager")) - 1)) & ~bytes32(uint256(0xff));
+  // keccak256(abi.encode(uint256(keccak256("gogopool.storage.StakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
   bytes32 public constant STORAGE_LOCATION = 0x81773fca73a14ca21edf1cadc6ec0b26d6a44966f6e97607e90422658d423500;
 
-  function _getStorage() private pure returns (Storage storage $) {
+  function _getStorage() private pure returns (StakingManagerStorage storage $) {
     // solhint-disable-next-line no-inline-assembly
     assembly {
       $.slot := STORAGE_LOCATION
@@ -104,9 +112,9 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable,
     __UUPSUpgradeable_init();
   }
 
-  function initializeStakeToken(StakingInputToken calldata input) payable external returns (bytes32) {
+  function initializeStake(StakingInput calldata input) payable external returns (bytes32) {
     Storage storage $ = _getStorage();
-    if (input.tokenAddress == address(0)) {
+    if (input.tokenAddress == address(0)) { // Native token
       require(msg.value == input.amount, "Incorrect amount sent");
     } else {
       // TODO figure out how to get it all to work with erc20s as well (with minting rewards both ways etc)
@@ -132,6 +140,11 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable,
     $.validatorInfo[validationID].uptimeSeconds = 0;    
 
     return validationID;
+  }
+
+  // External fn that either reverts if anything is wrong, or returns a weight.
+  function validateStakeInput(StakingInput calldata input) internal view returns (uint64) {
+
   }
 
   function initializeStakeNFT(StakingInputNFT calldata input) external returns (bytes32) {
