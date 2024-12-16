@@ -6,8 +6,8 @@ import {BaseTest} from "./BaseTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IACP99ValidatorManager} from "../contracts/interfaces/IACP99ValidatorManager.sol";
 import {MockValidatorManager} from "../contracts/mocks/MockValidatorManager.sol";
-import {ValidatorRegistrationInput, PChainOwner} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {IStakingManager, StakingInputNFT, StakingInputToken} from "../contracts/interfaces/IStakingManager.sol";
+import {ValidatorRegistrationInput, PChainOwner} from "../contracts/interfaces/IValidatorManager.sol";
+import {IStakingManager, StakingInput} from "../contracts/interfaces/IStakingManager.sol";
 import {StakingManager} from "../contracts/validator-manager/StakingManager.sol";
 
 contract StakingManagerTests is BaseTest {
@@ -30,10 +30,12 @@ contract StakingManagerTests is BaseTest {
     vm.deal(admin, 100);
     PChainOwner memory pChainOwner = makePChainOwner(admin);
 
-    StakingInputToken memory stakingInputToken = StakingInputToken({
+    StakingInput memory stakingInput = StakingInput({
       staker: admin, 
       tokenAddress: address(0),
       amount: 101, 
+      nftAddress: address(0),
+      nftId: 0,
       minimumStakeDuration: 1000,
       input: ValidatorRegistrationInput({
         nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
@@ -43,7 +45,7 @@ contract StakingManagerTests is BaseTest {
         disableOwner: pChainOwner
       })
     });
-    stakingManager.initializeStakeToken{value: 101}(stakingInputToken);
+    stakingManager.initializeStake{value: 101}(stakingInput);
   }
 
   //   function test_ICTTStaking() public {

@@ -2,16 +2,7 @@
 
 pragma solidity 0.8.25;
 
-import {ValidatorRegistrationInput} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
-
-// struct ValidatorRegistrationInput {
-//     bytes nodeID;
-//     bytes blsPublicKey;
-//     uint64 registrationExpiry;
-//     PChainOwner remainingBalanceOwner;
-//     PChainOwner disableOwner;
-// }
+import {ValidatorRegistrationInput} from "./IValidatorManager.sol";
 
 struct StakingInput {
   address staker;
@@ -23,8 +14,7 @@ struct StakingInput {
   ValidatorRegistrationInput input;
 }
 
-
 interface IStakingManager {
-  function initializeStake(StakingInput calldata input) external returns (bytes32);
+  function initializeStake(StakingInput calldata input) external payable returns (bytes32);
   function completeStake(uint32 messageIndex) external returns (bytes32);
 }

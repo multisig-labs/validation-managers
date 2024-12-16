@@ -181,6 +181,11 @@ interface IValidatorManager {
         uint32 messsageIndex
     ) external;
 
+    function initializeValidatorRegistration(
+        ValidatorRegistrationInput calldata input,
+        uint64 weight
+    ) external returns (bytes32);
+
     /**
      * @notice Resubmits a validator registration message to be sent to the P-Chain.
      * Only necessary if the original message can't be delivered due to validator churn.

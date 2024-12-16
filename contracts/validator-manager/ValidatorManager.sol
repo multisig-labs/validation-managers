@@ -16,7 +16,7 @@ import {
     ValidatorManagerSettings,
     ValidatorRegistrationInput,
     ValidatorStatus
-} from "./interfaces/IValidatorManager.sol";
+} from "../interfaces/IValidatorManager.sol";
 import {
     IWarpMessenger,
     WarpMessage
@@ -31,7 +31,7 @@ import {Initializable} from
  *
  * @custom:security-contact https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
  */
-abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValidatorManager {
+contract ValidatorManager is Initializable, ContextUpgradeable, IValidatorManager {
     // solhint-disable private-vars-leading-underscore
     /// @custom:storage-location erc7201:avalanche-icm.storage.ValidatorManager
 
@@ -231,6 +231,13 @@ abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValida
         }
     }
 
+    function initializeValidatorRegistration(
+        ValidatorRegistrationInput calldata input,
+        uint64 weight
+    ) external returns (bytes32) {
+        return _initializeValidatorRegistration(input, weight);
+    }
+
     /**
      * @notice Begins the validator registration process, and sets the initial weight for the validator.
      * This is the only method related to validator registration and removal that needs the initializedValidatorSet
@@ -241,7 +248,7 @@ abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValida
     function _initializeValidatorRegistration(
         ValidatorRegistrationInput calldata input,
         uint64 weight
-    ) internal virtual initializedValidatorSet returns (bytes32) {
+    ) internal initializedValidatorSet returns (bytes32) {
         ValidatorManagerStorage storage $ = _getValidatorManagerStorage();
 
         if (
@@ -376,7 +383,6 @@ abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValida
      */
     function _initializeEndValidation(bytes32 validationID)
         internal
-        virtual
         returns (Validator memory)
     {
         ValidatorManagerStorage storage $ = _getValidatorManagerStorage();
@@ -424,6 +430,10 @@ abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValida
         );
     }
 
+    function completeEndValidation(uint32 messageIndex) external {
+        _completeEndValidation(messageIndex);
+    }
+    
     /**
      * @notice Completes the process of ending a validation period by receiving an acknowledgement from the P-Chain
      * that the validation ID is not active and will never be active in the future.

@@ -2,10 +2,10 @@
 
 pragma solidity 0.8.25;
 
-import {ConversionData, InitialValidator, PChainOwner} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
 import {Test} from "@forge-std/Test.sol";
 import "@forge-std/console2.sol";
 
+import {ConversionData, InitialValidator, PChainOwner} from "../contracts/interfaces/IValidatorManager.sol";
 import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
 import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
 
