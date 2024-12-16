@@ -8,15 +8,9 @@ pragma solidity 0.8.25;
 import {ValidatorStatus, Validator, ValidatorRegistrationInput, ConversionData} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
 
 interface IACP99ValidatorManager {
-    function initializeValidatorSet(
-        ConversionData calldata conversionData,
-        uint32 messageIndex
-    ) external;
+    function initializeValidatorSet(ConversionData calldata conversionData, uint32 messageIndex) external;
 
-    function initializeValidatorRegistration(
-        ValidatorRegistrationInput calldata input,
-        uint64 weight
-    ) external returns (bytes32);
+    function initializeValidatorRegistration(ValidatorRegistrationInput calldata input, uint64 weight) external returns (bytes32);
 
     function completeValidatorRegistration(uint32 messageIndex) external  returns (bytes32) ;
 

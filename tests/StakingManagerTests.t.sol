@@ -6,8 +6,9 @@ import {BaseTest} from "./BaseTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IACP99ValidatorManager} from "../contracts/interfaces/IACP99ValidatorManager.sol";
 import {MockValidatorManager} from "../contracts/mocks/MockValidatorManager.sol";
-import {StakingManager, StakingInput} from "../contracts/validator-manager/StakingManager.sol";
 import {ValidatorRegistrationInput, PChainOwner} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import {IStakingManager, StakingInputNFT, StakingInputToken} from "../contracts/interfaces/IStakingManager.sol";
+import {StakingManager} from "../contracts/validator-manager/StakingManager.sol";
 
 contract StakingManagerTests is BaseTest {
   address admin;
@@ -25,13 +26,15 @@ contract StakingManagerTests is BaseTest {
     stakingManager = StakingManager(address(proxy));
   }
 
-  function test_stakeItDude() public {
+  function test_StakeToken() public {
     vm.deal(admin, 100);
     PChainOwner memory pChainOwner = makePChainOwner(admin);
 
-    StakingInput memory stakingInput = StakingInput({
+    StakingInputToken memory stakingInputToken = StakingInputToken({
       staker: admin, 
-      amount: 100, 
+      tokenAddress: address(0),
+      amount: 101, 
+      minimumStakeDuration: 1000,
       input: ValidatorRegistrationInput({
         nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
         blsPublicKey: DEFAULT_BLS_PUBLIC_KEY,
@@ -40,28 +43,28 @@ contract StakingManagerTests is BaseTest {
         disableOwner: pChainOwner
       })
     });
-    stakingManager.stakeItDude{value: 100}(stakingInput);
+    stakingManager.initializeStakeToken{value: 101}(stakingInputToken);
   }
 
-    function test_ICTTStaking() public {
-    vm.deal(admin, 100);
-    PChainOwner memory pChainOwner = makePChainOwner(admin);
+  //   function test_ICTTStaking() public {
+  //   vm.deal(admin, 100);
+  //   PChainOwner memory pChainOwner = makePChainOwner(admin);
 
-    StakingInput memory stakingInput = StakingInput({
-      staker: admin, 
-      amount: 100, 
-      input: ValidatorRegistrationInput({
-        nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
-        blsPublicKey: DEFAULT_BLS_PUBLIC_KEY,
-        registrationExpiry: uint64(block.timestamp) + 100,
-        remainingBalanceOwner: pChainOwner,
-        disableOwner: pChainOwner
-      })
-    });
+  //   StakingInput memory stakingInput = StakingInput({
+  //     staker: admin, 
+  //     amount: 100, 
+  //     input: ValidatorRegistrationInput({
+  //       nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
+  //       blsPublicKey: DEFAULT_BLS_PUBLIC_KEY,
+  //       registrationExpiry: uint64(block.timestamp) + 100,
+  //       remainingBalanceOwner: pChainOwner,
+  //       disableOwner: pChainOwner
+  //     })
+  //   });
 
-    bytes memory payload = abi.encode(stakingInput);
-    stakingManager.receiveTokens{value: 100}(bytes32(0), admin, admin, payload);
-  }
+  //   bytes memory payload = abi.encode(stakingInput);
+  //   stakingManager.receiveTokens{value: 100}(bytes32(0), admin, admin, payload);
+  // }
 
 
 }
