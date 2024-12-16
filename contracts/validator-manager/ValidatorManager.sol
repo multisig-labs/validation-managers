@@ -5,7 +5,7 @@
 
 pragma solidity 0.8.25;
 
-import {ValidatorMessages} from "@avalabs/icm-contracts/validator-manager/ValidatorMessages.sol";
+import {ValidatorMessages} from "./ValidatorMessages.sol";
 import {
     InitialValidator,
     IValidatorManager,
@@ -16,22 +16,22 @@ import {
     ValidatorManagerSettings,
     ValidatorRegistrationInput,
     ValidatorStatus
-} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+} from "./interfaces/IValidatorManager.sol";
 import {
     IWarpMessenger,
     WarpMessage
-} from "@avalabs/subnet-evm-contracts/contracts/interfaces/IWarpMessenger.sol";
+} from "@avalabs/subnet-evm-contracts@1.2.0/contracts/interfaces/IWarpMessenger.sol";
 import {ContextUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+    "@openzeppelin/contracts-upgradeable@5.0.2/utils/ContextUpgradeable.sol";
 import {Initializable} from
-    "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+    "@openzeppelin/contracts-upgradeable@5.0.2/proxy/utils/Initializable.sol";
 
 /**
  * @dev Implementation of the {IValidatorManager} interface.
  *
  * @custom:security-contact https://github.com/ava-labs/icm-contracts/blob/main/SECURITY.md
  */
-abstract contract ValidatorManagerForked is Initializable, ContextUpgradeable, IValidatorManager {
+abstract contract ValidatorManager is Initializable, ContextUpgradeable, IValidatorManager {
     // solhint-disable private-vars-leading-underscore
     /// @custom:storage-location erc7201:avalanche-icm.storage.ValidatorManager
 
