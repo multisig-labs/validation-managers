@@ -216,5 +216,5 @@ interface IValidatorManager {
      * @param messageIndex The index of the ICM message to be received providing the proof the validation is not active
      * and never will be active on the P-Chain.
      */
-    function completeEndValidation(uint32 messageIndex) external;
+    function completeEndValidation(uint32 messageIndex) external returns (bytes32 validationID, Validator memory validator);
 }

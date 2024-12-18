@@ -61,6 +61,8 @@ interface IStakingManager {
   error ZeroWeightToValueFactor();
   error InvalidUptimeBlockchainID(bytes32 uptimeBlockchainID);
 
-  function initializeStake(StakingInput calldata input) external payable returns (bytes32);
-  function completeStake(uint32 messageIndex) external returns (bytes32);
+  function initializeStake(StakingInput calldata input) external payable returns (bytes32 validationID);
+  function completeStake(uint32 messageIndex) external;
+  function initializeUnstake(bytes32 validationID, bool includeUptimeProof, uint32 messageIndex) external returns (bool);
+  function completeUnstake(uint32 messageIndex) external;
 }

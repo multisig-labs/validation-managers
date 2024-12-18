@@ -44,8 +44,8 @@ contract PoAValidatorManager is IPoAValidatorManager, ValidatorManager, AccessCo
     return _initializeEndValidation(validationID);
   }
 
-  function completeEndValidation(uint32 messageIndex) external {
-    _completeEndValidation(messageIndex);
+  function completeEndValidation(uint32 messageIndex) external returns (bytes32 validationID, Validator memory validator){
+    (validationID, validator) = _completeEndValidation(messageIndex);
   }
 
 }

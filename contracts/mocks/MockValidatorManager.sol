@@ -32,7 +32,7 @@ contract MockValidatorManager is IPoAValidatorManager {
         // TODO: Implement
     }
 
-    function completeEndValidation(uint32 messageIndex) external {
+    function completeEndValidation(uint32 messageIndex) external returns (bytes32 validationID, Validator memory validator){
         // TODO: Implement
     }
 

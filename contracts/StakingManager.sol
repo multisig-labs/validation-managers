@@ -26,6 +26,7 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable 
     // uint16 delegationFeeBips;
     uint64 minimumStakeDuration;
     uint64 uptimeSeconds;
+    uint256 redeemableValidatorRewards;
   }
 
 
@@ -45,7 +46,7 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable 
     /// @notice The reward calculator for this validator manager.
     IRewardCalculator rewardCalculator;
 
-    /// @notice Address of the ValidatorManager contract.
+    /// @notice Address of the PoAValidatorManager contract.
     IPoAValidatorManager validatorManager;
 
     /// @notice Maps the validation ID to its requirements.
@@ -84,18 +85,13 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable 
   function initializeStake(StakingInput calldata input) payable external returns (bytes32) {
     StakingManagerStorage storage $ = _getStorage();
 
+    _lockStake(input);
+
     address owner = input.owner;
     if (owner == address(0)) {
       owner = _msgSender();
     }
 
-    // Native token or ERC20
-    if (input.tokenAddress == address(0)) { 
-      require(msg.value == input.amount, "Incorrect amount sent");
-    } else {
-      require(address($.token) == input.tokenAddress, "Invalid token address");
-      $.token.transferFrom(input.owner, address(this), input.amount);
-    }
 
     if (input.minimumStakeDuration < $.minimumStakeDuration) {
       revert InvalidMinStakeDuration(input.minimumStakeDuration);
@@ -116,7 +112,38 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable 
     return validationID;
   }
 
-  function completeStake(uint32 messageIndex) external returns (bytes32) {
+  function _lockStake(StakingInput calldata input) internal {
+    StakingManagerStorage storage $ = _getStorage();
+    // Native token or ERC20
+    if (input.tokenAddress == address(0)) { 
+      require(msg.value == input.amount, "Incorrect amount sent");
+    } else {
+      require(address($.token) == input.tokenAddress, "Invalid token address");
+      $.token.transferFrom(input.owner, address(this), input.amount);
+    }
+  }
+
+  function _unlockStake(bytes32 validationID) internal {
+    StakingManagerStorage storage $ = _getStorage();
+    if ($.validatorInfo[validationID].tokenAddress == address(0)) { 
+      payable($.validatorInfo[validationID].owner).transfer($.validatorInfo[validationID].amount);
+    } else {
+      $.token.transfer($.validatorInfo[validationID].owner, $.validatorInfo[validationID].amount);
+    }
+  }
+
+  function _withdrawRewards(bytes32 validationID) internal {
+    StakingManagerStorage storage $ = _getStorage();
+    uint256 rewards = $.validatorInfo[validationID].redeemableValidatorRewards;
+    $.validatorInfo[validationID].redeemableValidatorRewards = 0;
+    if ($.validatorInfo[validationID].tokenAddress == address(0)) { 
+      
+    } else {
+
+    }
+  }
+
+  function completeStake(uint32 messageIndex) external {
     StakingManagerStorage storage $ = _getStorage();
     $.validatorManager.completeValidatorRegistration(messageIndex);
   }
@@ -155,12 +182,24 @@ contract StakingManager is IStakingManager, UUPSUpgradeable, OwnableUpgradeable 
         uptimeSeconds: uptimeSeconds
     });
 
-    // $._redeemableValidatorRewards[validationID] += reward;
+    $.validatorInfo[validationID].redeemableValidatorRewards += reward;
     // $._rewardRecipients[validationID] = rewardRecipient;
 
     return (reward > 0);
-
   }
+
+  function completeUnstake(uint32 messageIndex) external {
+    StakingManagerStorage storage $ = _getStorage();
+    (bytes32 validationID, Validator memory validator) = $.validatorManager.completeEndValidation(messageIndex);
+    // The validator can either be Completed or Invalidated here. We only grant rewards for Completed.
+    if (validator.status == ValidatorStatus.Completed) {
+      uint256 rewards = $.validatorInfo[validationID].redeemableValidatorRewards;
+      $.validatorInfo[validationID].redeemableValidatorRewards = 0;
+      $.token.transfer($.validatorInfo[validationID].owner, rewards);
+    }
+    _unlockStake(validationID);
+  }
+
 
   function valueToWeight(uint256 value) public view returns (uint64) {
     // TODO maybe move this out to a rewardsCalc-like contract?
