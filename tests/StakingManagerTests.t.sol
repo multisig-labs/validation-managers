@@ -4,11 +4,10 @@ pragma solidity 0.8.25;
 
 import {BaseTest} from "./BaseTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IACP99ValidatorManager} from "../contracts/interfaces/IACP99ValidatorManager.sol";
 import {MockValidatorManager} from "../contracts/mocks/MockValidatorManager.sol";
 import {ValidatorRegistrationInput, PChainOwner} from "../contracts/interfaces/IValidatorManager.sol";
 import {IStakingManager, StakingInput} from "../contracts/interfaces/IStakingManager.sol";
-import {StakingManager} from "../contracts/validator-manager/StakingManager.sol";
+import {StakingManager} from "../contracts/StakingManager.sol";
 
 contract StakingManagerTests is BaseTest {
   address admin;
@@ -31,7 +30,7 @@ contract StakingManagerTests is BaseTest {
     PChainOwner memory pChainOwner = makePChainOwner(admin);
 
     StakingInput memory stakingInput = StakingInput({
-      staker: admin, 
+      owner: admin, 
       tokenAddress: address(0),
       amount: 101, 
       nftAddress: address(0),
@@ -46,6 +45,7 @@ contract StakingManagerTests is BaseTest {
       })
     });
     stakingManager.initializeStake{value: 101}(stakingInput);
+    stakingManager.completeStake(0);
   }
 
   //   function test_ICTTStaking() public {

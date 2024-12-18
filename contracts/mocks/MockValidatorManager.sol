@@ -3,13 +3,13 @@
 pragma solidity ^0.8.25;
 
 import {
-  IACP99ValidatorManager,
   ValidatorRegistrationInput,
   ConversionData,
   Validator
-} from "../interfaces/IACP99ValidatorManager.sol";
+} from "../interfaces/IValidatorManager.sol";
+import {IPoAValidatorManager} from "../interfaces/IPoAValidatorManager.sol";
 
-contract MockValidatorManager is IACP99ValidatorManager {
+contract MockValidatorManager is IPoAValidatorManager {
     function initializeValidatorSet(
         ConversionData calldata conversionData,
         uint32 messageIndex
@@ -24,15 +24,15 @@ contract MockValidatorManager is IACP99ValidatorManager {
         return randHash();
     }
 
-    function completeValidatorRegistration(uint32 messageIndex) external  returns (bytes32) {
+    function completeValidatorRegistration(uint32 messageIndex) external {
         // TODO: Implement
     }
 
-    function initializeEndValidation(bytes32 validationID) external {
+    function initializeEndValidation(bytes32 validationID) external returns (Validator memory) {
         // TODO: Implement
     }
 
-    function completeEndValidation(uint32 messageIndex) external returns (bytes32) {
+    function completeEndValidation(uint32 messageIndex) external {
         // TODO: Implement
     }
 
@@ -44,6 +44,14 @@ contract MockValidatorManager is IACP99ValidatorManager {
         // TODO: Implement
     }
 
+    function resendEndValidatorMessage(bytes32 validationID) external {
+      // TODO: Implement
+    }
+
+    function resendRegisterValidatorMessage(bytes32 validationID) external {
+      // TODO: Implement
+    }
+  
     // These shouldn't be in this interface, but put them here for now
     function getChurnPeriodSeconds() external view returns (uint64) {
         // TODO: Implement
