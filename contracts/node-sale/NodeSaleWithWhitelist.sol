@@ -94,7 +94,7 @@ contract NodeSaleWithWhitelist is
 
     // Verify whitelist if merkleRoot is set
     if ($.merkleRoot != bytes32(0)) {
-      bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
+      bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(msg.sender))));
       if (!MerkleProof.verify(merkleProof, $.merkleRoot, leaf)) {
         revert NotWhitelisted();
       }
