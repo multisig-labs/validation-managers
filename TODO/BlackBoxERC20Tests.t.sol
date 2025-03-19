@@ -9,7 +9,11 @@ import {ERC20TokenStakingManager} from "@avalabs/icm-contracts/validator-manager
 
 import {ExampleRewardCalculator} from "@avalabs/icm-contracts/validator-manager/ExampleRewardCalculator.sol";
 
+import {ExampleERC20} from "../contracts/mocks/ExampleERC20.sol";
+
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
 import {ValidatorMessages} from "@avalabs/icm-contracts/validator-manager/ValidatorMessages.sol";
+import {IERC20Mintable} from "@avalabs/icm-contracts/validator-manager/interfaces/IERC20Mintable.sol";
 import {PoSValidatorManagerSettings} from "@avalabs/icm-contracts/validator-manager/interfaces/IPoSValidatorManager.sol";
 import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {
@@ -22,9 +26,7 @@ import {
   ValidatorRegistrationInput,
   ValidatorStatus
 } from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {ExampleERC20} from "../contracts/mocks/ExampleERC20.sol";
-import {IERC20Mintable} from "@avalabs/icm-contracts/validator-manager/interfaces/IERC20Mintable.sol";
-import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
+
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract BlackBoxERC20Tests is BaseTest {

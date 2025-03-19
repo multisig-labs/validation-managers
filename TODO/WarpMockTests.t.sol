@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.25;
 
-import {BaseTest} from "./BaseTest.sol";
 import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
+import {BaseTest} from "./BaseTest.sol";
 
 contract WarpMockTests is BaseTest {
   MockWarpMessenger public warp;

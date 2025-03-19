@@ -9,8 +9,8 @@ pragma solidity 0.8.25;
  * THIS IS AN EXAMPLE CONTRACT THAT USES UN-AUDITED CODE.
  * DO NOT USE THIS CODE IN PRODUCTION.
  */
-import {ERC20, ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {IERC20Mintable} from "@avalabs/icm-contracts/validator-manager/interfaces/IERC20Mintable.sol";
+import {ERC20, ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
 contract ExampleERC20 is ERC20Burnable, IERC20Mintable {
   string private constant _TOKEN_NAME = "Mock Token";

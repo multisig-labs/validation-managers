@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {IRewardCalculator} from "@avalabs/icm-contracts/validator-manager/interfaces/IRewardCalculator.sol";
 import {INFTLicenseModule} from "../interfaces/INFTLicenseModule.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/access/OwnableUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import {IRewardCalculator} from "icm-contracts/contracts/validator-manager/interfaces/IRewardCalculator.sol";
+
 interface ICertificates {
   function tokenByCollection(address account, bytes32 collection) external view returns (uint256);
 }
@@ -15,11 +16,11 @@ interface ICertificates {
 /// The ValidatorManager contract would call out to this module at the appropriate times.
 /// @dev This contract is upgradable.
 
-contract NFTLicenseModule is INFTLicenseModule, Initializable, UUPSUpgradeable, OwnableUpgradeable  {
+contract NFTLicenseModule is INFTLicenseModule, Initializable, UUPSUpgradeable, OwnableUpgradeable {
   /// @notice Address of the Certificate NFT contract that holds KYC certs, etc.
   address public _certificateNFTAddress;
 
-  /// @notice Mapping of _keyFrom(nftAddress, nftId) to weight. 
+  /// @notice Mapping of _keyFrom(nftAddress, nftId) to weight.
   ///         nftId=0 signifies the default weight for the NFT address.
   ///         If a different weight is specified for the nftId then that weight is used instead of the default.
   mapping(bytes32 nftAddrAndId => uint64 weight) private _nftWeights;
@@ -59,7 +60,7 @@ contract NFTLicenseModule is INFTLicenseModule, Initializable, UUPSUpgradeable, 
 
   /// @notice Calculate the reward for a validator based on their NFT License and uptime.
   function calculateReward(
-    address nftAddress, 
+    address nftAddress,
     uint256 nftId,
     uint64 validatorStartTime,
     uint64 stakingStartTime,
@@ -109,7 +110,6 @@ contract NFTLicenseModule is INFTLicenseModule, Initializable, UUPSUpgradeable, 
     _nftWeights[_keyFrom(nftAddress, nftId)] = weight;
     emit NFTWeightSet(nftAddress, nftId, weight);
   }
-
 
   /// @dev UUPS upgrade authorization - restrict upgrades to the owner
   function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}

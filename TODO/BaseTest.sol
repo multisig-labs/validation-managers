@@ -6,8 +6,8 @@ import {ConversionData, InitialValidator, PChainOwner} from "@avalabs/icm-contra
 import {Test} from "@forge-std/Test.sol";
 import "@forge-std/console2.sol";
 
-import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
 import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
 
 contract BaseTest is Test {
   uint256 private randNonce = 0;

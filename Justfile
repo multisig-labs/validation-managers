@@ -11,7 +11,7 @@ default:
 	@just --list --unsorted
 	
 setup:
-	git submodule update --init --recursive
+	forge soldeer install
 
 build:
 	forge build

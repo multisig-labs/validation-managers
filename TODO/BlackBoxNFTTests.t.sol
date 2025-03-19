@@ -4,6 +4,13 @@ pragma solidity 0.8.25;
 
 import {BaseTest} from "./BaseTest.sol";
 
+import {NFTValidatorManagerSettings} from "../contracts/interfaces/INFTStakingManager.sol";
+import {ExampleERC721} from "../contracts/mocks/ExampleERC721.sol";
+import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
+import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
+import {Certificates} from "../contracts/tokens/Certificates.sol";
+import {ValidatorReceipt} from "../contracts/tokens/ValidatorReceipt.sol";
+import {NFTLicenseModule} from "../contracts/validator-manager/NFTLicenseModule.sol";
 import {NFTStakingManager} from "../contracts/validator-manager/NFTStakingManager.sol";
 import {ICMInitializable} from "@avalabs/icm-contracts/utilities/ICMInitializable.sol";
 import {ExampleRewardCalculator} from "@avalabs/icm-contracts/validator-manager/ExampleRewardCalculator.sol";
@@ -21,13 +28,6 @@ import {
   ValidatorStatus
 } from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-import {ExampleERC721} from "../contracts/mocks/ExampleERC721.sol";
-import {MockNativeMinter} from "../contracts/mocks/MockNativeMinter.sol";
-import {MockWarpMessenger, WarpMessage} from "../contracts/mocks/MockWarpMessenger.sol";
-import {NFTLicenseModule} from "../contracts/validator-manager/NFTLicenseModule.sol";
-import {ValidatorReceipt} from "../contracts/tokens/ValidatorReceipt.sol";
-import {Certificates} from "../contracts/tokens/Certificates.sol";
-import {NFTValidatorManagerSettings} from "../contracts/interfaces/INFTStakingManager.sol";
 
 contract BlackBoxNFTTests is BaseTest {
   uint8 public constant DEFAULT_MAXIMUM_CHURN_PERCENTAGE = 20;

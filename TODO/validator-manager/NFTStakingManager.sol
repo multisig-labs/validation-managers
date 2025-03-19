@@ -17,19 +17,26 @@ import {
 } from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
 import {IWarpMessenger, WarpMessage} from "@avalabs/subnet-evm-contracts/contracts/interfaces/IWarpMessenger.sol";
 
-import {INativeMinter} from "@avalabs/subnet-evm-contracts/contracts/interfaces/INativeMinter.sol";
 import {ICMInitializable} from "@avalabs/icm-contracts/utilities/ICMInitializable.sol";
 
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import {INFTStakingManager, NFTValidatorManagerSettings, NFTValidatorInfo} from "../interfaces/INFTStakingManager.sol";
-import {ValidatorReceipt} from "../tokens/ValidatorReceipt.sol";
 import {INFTLicenseModule} from "../interfaces/INFTLicenseModule.sol";
+import {INFTStakingManager, NFTValidatorInfo, NFTValidatorManagerSettings} from "../interfaces/INFTStakingManager.sol";
+import {ValidatorReceipt} from "../tokens/ValidatorReceipt.sol";
+
+interface INativeMinter is IAllowList {
+  event NativeCoinMinted(address indexed sender, address indexed recipient, uint256 amount);
+  // Mint [amount] number of native coins and send to [addr]
+
+  function mintNativeCoin(address addr, uint256 amount) external;
+}
 
 contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgradeable, ReentrancyGuardUpgradeable {
   using Address for address payable;
@@ -43,7 +50,6 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
     address _validatorReceiptAddress;
     /// @notice The blockchain ID of the uptime blockchain
     bytes32 _uptimeBlockchainID;
-
     mapping(bytes32 validationID => NFTValidatorInfo) _nftValidatorInfo;
     mapping(uint256 receiptId => bytes32 validationID) _receiptToValidation;
   }
@@ -75,14 +81,12 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
     __NFTStakingManager_init(settings, initialOwner);
   }
 
-  function __NFTStakingManager_init(NFTValidatorManagerSettings calldata settings, address initialOwner) internal
-        onlyInitializing {
+  function __NFTStakingManager_init(NFTValidatorManagerSettings calldata settings, address initialOwner) internal onlyInitializing {
     __ValidatorManager_init(settings.baseSettings);
     __Ownable_init(initialOwner);
     __ReentrancyGuard_init();
     __NFTStakingManager_init_unchained(settings);
   }
-
 
   function __NFTStakingManager_init_unchained(NFTValidatorManagerSettings calldata settings) internal onlyInitializing {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
@@ -104,7 +108,8 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
       revert InvalidValidator(_msgSender());
     }
     uint256 receiptId = _lockAndIsssueReceipt(_msgSender(), nftAddress, nftId);
-    NFTValidatorInfo memory info = NFTValidatorInfo({nftAddress: nftAddress, nftId: nftId, receiptId: receiptId, uptimeSeconds: 0, redeemableValidatorRewards: 0});
+    NFTValidatorInfo memory info =
+      NFTValidatorInfo({nftAddress: nftAddress, nftId: nftId, receiptId: receiptId, uptimeSeconds: 0, redeemableValidatorRewards: 0});
     uint64 weight = $._licenseModule.licenseToWeight(nftAddress, nftId);
     validationID = _initializeValidatorRegistration(registrationInput, weight);
     $._nftValidatorInfo[validationID] = info;
@@ -114,12 +119,12 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
   function initializeEndValidation(bytes32 validationID, bool includeUptimeProof, uint32 messageIndex) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     NFTValidatorInfo storage info = $._nftValidatorInfo[validationID];
-    
+
     address receiptOwner = ValidatorReceipt($._validatorReceiptAddress).ownerOf(info.receiptId);
     if (receiptOwner != _msgSender()) {
       revert InvalidReceipt(info.receiptId, receiptOwner);
     }
-    
+
     Validator memory validator = _initializeEndValidation(validationID);
 
     // Uptime proofs include the absolute number of seconds the validator has been active.
@@ -138,12 +143,12 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
       stakingEndTime: validator.endedAt,
       uptimeSeconds: uptimeSeconds
     });
-    info.redeemableValidatorRewards += reward; 
+    info.redeemableValidatorRewards += reward;
   }
 
   function completeEndValidation(uint32 messageIndex) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bytes32 validationID, ) = _completeEndValidation(messageIndex);
+    (bytes32 validationID,) = _completeEndValidation(messageIndex);
     uint256 receiptId = $._nftValidatorInfo[validationID].receiptId;
     address receiptOwner = ValidatorReceipt($._validatorReceiptAddress).ownerOf(receiptId);
     _unlockAndPayRewards(receiptOwner, receiptId);
@@ -168,15 +173,14 @@ contract NFTStakingManager is INFTStakingManager, ValidatorManager, OwnableUpgra
   }
 
   function submitUptimeProof(bytes32 validationID, uint32 messageIndex) external {
-      ValidatorStatus status = getValidator(validationID).status;
-      if (status != ValidatorStatus.Active) {
-        revert InvalidValidatorStatus(status);
-      }
+    ValidatorStatus status = getValidator(validationID).status;
+    if (status != ValidatorStatus.Active) {
+      revert InvalidValidatorStatus(status);
+    }
 
-      // Uptime proofs include the absolute number of seconds the validator has been active.
-      _updateUptime(validationID, messageIndex);
+    // Uptime proofs include the absolute number of seconds the validator has been active.
+    _updateUptime(validationID, messageIndex);
   }
-
 
   function _updateUptime(bytes32 validationID, uint32 messageIndex) internal returns (uint64) {
     (WarpMessage memory warpMessage, bool valid) = WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);

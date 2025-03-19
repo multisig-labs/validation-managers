@@ -1,7 +1,7 @@
 [profile.default]
 src = 'contracts'
 out = 'out'
-libs = ['lib']
+libs = ['lib', "dependencies"]
 solc_version = '0.8.25'
 evm_version = 'shanghai'
 test = 'tests'
@@ -20,11 +20,20 @@ number_underscores = 'thousands'
 override_spacing = true
 wrap_comments = false
 
-# Add the following to your VSCode settings to enable automatic formatting.
-# {
-#   "editor.formatOnSave": true,
-#   "[solidity]": {
-#     "editor.defaultFormatter": "JuanBlanco.solidity" 
-#   },
-#   "solidity.formatter": "forge",
-# }
+[dependencies]
+forge-std = "1.9.6"
+"@openzeppelin-contracts" = "5.2.0"
+"@openzeppelin-contracts-upgradeable" = "5.2.0"
+icm-contracts = { version = "8817f47", git = "https://github.com/ava-labs/icm-contracts.git", rev = "8817f47b1c75c4b2f3d1e90256342f0d0440a634" }
+solmate = "6.8.0"
+
+[soldeer]
+# whether Soldeer manages remappings
+remappings_generate = true
+# whether Soldeer re-generates all remappings when installing, updating or uninstalling deps
+remappings_regenerate = true
+# whether to suffix the remapping with the version requirement string: `name-a.b.c`
+remappings_version = true
+# whether to install sub-dependencies or not. If true this will install the dependencies of dependencies recursively.
+recursive_deps = true
+

@@ -2,12 +2,12 @@
 
 pragma solidity 0.8.25;
 
-import "@openzeppelin/contracts-upgradeable/metatx/ERC2771ContextUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {ValidatorRegistrationInput, ConversionData, PChainOwner} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import {INativeSendAndCallReceiver} from "@avalabs/icm-contracts/ictt/interfaces/INativeSendAndCallReceiver.sol";
 import {IACP99ValidatorManager} from "../interfaces/IACP99ValidatorManager.sol";
+import {INativeSendAndCallReceiver} from "@avalabs/icm-contracts/ictt/interfaces/INativeSendAndCallReceiver.sol";
+import {ConversionData, PChainOwner, ValidatorRegistrationInput} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/access/OwnableUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/metatx/ERC2771ContextUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 
 struct StakingInput {
   address staker;
@@ -16,7 +16,6 @@ struct StakingInput {
 }
 
 contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCallReceiver {
-
   struct Storage {
     IACP99ValidatorManager validatorManager;
   }
@@ -43,7 +42,7 @@ contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCa
     __UUPSUpgradeable_init();
   }
 
-  function stakeItDude(StakingInput memory stakingInput) payable public {
+  function stakeItDude(StakingInput memory stakingInput) public payable {
     require(msg.value > 0 && msg.value == stakingInput.amount, "Invalid amount");
     Storage storage $ = _getStorage();
     bytes32 validationID = $.validatorManager.initializeValidatorRegistration(stakingInput.input, 0);
@@ -51,18 +50,16 @@ contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCa
 
   // This would be called by the TeleporterMessenger on the L1
   // from INativeSendAndCallReceiver
-  function receiveTokens(
-    bytes32 sourceBlockchainID,
-    address originTokenTransferrerAddress,
-    address originSenderAddress,
-    bytes calldata payload
-  ) external payable {
+  function receiveTokens(bytes32 sourceBlockchainID, address originTokenTransferrerAddress, address originSenderAddress, bytes calldata payload)
+    external
+    payable
+  {
     StakingInput memory stakingInput = abi.decode(payload, (StakingInput));
     // TODO Verify blockchainID and originTokenTransferrerAddress
-    
+
     // Do we care? Or can anyone stake for any address?
     require(originSenderAddress == stakingInput.staker, "Invalid sender");
-    
+
     stakeItDude(stakingInput);
   }
 
