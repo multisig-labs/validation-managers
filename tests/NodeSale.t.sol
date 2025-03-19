@@ -14,7 +14,8 @@ contract NodeSaleTest is Base {
   address public admin;
   address public manager;
   address public treasury;
-  uint256 public MAX_TOKENS = 10000;
+  uint256 public BATCHES = 10;
+  uint256 public MAX_TOKENS_PER_BATCH = 1000;
 
   function setUp() public override {
     super.setUp();
@@ -45,48 +46,82 @@ contract NodeSaleTest is Base {
     nodeSale = NodeSaleWithWhitelist(address(proxy));
     nodeSale.grantRole(nodeSale.MANAGER_ROLE(), manager);
 
-    // Create array to hold all token IDs
-    uint256[] memory tokenIds = new uint256[](MAX_TOKENS);
-
-    // Mint 10000 NFTs and store their IDs
-    for (uint256 i = 1; i <= MAX_TOKENS; i++) {
+    // Mint NFTs
+    for (uint256 i = 1; i <= BATCHES * MAX_TOKENS_PER_BATCH; i++) {
       nft.mint(address(nodeSale), i);
-      tokenIds[i - 1] = i; // array is 0-based, so i-1
     }
-
-    // Make all NFTs available for sale
-    uint256 gas = gasleft();
-    nodeSale.updateAvailableTokenIds(tokenIds);
-    gas = gas - gasleft();
-    console.log("Gas used:", gas);
 
     vm.stopPrank();
 
-    vm.prank(manager);
+    vm.startPrank(manager);
+    // Make all NFTs available for sale
+    for (uint256 i = 0; i < BATCHES; i++) {
+      uint256 startIndex = 1 + i * MAX_TOKENS_PER_BATCH;
+      uint256[] memory batchTokenIds = new uint256[](MAX_TOKENS_PER_BATCH);
+      for (uint256 j = startIndex; j < startIndex + MAX_TOKENS_PER_BATCH; j++) {
+        batchTokenIds[j - startIndex] = j;
+      }
+      uint256 gas = gasleft();
+      nodeSale.appendAvailableTokenIds(batchTokenIds);
+      calculateGasCostInUSD("Appending batch:", gas - gasleft());
+    }
     nodeSale.unpause();
+    vm.stopPrank();
   }
-
-  // function test1() public {
-  //   address buyer = getActor("Buyer");
-  //   vm.deal(buyer, 10 ether);
-  //   vm.prank(buyer);
-  //   nodeSale.buyNFT{value: 1 ether}(new bytes32[](0));
-  //   string memory storageJson = nodeSale.getStorageAsJson();
-  //   console.log(storageJson);
-  // }
 
   function testMassNFTPurchase() public {
     // Create multiple buyers and have them purchase
-    for (uint256 i = 1; i <= MAX_TOKENS; i++) {
+    for (uint256 i = 1; i <= (BATCHES * MAX_TOKENS_PER_BATCH) / 10; i++) {
       address buyer = address(uint160(i));
-      vm.deal(buyer, 1 ether); // Give each buyer 1 ETH
+      vm.deal(buyer, 10 ether);
 
       vm.startPrank(buyer);
-      nodeSale.buyNFT{value: 1 ether}(new bytes32[](0)); // Assuming no whitelist
+      nodeSale.buyNFTs{value: 10 ether}(10, new bytes32[](0)); // Assuming no whitelist
+      assertEq(buyer.balance, 0);
       vm.stopPrank();
     }
 
-    assertEq(nodeSale.totalSold(), MAX_TOKENS);
+    assertEq(nodeSale.totalSold(), BATCHES * MAX_TOKENS_PER_BATCH);
     assertEq(nodeSale.getRemainingSupply(), 0);
+    assertEq(nft.balanceOf(address(nodeSale)), 0);
+    assertEq(address(nodeSale).balance, BATCHES * MAX_TOKENS_PER_BATCH * 1 ether);
+
+    vm.prank(manager);
+    nodeSale.withdraw();
+
+    assertEq(address(nodeSale).balance, 0);
+    assertEq(treasury.balance, BATCHES * MAX_TOKENS_PER_BATCH * 1 ether);
+  }
+
+  function logArrayInline(uint256[] memory arr) internal pure {
+    string memory output = "[";
+    for (uint256 i = 0; i < arr.length; i++) {
+      if (i > 0) {
+        output = string.concat(output, ", ");
+      }
+      output = string.concat(output, vm.toString(arr[i]));
+    }
+    output = string.concat(output, "]");
+    console.log(output);
+  }
+
+  function calculateGasCostInUSD(string memory action, uint256 gasUsed) internal pure {
+    uint256 gasPrice = 2 * 1e9; // 2 nAVAX
+    uint256 avaxPrice = 20_00; // $20.00 (stored as 2000 cents)
+
+    // Calculate total cost in wei
+    uint256 gasCostInWei = gasUsed * gasPrice;
+
+    // Calculate USD cost in cents (multiply by price in cents)
+    uint256 gasCostInCents = (gasCostInWei * avaxPrice) / 1e18;
+
+    // Split into dollars and cents
+    uint256 dollars = gasCostInCents / 100;
+    uint256 cents = gasCostInCents % 100;
+
+    // Format with proper decimal places
+    string memory centsStr = cents < 10 ? string.concat("0", vm.toString(cents)) : vm.toString(cents);
+
+    console.log(string.concat(action, " Gas Cost: $", vm.toString(dollars), ".", centsStr));
   }
 }

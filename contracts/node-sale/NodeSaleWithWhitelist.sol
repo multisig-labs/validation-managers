@@ -84,20 +84,15 @@ contract NodeSaleWithWhitelist is
     _pause();
   }
 
-  function buyNFT(bytes32[] calldata merkleProof) external payable whenNotPaused nonReentrant {
+  function buyNFTs(uint256 quantity, bytes32[] calldata merkleProof) external payable whenNotPaused nonReentrant {
     Storage storage $ = _storage();
 
     if (block.timestamp < $.saleStartTime) revert SaleNotStarted();
-    if (msg.value != $.price) revert InsufficientPayment();
-    if ($.availableTokenIds.length == 0) revert SupplyExhausted();
-    if ($.purchases[msg.sender] >= $.maxPerWallet) revert ExceedsMaxPerWallet();
+    if (msg.value != $.price * quantity) revert InsufficientPayment();
+    if ($.availableTokenIds.length < quantity) revert SupplyExhausted();
+    if ($.purchases[msg.sender] + quantity > $.maxPerWallet) revert ExceedsMaxPerWallet();
 
-    // Get the next available token ID from the array
-    uint256 tokenId = $.availableTokenIds[$.availableTokenIds.length - 1];
-    $.availableTokenIds.pop();
-
-    if ($.nftContract.ownerOf(tokenId) != address(this)) revert NFTNotOwned();
-
+    // Verify whitelist if merkleRoot is set
     if ($.merkleRoot != bytes32(0)) {
       bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
       if (!MerkleProof.verify(merkleProof, $.merkleRoot, leaf)) {
@@ -105,22 +100,43 @@ contract NodeSaleWithWhitelist is
       }
     }
 
-    $.purchases[msg.sender] += 1;
-    $.totalSold += 1;
+    // Process multiple NFT purchases
+    for (uint256 i = 0; i < quantity;) {
+      // Get the next available token ID from the array
+      uint256 tokenId = $.availableTokenIds[$.availableTokenIds.length - 1];
+      $.availableTokenIds.pop();
 
-    $.nftContract.safeTransferFrom(address(this), msg.sender, tokenId);
+      if ($.nftContract.ownerOf(tokenId) != address(this)) revert NFTNotOwned();
 
-    if (msg.value > $.price) {
-      payable(msg.sender).sendValue(msg.value - $.price);
+      $.nftContract.safeTransferFrom(address(this), msg.sender, tokenId);
+      emit NFTSold(msg.sender, tokenId, $.price);
+
+      unchecked {
+        i++;
+      }
     }
 
-    emit NFTSold(msg.sender, tokenId, $.price);
+    // Update purchase tracking
+    $.purchases[msg.sender] += quantity;
+    $.totalSold += quantity;
+
+    // Refund excess payment if any
+    if (msg.value > $.price * quantity) {
+      payable(msg.sender).sendValue(msg.value - ($.price * quantity));
+    }
   }
 
-  // Update available token IDs (admin only, when paused)
-  function updateAvailableTokenIds(uint256[] calldata newTokenIds) external onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
+  // Append available token IDs (manager only, when paused)
+  // @dev It is up to the caller to ensure no duplicate token IDs
+  // are added and that the token IDs are owned by the contract
+  function appendAvailableTokenIds(uint256[] calldata newTokenIds) external onlyRole(MANAGER_ROLE) whenPaused {
     Storage storage $ = _storage();
-    $.availableTokenIds = newTokenIds;
+    for (uint256 i = 0; i < newTokenIds.length;) {
+      $.availableTokenIds.push(newTokenIds[i]);
+      unchecked {
+        i++;
+      }
+    }
   }
 
   function getNextTokenId() external view returns (uint256) {
@@ -161,7 +177,7 @@ contract NodeSaleWithWhitelist is
     _unpause();
   }
 
-  function withdraw() external onlyRole(DEFAULT_ADMIN_ROLE) {
+  function withdraw() external onlyRole(MANAGER_ROLE) {
     uint256 balance = address(this).balance;
     if (balance == 0) revert NoFundsToWithdraw();
     Storage storage $ = _storage();
