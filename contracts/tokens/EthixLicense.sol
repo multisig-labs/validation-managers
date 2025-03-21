@@ -15,7 +15,7 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
 
-  error TokenStillLockedError(uint32 unlockTime);
+  error LicenseLockedError(uint32 unlockTime);
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -61,7 +61,7 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
     // If both addresses are non-zero, it's a transfer (not a mint or burn)
     if (auth != address(0) && to != address(0) && block.timestamp < _lockedUntil) {
       // Only check timelock for transfers
-      revert TokenStillLockedError(_lockedUntil);
+      revert LicenseLockedError(_lockedUntil);
     }
     return super._update(to, tokenId, auth);
   }
