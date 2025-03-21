@@ -86,6 +86,7 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     // epoch is the count of days. each day is a set, static reward amt.
     // would need mapping to track if an epoch was minted or not
     // mapping(uint16 => bool) public epochMinted;
+    // maybe track lastEpoch and only allow minting if lastEpoch + 1 == epoch
     if (epochMinted[epoch]) revert EpochAlreadyMinted();
     NativeMinter.mint(address(this), rewardPerEpoch);
     epochMinted[epoch] = true;
