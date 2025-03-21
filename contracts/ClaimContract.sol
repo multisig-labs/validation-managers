@@ -20,6 +20,7 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
 
   event RewardsAdded(address indexed user, uint256 amount);
   event RewardsClaimed(address indexed user, uint256 amount);
+  event RewardsAdjusted(address indexed user, uint256 oldAmount, uint256 newAmount);
 
   error ArrayLengthMismatch();
   error ZeroAddress();
@@ -88,6 +89,13 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     if (epochMinted[epoch]) revert EpochAlreadyMinted();
     NativeMinter.mint(address(this), rewardPerEpoch);
     epochMinted[epoch] = true;
+  }
+
+  function setRewards(address user, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (user == address(0)) revert ZeroAddress();
+    uint256 oldAmount = rewards[user];
+    rewards[user] = amount;
+    emit RewardsAdjusted(user, oldAmount, amount);
   }
 
   function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
