@@ -18,9 +18,13 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
 
   mapping(address => uint256) public rewards;
 
+  event RewardsAdded(address indexed user, uint256 amount);
+  event RewardsClaimed(address indexed user, uint256 amount);
+
   error ArrayLengthMismatch();
   error ZeroAddress();
   error InvalidAmount();
+  error InsufficientRewardsError(uint256 requested, uint256 available);
 
   constructor() {
     _disableInitializers();
@@ -40,6 +44,7 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     }
     rewards[msg.sender] -= amount;
     payable(msg.sender).sendValue(amount);
+    emit RewardsClaimed(msg.sender, amount);
   }
 
   // TODO does this even need a role? Anyone can add rewards right? free money!
@@ -51,20 +56,24 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
 
     // Check total matches msg.value
     uint256 total;
-    for (uint256 i = 0; i < amounts.length; i++) {
+    for (uint256 i = 0; i < users.length; i++) {
+      // Accumulate total while processing each entry
       total += amounts[i];
-    }
-    if (total != msg.value) {
-      revert InvalidAmount();
+      if (users[i] == address(0)) revert ZeroAddress();
+      rewards[users[i]] += amounts[i];
+      emit RewardsAdded(users[i], amounts[i]);
     }
 
-    // Add rewards
-    for (uint256 i = 0; i < users.length; i++) {
-      if (users[i] == address(0)) {
-        revert ZeroAddress();
-      }
-      rewards[users[i]] += amounts[i];
-    }
+    // Check total after loop
+    if (total != msg.value) revert InvalidAmount();
+  }
+
+  function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    IERC20(token).transferFrom(address(this), msg.sender, IERC20(token).balanceOf(address(this)));
+  }
+
+  function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    payable(msg.sender).sendValue(amount);
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
