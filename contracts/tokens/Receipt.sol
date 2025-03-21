@@ -6,12 +6,13 @@ import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.
 import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
+import {ERC721BurnableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/extensions/ERC721BurnableUpgradeable.sol";
 
 // Sketch of a generic Receipt, tying a user to, for example, all their licenses in a vault.
 // This is a soulbound token, meaning it cannot be transferred.
 // It can be burned when the user leaves the vault.
 
-contract Receipt is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
@@ -48,6 +49,7 @@ contract Receipt is Initializable, ERC721Upgradeable, AccessControlUpgradeable, 
     return tokenId;
   }
 
+  // TODO Not sure how to use ERC721BurnableUpgradeable,
   function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
     _burn(tokenId);
   }
