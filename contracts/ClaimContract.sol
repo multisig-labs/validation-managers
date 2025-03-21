@@ -48,6 +48,8 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
   }
 
   // TODO does this even need a role? Anyone can add rewards right? free money!
+  // In this scenario, some off-chain actor needs to use nativeMinter precompile to mint the rewards,
+  // then call this function to distribute them.
   function addRewards(address[] calldata users, uint256[] calldata amounts) public payable onlyRole(DEFAULT_ADMIN_ROLE) {
     // Check arrays have same length
     if (users.length != amounts.length) {
@@ -66,6 +68,26 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
 
     // Check total after loop
     if (total != msg.value) revert InvalidAmount();
+  }
+
+  // TODO Another idea is to have this contract be allowed to use NativeMinter precompile.
+  // So the flow would be the off-chain program does:
+  // Query StakingContract to get map of userAddr => licenseCount
+  // Calculate rewardPerLicense
+  // Calculate rewardPerUser
+  // call mintRewards()
+  // call addRewards(userAddr[], amt[])
+  // In this case addRewards is not payable, as mintRewards put the funds directly into this contract
+  // Advantage is this would be the only contract that can mint, and only to itself. Better security.
+  // How to handle if we missed a day due to downtime or something? Just do 2 epochs in a row?
+  function mintRewards(uint16 epoch) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    // init with a constant rewardPerEpoch = 123 ether
+    // epoch is the count of days. each day is a set, static reward amt.
+    // would need mapping to track if an epoch was minted or not
+    // mapping(uint16 => bool) public epochMinted;
+    if (epochMinted[epoch]) revert EpochAlreadyMinted();
+    NativeMinter.mint(address(this), rewardPerEpoch);
+    epochMinted[epoch] = true;
   }
 
   function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
