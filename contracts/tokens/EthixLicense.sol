@@ -15,7 +15,13 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
 
+  event BatchMinted(address indexed minter, address[] recipients, uint256[] tokenIds);
+
+  error ArrayLengthMismatch();
+  error ArrayLengthZero();
   error LicenseLockedError(uint32 unlockTime);
+  error NoTokensToMint();
+  error ZeroAddress();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -44,9 +50,37 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
   }
 
   function mint(address to) public onlyRole(MINTER_ROLE) returns (uint256) {
+    if (to == address(0)) revert ZeroAddress();
     uint256 tokenId = _nextTokenId++;
     _safeMint(to, tokenId);
     return tokenId;
+  }
+
+  function batchMint(address[] calldata recipients, uint256[] calldata amounts) public onlyRole(MINTER_ROLE) {
+    if (recipients.length == 0) revert ArrayLengthZero();
+    if (recipients.length != amounts.length) revert ArrayLengthMismatch();
+
+    uint256 totalAmount;
+    for (uint256 i = 0; i < amounts.length; i++) {
+      totalAmount += amounts[i];
+    }
+
+    if (totalAmount == 0) revert NoTokensToMint();
+
+    tokenIds = new uint256[](totalAmount);
+    uint256 startingTokenId = _nextTokenId;
+    _nextTokenId += totalAmount;
+
+    uint256 currentIndex;
+    for (uint256 i = 0; i < recipients.length; i++) {
+      for (uint256 j = 0; j < amounts[i]; j++) {
+        uint256 tokenId = startingTokenId + currentIndex;
+        tokenIds[currentIndex] = tokenId;
+        _safeMint(recipients[i], tokenId);
+        currentIndex++;
+      }
+    }
+    emit BatchMinted(msg.sender, recipients, tokenIds);
   }
 
   function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
