@@ -106,6 +106,14 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
     return _baseTokenURI;
   }
 
+  function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    IERC20(token).transferFrom(address(this), msg.sender, IERC20(token).balanceOf(address(this)));
+  }
+
+  function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    payable(msg.sender).sendValue(amount);
+  }
+
   // The following functions are overrides required by Solidity.
 
   function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {

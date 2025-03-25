@@ -16,13 +16,16 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
 
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
-  mapping(address => uint256) public rewards;
+  mapping(address => uint256) public userBalances;
+  // Each uint256 can store 256 epochs worth of reward status
+  mapping(address => mapping(uint256 => uint256)) public userEpochRewardsDepositedBitmap;
 
-  event RewardsAdded(address indexed user, uint256 amount);
+  event RewardsDeposited(uint32 indexed epoch, address indexed user, uint256 amount);
   event RewardsClaimed(address indexed user, uint256 amount);
   event RewardsAdjusted(address indexed user, uint256 oldAmount, uint256 newAmount);
 
   error ArrayLengthMismatch();
+  error UserAlreadyRewarded();
   error ZeroAddress();
   error InvalidAmount();
   error InsufficientRewardsError(uint256 requested, uint256 available);
@@ -39,72 +42,62 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     _grantRole(UPGRADER_ROLE, upgrader);
   }
 
-  function claimRewards(uint256 amount) public {
-    if (rewards[msg.sender] < amount) {
-      revert InsufficientRewardsError(amount, rewards[msg.sender]);
-    }
-    rewards[msg.sender] -= amount;
-    payable(msg.sender).sendValue(amount);
-    emit RewardsClaimed(msg.sender, amount);
-  }
-
-  // TODO does this even need a role? Anyone can add rewards right? free money!
-  // In this scenario, some off-chain actor needs to use nativeMinter precompile to mint the rewards,
-  // then call this function to distribute them.
-  function addRewards(address[] calldata users, uint256[] calldata amounts) public payable onlyRole(DEFAULT_ADMIN_ROLE) {
+  // So the flow would be the off-chain program does:
+  // Query StakingContract to get map of userAddr => licenseCount
+  // Sweep any gas fees from GasContract
+  // Calculate rewardPerLicense
+  // Calculate rewardPerUser
+  // call depositRewards(epoch, userAddr[], amt[]) as many times as necessary
+  function depositRewards(uint32 epoch, address[] calldata users, uint256[] calldata amounts) public payable onlyRole(DEFAULT_ADMIN_ROLE) {
     // Check arrays have same length
     if (users.length != amounts.length) {
       revert ArrayLengthMismatch();
     }
 
-    // Check total matches msg.value
     uint256 total;
     for (uint256 i = 0; i < users.length; i++) {
       // Accumulate total while processing each entry
       total += amounts[i];
       if (users[i] == address(0)) revert ZeroAddress();
-      rewards[users[i]] += amounts[i];
-      emit RewardsAdded(users[i], amounts[i]);
+      if (isUserRewarded(users[i], epoch)) revert UserAlreadyRewarded();
+      _setUserRewarded(users[i], epoch);
+      userBalances[users[i]] += amounts[i];
+      emit RewardsDeposited(epoch, users[i], amounts[i]);
     }
 
     // Check total after loop
     if (total != msg.value) revert InvalidAmount();
   }
 
-  // TODO Another idea is to have this contract be allowed to use NativeMinter precompile.
-  // So the flow would be the off-chain program does:
-  // Query StakingContract to get map of userAddr => licenseCount
-  // Calculate rewardPerLicense
-  // Calculate rewardPerUser
-  // call mintRewards()
-  // call addRewards(userAddr[], amt[])
-  // In this case addRewards is not payable, as mintRewards put the funds directly into this contract
-  // Advantage is this would be the only contract that can mint, and only to itself. Better security.
-  // How to handle if we missed a day due to downtime or something? Just do 2 epochs in a row?
-  function mintRewards(uint16 epoch) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    // init with a constant rewardPerEpoch = 123 ether
-    // epoch is the count of days. each day is a set, static reward amt.
-    // would need mapping to track if an epoch was minted or not
-    // mapping(uint16 => bool) public epochMinted;
-    // maybe track lastEpoch and only allow minting if lastEpoch + 1 == epoch
-    if (epochMinted[epoch]) revert EpochAlreadyMinted();
-    NativeMinter.mint(address(this), rewardPerEpoch);
-    epochMinted[epoch] = true;
+  function claimRewards(uint256 amount) public {
+    if (userBalances[msg.sender] < amount) {
+      revert InsufficientRewardsError(amount, userBalances[msg.sender]);
+    }
+    userBalances[msg.sender] -= amount;
+    payable(msg.sender).sendValue(amount);
+    emit RewardsClaimed(msg.sender, amount);
   }
 
+  /// @dev Allows for fixing any mistakes in the off-chain rewards calculations.
   function setRewards(address user, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (user == address(0)) revert ZeroAddress();
-    uint256 oldAmount = rewards[user];
-    rewards[user] = amount;
+    uint256 oldAmount = userBalances[user];
+    userBalances[user] = amount;
     emit RewardsAdjusted(user, oldAmount, amount);
   }
 
-  function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    IERC20(token).transferFrom(address(this), msg.sender, IERC20(token).balanceOf(address(this)));
+  // Helper functions to manage the bitmap
+  function isUserRewarded(address user, uint32 epoch) public view returns (bool) {
+    uint256 wordIndex = epoch / 256;
+    uint256 bitIndex = epoch % 256;
+    uint256 word = userEpochRewardBitmap[user][wordIndex];
+    return (word & (1 << bitIndex)) != 0;
   }
 
-  function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    payable(msg.sender).sendValue(amount);
+  function _setUserRewarded(address user, uint32 epoch) internal {
+    uint256 wordIndex = epoch / 256;
+    uint256 bitIndex = epoch % 256;
+    userEpochRewardBitmap[user][wordIndex] |= (1 << bitIndex);
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}

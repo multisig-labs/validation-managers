@@ -11,6 +11,7 @@ import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/u
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
 
+/// @dev This vault only works if the NFTs are all fungible.
 contract LicenseVault is
   ReentrancyGuardUpgradeable,
   AccessControlDefaultAdminRulesUpgradeable,
