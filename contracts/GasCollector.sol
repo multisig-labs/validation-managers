@@ -11,6 +11,7 @@ import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/u
 
 // TODO figure out best most flexible way to structure roles and perms
 // TODO will this work? Not sure how proxies etc work as a destination for the gas fees precompile.
+// Maybe just use an EOA? Is this contract necessary?
 contract GasCollector is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
   using Address for address payable;
 

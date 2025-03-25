@@ -83,6 +83,12 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
     emit BatchMinted(msg.sender, recipients, tokenIds);
   }
 
+  function batchTransferFrom(address from, address to, uint256[] memory tokenIds) public {
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      transferFrom(from, to, tokenIds[i]);
+    }
+  }
+
   function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
     _burn(tokenId);
   }
