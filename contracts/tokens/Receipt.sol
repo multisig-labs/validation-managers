@@ -50,7 +50,7 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
   }
 
   // TODO Not sure how to use ERC721BurnableUpgradeable,
-  function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
+  function burn(uint256 tokenId) public override onlyRole(MINTER_ROLE) {
     _burn(tokenId);
   }
 

@@ -5,9 +5,12 @@ pragma solidity ^0.8.25;
 import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+
+import {IERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
 import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
 
-contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+import {ERC721UpgradeableBatchable} from "./ERC721UpgradeableBatchable.sol";
+contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessControlUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
@@ -67,7 +70,7 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
 
     if (totalAmount == 0) revert NoTokensToMint();
 
-    tokenIds = new uint256[](totalAmount);
+    uint256[] memory tokenIds = new uint256[](totalAmount);
     uint256 startingTokenId = _nextTokenId;
     _nextTokenId += totalAmount;
 
@@ -117,7 +120,9 @@ contract EthixLicense is Initializable, ERC721Upgradeable, AccessControlUpgradea
   }
 
   function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    payable(msg.sender).sendValue(amount);
+    if (amount > address(this).balance) revert("Insufficient balance");
+    (bool success, ) = payable(msg.sender).call{value: amount}("");
+    require(success, "ETH transfer failed");
   }
 
   // The following functions are overrides required by Solidity.

@@ -90,14 +90,14 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
   function isUserRewarded(address user, uint32 epoch) public view returns (bool) {
     uint256 wordIndex = epoch / 256;
     uint256 bitIndex = epoch % 256;
-    uint256 word = userEpochRewardBitmap[user][wordIndex];
+    uint256 word = userEpochRewardsDepositedBitmap[user][wordIndex];
     return (word & (1 << bitIndex)) != 0;
   }
 
   function _setUserRewarded(address user, uint32 epoch) internal {
     uint256 wordIndex = epoch / 256;
     uint256 bitIndex = epoch % 256;
-    userEpochRewardBitmap[user][wordIndex] |= (1 << bitIndex);
+    userEpochRewardsDepositedBitmap[user][wordIndex] |= (1 << bitIndex);
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}

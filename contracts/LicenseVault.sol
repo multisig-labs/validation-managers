@@ -11,6 +11,10 @@ import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/u
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
 
+import {EnumerableSet} from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
+
+import {IERC721Batchable} from "./tokens/IERC721Batchable.sol";
+
 /// @dev This vault only works if the NFTs are all fungible.
 contract LicenseVault is
   ReentrancyGuardUpgradeable,
@@ -24,7 +28,7 @@ contract LicenseVault is
 
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
-  IERC721 public nftContract;
+  IERC721Batchable public nftContract;
   // As NFTs are added, we lump them all together and do not track which user had which id
   // This is the set that are in this contract and not staking
   EnumerableSet.UintSet unstakedNftIds;
@@ -51,7 +55,7 @@ contract LicenseVault is
     __Pausable_init();
     __UUPSUpgradeable_init();
 
-    nftContract = IERC721(_nftContract);
+    nftContract = IERC721Batchable(_nftContract);
 
     _grantRole(DEFAULT_ADMIN_ROLE, _initialAdmin);
 
@@ -64,7 +68,7 @@ contract LicenseVault is
       unstakedNftIds.add(_nftIds[i]);
       userLicenseCount[msg.sender]++;
     }
-    emit LicensesDeposited(msg.sender, _nftIds.length);
+    emit LicensesDeposited(msg.sender, uint32(_nftIds.length));
   }
 
   function requestWithdrawal(uint32 _count) external nonReentrant {
@@ -101,7 +105,7 @@ contract LicenseVault is
     nftContract.safeBatchTransferFrom(address(this), msg.sender, nftsToTransfer);
 
     userWithdrawalRequests[msg.sender] = 0;
-    emit LicensesWithdrawn(msg.sender, nftsToTransfer.length);
+    emit LicensesWithdrawn(msg.sender, uint32(nftsToTransfer.length));
   }
 
   // Off-Chain fns
@@ -133,4 +137,6 @@ contract LicenseVault is
   function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
     return this.onERC721Received.selector;
   }
+
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
