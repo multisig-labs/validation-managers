@@ -10,6 +10,7 @@ import {IERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
 import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
 
 import {ERC721UpgradeableBatchable} from "./ERC721UpgradeableBatchable.sol";
+
 contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessControlUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
@@ -45,7 +46,7 @@ contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessContro
     __UUPSUpgradeable_init();
 
     _nextTokenId = 1;
-    _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
+    // _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
     _grantRole(MINTER_ROLE, minter);
     _grantRole(UPGRADER_ROLE, upgrader);
     _baseTokenURI = baseTokenURI;
@@ -121,7 +122,7 @@ contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessContro
 
   function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (amount > address(this).balance) revert("Insufficient balance");
-    (bool success, ) = payable(msg.sender).call{value: amount}("");
+    (bool success,) = payable(msg.sender).call{value: amount}("");
     require(success, "ETH transfer failed");
   }
 
