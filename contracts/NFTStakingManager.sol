@@ -23,6 +23,8 @@ struct StakeInfo {
 }
 
 struct NFTStakingManagerSettings {
+  address validatorManager;
+  address license;
   uint32 initialEpochTimestamp;
   uint32 epochDuration;
   uint64 licenseWeight;
@@ -73,6 +75,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function initialize(NFTStakingManagerSettings memory settings) public initializer {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
+    $.manager = ValidatorManager(settings.validatorManager);
+    $.licenseContract = IERC721(settings.license);
     $.initialEpochTimestamp = settings.initialEpochTimestamp;
     $.epochDuration = settings.epochDuration;
     $.licenseWeight = settings.licenseWeight;
@@ -87,7 +91,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     bytes memory blsPublicKey,
     PChainOwner memory remainingBalanceOwner,
     PChainOwner memory disableOwner,
-    uint256[] memory tokenIds
+    uint256[] calldata tokenIds
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     if (tokenIds.length == 0 || tokenIds.length > $.maxLicensesPerValidator) revert("Invalid license count");
