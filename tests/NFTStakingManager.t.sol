@@ -1,26 +1,47 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
-import {ERC1967Proxy} from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { console2 } from "forge-std-1.9.6/src/console2.sol";
 
-import {NFTStakingManager, NFTStakingManagerSettings} from "../contracts/NFTStakingManager.sol";
-import {Base} from "./utils/Base.sol";
-import {console} from "forge-std-1.9.6/src/console.sol";
+import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {ICMInitializable} from "icm-contracts-8817f47/contracts/utilities/ICMInitializable.sol";
+import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManager.sol";
+import { Base } from "./utils/Base.sol";
+import { console } from "forge-std-1.9.6/src/console.sol";
 
-import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
-import {ValidatorManager, ValidatorManagerSettings} from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+import { ICMInitializable } from "icm-contracts-8817f47/contracts/utilities/ICMInitializable.sol";
+import { ValidatorMessages } from "icm-contracts-8817f47/contracts/validator-manager/ValidatorMessages.sol";
+
+import { PChainOwner, ConversionData, InitialValidator } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { ValidatorManager, ValidatorManagerSettings } from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
 contract NFTStakingManagerTest is Base {
   uint64 public constant DEFAULT_CHURN_PERIOD = 1 hours;
   uint8 public constant DEFAULT_MAXIMUM_CHURN_PERCENTAGE = 20;
-  bytes32 public constant DEFAULT_SUBNET_ID = bytes32(hex"1234567812345678123456781234567812345678123456781234567812345678");
+  bytes32 public constant DEFAULT_SUBNET_ID =
+    bytes32(hex"1234567812345678123456781234567812345678123456781234567812345678");
   bytes public constant DEFAULT_BLS_PUBLIC_KEY =
-    bytes(hex"123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678");
+    bytes(
+      hex"123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678"
+    );
   bytes public constant DEFAULT_NODE_ID = bytes(hex"1234123412341234123412341234123412341234");
   PChainOwner public DEFAULT_P_CHAIN_OWNER;
+
+  bytes32 public constant DEFAULT_SOURCE_BLOCKCHAIN_ID =
+    bytes32(hex"abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd");
+  address public constant WARP_PRECOMPILE_ADDRESS = 0x0200000000000000000000000000000000000005;
+  bytes public constant DEFAULT_INITIAL_VALIDATOR_NODE_ID_1 =
+    bytes(hex"2341234123412341234123412341234123412341");
+  bytes public constant DEFAULT_INITIAL_VALIDATOR_NODE_ID_2 =
+    bytes(hex"3412341234123412341234123412341234123412");
+  uint64 public constant DEFAULT_WEIGHT = 1e6;
+  // Set the default weight to 1e10 to avoid churn issues
+  uint64 public constant DEFAULT_INITIAL_VALIDATOR_WEIGHT = DEFAULT_WEIGHT * 1e4;
+
+  uint64 public constant DEFAULT_INITIAL_TOTAL_WEIGHT =
+    DEFAULT_INITIAL_VALIDATOR_WEIGHT + DEFAULT_WEIGHT;
 
   ERC721Mock public nft;
   ValidatorManager public validatorManager;
@@ -35,19 +56,21 @@ contract NFTStakingManagerTest is Base {
 
     address[] memory addresses = new address[](1);
     addresses[0] = 0x1234567812345678123456781234567812345678;
-    DEFAULT_P_CHAIN_OWNER = PChainOwner({threshold: 1, addresses: addresses});
+    DEFAULT_P_CHAIN_OWNER = PChainOwner({ threshold: 1, addresses: addresses });
 
     vm.startPrank(deployer);
 
     nft = new ERC721Mock("NFT License", "NFTL");
 
-    ValidatorManager vmImpl = new ValidatorManager(ICMInitializable.Disallowed);
-    ERC1967Proxy vmProxy = new ERC1967Proxy(address(vmImpl), abi.encodeCall(ValidatorManager.initialize, _defaultValidatorManagerSettings(deployer)));
-    validatorManager = ValidatorManager(address(vmProxy));
+    _validatorManagerSetup();
 
     NFTStakingManager nftImpl = new NFTStakingManager();
     ERC1967Proxy nftProxy = new ERC1967Proxy(
-      address(nftImpl), abi.encodeCall(NFTStakingManager.initialize, _defaultNFTStakingManagerSettings(address(validatorManager), address(nft)))
+      address(nftImpl),
+      abi.encodeCall(
+        NFTStakingManager.initialize,
+        _defaultNFTStakingManagerSettings(address(validatorManager), address(nft))
+      )
     );
     nftStakingManager = NFTStakingManager(address(nftProxy));
 
@@ -55,35 +78,149 @@ contract NFTStakingManagerTest is Base {
 
     vm.stopPrank();
   }
-
   function test_Scenario1() public {
     address validator = getActor("Validator");
     nft.mint(validator, 1);
     vm.startPrank(validator);
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = 1;
-    nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
+    nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      tokenIds
+    );
     vm.stopPrank();
   }
 
-  function _defaultValidatorManagerSettings(address admin_) internal pure returns (ValidatorManagerSettings memory) {
-    return ValidatorManagerSettings({
-      admin: admin_,
-      subnetID: DEFAULT_SUBNET_ID,
-      churnPeriodSeconds: DEFAULT_CHURN_PERIOD,
-      maximumChurnPercentage: DEFAULT_MAXIMUM_CHURN_PERCENTAGE
-    });
+  function _validatorManagerSetup() internal {
+    ValidatorManager vmImpl = new ValidatorManager(ICMInitializable.Disallowed);
+    ERC1967Proxy vmProxy = new ERC1967Proxy(
+      address(vmImpl),
+      abi.encodeCall(ValidatorManager.initialize, _defaultValidatorManagerSettings(deployer))
+    );
+    validatorManager = ValidatorManager(address(vmProxy));
+
+    _mockGetBlockchainID();
+
+    ConversionData memory conversion = _defaultConversionDataTotalWeight5();
+    bytes32 id = sha256(ValidatorMessages.packConversionData(conversion));
+    _mockGetPChainWarpMessage(ValidatorMessages.packSubnetToL1ConversionMessage(id), true);
+
+    validatorManager.initializeValidatorSet(_defaultConversionDataTotalWeight5(), 0);
+    console2.log("validator set initialized");
   }
 
-  function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {
-    return NFTStakingManagerSettings({
-      validatorManager: validatorManager_,
-      license: license_,
-      initialEpochTimestamp: uint32(block.timestamp),
-      epochDuration: 1 days,
-      licenseWeight: 1000,
-      epochRewards: 1000 ether,
-      maxLicensesPerValidator: 10
+  function _mockGetBlockchainID() internal {
+    vm.mockCall(
+      WARP_PRECOMPILE_ADDRESS,
+      abi.encodeWithSelector(IWarpMessenger.getBlockchainID.selector),
+      abi.encode(DEFAULT_SOURCE_BLOCKCHAIN_ID)
+    );
+    vm.expectCall(
+      WARP_PRECOMPILE_ADDRESS,
+      abi.encodeWithSelector(IWarpMessenger.getBlockchainID.selector)
+    );
+  }
+
+  function _defaultValidatorManagerSettings(
+    address admin_
+  ) internal pure returns (ValidatorManagerSettings memory) {
+    return
+      ValidatorManagerSettings({
+        admin: admin_,
+        subnetID: DEFAULT_SUBNET_ID,
+        churnPeriodSeconds: DEFAULT_CHURN_PERIOD,
+        maximumChurnPercentage: DEFAULT_MAXIMUM_CHURN_PERCENTAGE
+      });
+  }
+
+  function _defaultNFTStakingManagerSettings(
+    address validatorManager_,
+    address license_
+  ) internal view returns (NFTStakingManagerSettings memory) {
+    return
+      NFTStakingManagerSettings({
+        validatorManager: validatorManager_,
+        license: license_,
+        initialEpochTimestamp: uint32(block.timestamp),
+        epochDuration: 1 days,
+        licenseWeight: 1000,
+        epochRewards: 1000 ether,
+        maxLicensesPerValidator: 10
+      });
+  }
+
+  function _defaultConversionData() internal view returns (ConversionData memory) {
+    InitialValidator[] memory initialValidators = new InitialValidator[](2);
+    // The first initial validator has a high weight relative to the default PoS validator weight
+    // to avoid churn issues
+    initialValidators[0] = InitialValidator({
+      nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
+      weight: DEFAULT_INITIAL_VALIDATOR_WEIGHT,
+      blsPublicKey: DEFAULT_BLS_PUBLIC_KEY
     });
+    // The second initial validator has a low weight so that it can be safely removed in tests
+    initialValidators[1] = InitialValidator({
+      nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_2,
+      weight: DEFAULT_WEIGHT,
+      blsPublicKey: DEFAULT_BLS_PUBLIC_KEY
+    });
+
+    // Confirm the total initial weight
+    uint64 initialWeight;
+    for (uint256 i = 0; i < initialValidators.length; i++) {
+      initialWeight += initialValidators[i].weight;
+    }
+    assertEq(initialWeight, DEFAULT_INITIAL_TOTAL_WEIGHT);
+
+    return
+      ConversionData({
+        subnetID: DEFAULT_SUBNET_ID,
+        validatorManagerBlockchainID: DEFAULT_SOURCE_BLOCKCHAIN_ID,
+        validatorManagerAddress: address(validatorManager),
+        initialValidators: initialValidators
+      });
+  }
+  function _defaultConversionDataTotalWeight5() internal view returns (ConversionData memory) {
+    InitialValidator[] memory initialValidators = new InitialValidator[](2);
+
+    initialValidators[0] = InitialValidator({
+      nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_1,
+      weight: 1,
+      blsPublicKey: DEFAULT_BLS_PUBLIC_KEY
+    });
+    initialValidators[1] = InitialValidator({
+      nodeID: DEFAULT_INITIAL_VALIDATOR_NODE_ID_2,
+      weight: 4,
+      blsPublicKey: DEFAULT_BLS_PUBLIC_KEY
+    });
+
+    return
+      ConversionData({
+        subnetID: DEFAULT_SUBNET_ID,
+        validatorManagerBlockchainID: DEFAULT_SOURCE_BLOCKCHAIN_ID,
+        validatorManagerAddress: address(validatorManager),
+        initialValidators: initialValidators
+      });
+  }
+  function _mockGetPChainWarpMessage(bytes memory expectedPayload, bool valid) internal {
+    vm.mockCall(
+      WARP_PRECOMPILE_ADDRESS,
+      abi.encodeWithSelector(IWarpMessenger.getVerifiedWarpMessage.selector, uint32(0)),
+      abi.encode(
+        WarpMessage({
+          sourceChainID: validatorManager.P_CHAIN_BLOCKCHAIN_ID(),
+          originSenderAddress: address(0),
+          payload: expectedPayload
+        }),
+        valid
+      )
+    );
+    vm.expectCall(
+      WARP_PRECOMPILE_ADDRESS,
+      abi.encodeCall(IWarpMessenger.getVerifiedWarpMessage, 0)
+    );
   }
 }
