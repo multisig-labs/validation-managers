@@ -1,20 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import {IERC721} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
 import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 import {PChainOwner, Validator, ValidatorStatus} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 import {ValidatorManager} from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
-// import { IWarpMessenger } from "
 
-contract NFTStakingManager {
+struct EpochInfo {
+  uint256 totalStakedLicenses;
+}
+
+struct StakeInfo {
+  address owner;
+  uint32 startEpoch;
+  uint32 endEpoch;
+  bytes32 validationId;
+  uint256[] tokenIds;
+  mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
+}
+
+struct NFTStakingManagerSettings {
+  uint32 initialEpochTimestamp;
+  uint32 epochDuration;
+  uint64 licenseWeight;
+  uint256 epochRewards;
+  uint16 maxLicensesPerValidator;
+}
+
+contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
   using Address for address payable;
-
-  uint32 public constant INITIAL_EPOCH_TIMESTAMP = 1716864000; // 2024-05-27 00:00:00 UTC
-  uint32 public constant EPOCH_DURATION = 1 days;
-  uint64 public constant LICENSE_WEIGHT = 1000;
-  uint256 public constant EPOCH_REWARDS = 1_369_863 ether; // (2_500_000_000 / (365 * 5)) * 1 ether;
-  uint16 public constant MAX_LICENSES_PER_VALIDATOR = 100;
 
   error TokenAlreadyLocked(uint256 tokenId);
   error UnauthorizedOwner(address owner);
@@ -25,19 +42,6 @@ contract NFTStakingManager {
   event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
   event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
 
-  struct epochInfo {
-    uint256 totalStakedLicenses;
-  }
-
-  struct StakeInfo {
-    address owner;
-    uint32 startEpoch;
-    uint32 endEpoch;
-    bytes32 validationId;
-    uint256[] tokenIds;
-    mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
-  }
-
   // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
   bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION = 0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
 
@@ -45,7 +49,12 @@ contract NFTStakingManager {
     ValidatorManager manager;
     IERC721 licenseContract;
     uint32 currentTotalStakedLicenses;
-    mapping(uint32 epochNumber => epochInfo) epochInfo;
+    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC
+    uint32 epochDuration; // 1 days
+    uint64 licenseWeight; // 1000
+    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
+    uint16 maxLicensesPerValidator; // 100
+    mapping(uint32 epochNumber => EpochInfo) epochInfo;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 stakeID) tokenLockedBy;
     // stakeId = validationId but in future could also be delegationId if we support that
@@ -57,6 +66,22 @@ contract NFTStakingManager {
 
   NFTStakingManagerStorage private _storage;
 
+  constructor() {
+    _disableInitializers();
+  }
+
+  function initialize(NFTStakingManagerSettings memory settings) public initializer {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+
+    $.initialEpochTimestamp = settings.initialEpochTimestamp;
+    $.epochDuration = settings.epochDuration;
+    $.licenseWeight = settings.licenseWeight;
+    $.epochRewards = settings.epochRewards;
+    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
+
+    // ... rest of initialization
+  }
+
   function initiateValidatorRegistration(
     bytes memory nodeID,
     bytes memory blsPublicKey,
@@ -64,9 +89,9 @@ contract NFTStakingManager {
     PChainOwner memory disableOwner,
     uint256[] memory tokenIds
   ) public returns (bytes32) {
-    if (tokenIds.length == 0 || tokenIds.length > MAX_LICENSES_PER_VALIDATOR) revert("Invalid license count");
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    uint64 weight = uint64(tokenIds.length * LICENSE_WEIGHT);
+    if (tokenIds.length == 0 || tokenIds.length > $.maxLicensesPerValidator) revert("Invalid license count");
+    uint64 weight = uint64(tokenIds.length * $.licenseWeight);
     bytes32 stakeId =
       $.manager.initiateValidatorRegistration(nodeID, blsPublicKey, uint64(block.timestamp + 1 days), remainingBalanceOwner, disableOwner, weight);
     // do not xfer, just mark tokens as locked by this stakeId
@@ -189,14 +214,17 @@ contract NFTStakingManager {
   function calculateRewardsPerLicense(uint32 epochNumber) public view returns (uint256) {
     // maybe only allow checking for currentEpoch-1 or earlier?
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return EPOCH_REWARDS / $.epochInfo[epochNumber].totalStakedLicenses;
+    return $.epochRewards / $.epochInfo[epochNumber].totalStakedLicenses;
   }
 
-  function getEpochByTimestamp(uint32 timestamp) public pure returns (uint32) {
-    return (timestamp - INITIAL_EPOCH_TIMESTAMP) / EPOCH_DURATION;
+  function getEpochByTimestamp(uint32 timestamp) public view returns (uint32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return (timestamp - $.initialEpochTimestamp) / $.epochDuration;
   }
 
   function getCurrentEpoch() public view returns (uint32) {
     return getEpochByTimestamp(uint32(block.timestamp));
   }
+
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
