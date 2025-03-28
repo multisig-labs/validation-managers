@@ -11,7 +11,7 @@ import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token
 
 import {ERC721UpgradeableBatchable} from "./ERC721UpgradeableBatchable.sol";
 
-contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessControlUpgradeable, UUPSUpgradeable {
+contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControlUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 

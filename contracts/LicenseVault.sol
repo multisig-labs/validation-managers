@@ -128,7 +128,6 @@ contract LicenseVault is
       tokenIdsToTransfer[i] = lastTokenId;
     }
     // Then do a single batch transfer
-    // TODO make sure ethix license contract supports batch transfers
     licenseContract.safeBatchTransferFrom(address(this), msg.sender, tokenIdsToTransfer);
     // TODO burn the receipt NFTs
     withdrawalRequest[msg.sender] = 0;
