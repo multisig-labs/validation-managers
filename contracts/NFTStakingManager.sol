@@ -245,6 +245,11 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function getCurrentEpoch() public view returns (uint32) {
     return getEpochByTimestamp(uint32(block.timestamp));
   }
+  
+  function getCurrentTotalStakedLicenses() public view returns (uint32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.currentTotalStakedLicenses;
+  }
 
   function _authorizeUpgrade(
     address newImplementation
