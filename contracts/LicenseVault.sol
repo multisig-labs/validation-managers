@@ -10,10 +10,22 @@ import {AccessControlDefaultAdminRulesUpgradeable} from
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
+import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
 import {EnumerableSet} from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
 
+import {NFTStakingManager} from "./NFTStakingManager.sol";
 import {IERC721Batchable} from "./tokens/IERC721Batchable.sol";
+
+// TODO also get $._pendingRegisterValidationMessages[validationID] = registerL1ValidatorMessage; from the validator manager
+struct StakeInfo {
+  bytes32 stakeId;
+  bytes nodeID;
+  bytes blsPublicKey;
+  bytes blsPop;
+  uint256[] tokenIds;
+  bytes registerL1ValidatorMessage;
+}
 
 /// @dev This vault only works if the NFTs are all fungible.
 contract LicenseVault is
@@ -28,16 +40,22 @@ contract LicenseVault is
 
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
-  IERC721Batchable public nftContract;
+  IERC721Batchable public licenseContract;
+  NFTStakingManager public nftStakingManager;
+  // These will be used for each new hardware node created
+  PChainOwner public remainingBalanceOwner;
+  PChainOwner public disableOwner;
   // As NFTs are added, we lump them all together and do not track which user had which id
   // This is the set that are in this contract and not staking
-  EnumerableSet.UintSet unstakedNftIds;
-  // These are the ones that have been xfered out to the staking contract
-  EnumerableSet.UintSet stakedNftIds;
+  EnumerableSet.UintSet unstakedTokenIds;
+  // These are the ones that have been deposited to the staking contract
+  EnumerableSet.UintSet stakedTokenIds;
   // Track how many licenses each user has deposited
-  mapping(address => uint32) userLicenseCount;
+  mapping(address depositor => uint32 count) licenseCount;
   // Track how many licenses each user has requested to withdraw
-  mapping(address => uint32) userWithdrawalRequests;
+  mapping(address depositor => uint32 count) withdrawalRequest;
+  // Track the stake info for each stakeId
+  mapping(bytes32 stakeId => StakeInfo stakeInfo) stakeInfo;
 
   event LicensesDeposited(address depositor, uint32 count);
   event LicensesWithdrawn(address withdrawer, uint32 count);
@@ -49,89 +67,103 @@ contract LicenseVault is
   error NoWithdrawalRequest();
 
   // Initializer instead of constructor
-  function initialize(address _nftContract, address _initialAdmin) external initializer {
+  function initialize(
+    address licenseContract_,
+    address nftStakingManager_,
+    address initialAdmin,
+    PChainOwner calldata remainingBalanceOwner_,
+    PChainOwner calldata disableOwner_
+  ) external initializer {
     __ReentrancyGuard_init();
     __AccessControl_init();
     __Pausable_init();
     __UUPSUpgradeable_init();
 
-    nftContract = IERC721Batchable(_nftContract);
-
-    _grantRole(DEFAULT_ADMIN_ROLE, _initialAdmin);
+    licenseContract = IERC721Batchable(licenseContract_);
+    nftStakingManager = NFTStakingManager(nftStakingManager_);
+    remainingBalanceOwner = remainingBalanceOwner_;
+    disableOwner = disableOwner_;
+    _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
 
     _pause();
   }
 
-  function deposit(uint256[] calldata _nftIds) external nonReentrant {
-    for (uint256 i = 0; i < _nftIds.length; i++) {
-      nftContract.safeTransferFrom(msg.sender, address(this), _nftIds[i]);
-      unstakedNftIds.add(_nftIds[i]);
-      userLicenseCount[msg.sender]++;
+  function deposit(uint256[] calldata tokenIds) external nonReentrant {
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      unstakedTokenIds.add(tokenIds[i]);
+      licenseCount[msg.sender]++;
     }
-    emit LicensesDeposited(msg.sender, uint32(_nftIds.length));
+    licenseContract.safeBatchTransferFrom(msg.sender, address(this), tokenIds);
+    // TODO mint soulbound receipt NFTs
+    emit LicensesDeposited(msg.sender, uint32(tokenIds.length));
   }
 
-  function requestWithdrawal(uint32 _count) external nonReentrant {
-    if (userWithdrawalRequests[msg.sender] != 0) {
+  function requestWithdrawal(uint32 count) external nonReentrant {
+    if (withdrawalRequest[msg.sender] != 0) {
       revert WithdrawalAlreadyRequested();
     }
-    if (_count > userLicenseCount[msg.sender]) {
+    if (count > licenseCount[msg.sender]) {
       revert NotEnoughLicenses();
     }
 
-    userWithdrawalRequests[msg.sender] = _count;
-    emit WithdrawalRequested(msg.sender, _count);
+    withdrawalRequest[msg.sender] = count;
+    emit WithdrawalRequested(msg.sender, count);
   }
 
   // Assumes we actually have enough NFTs back from the staking contract
   function withdraw() external nonReentrant {
-    if (userWithdrawalRequests[msg.sender] == 0) {
+    if (withdrawalRequest[msg.sender] == 0) {
       revert NoWithdrawalRequest();
     }
-    if (userWithdrawalRequests[msg.sender] > unstakedNftIds.length()) {
+    if (withdrawalRequest[msg.sender] > unstakedTokenIds.length()) {
       revert LicensesNotAvailableForWithdrawal();
     }
 
     // First collect all NFTs to transfer
-    uint256[] memory nftsToTransfer = new uint256[](userWithdrawalRequests[msg.sender]);
-    for (uint256 i = 0; i < userWithdrawalRequests[msg.sender]; i++) {
-      uint256 lastIndex = unstakedNftIds.length() - 1;
-      uint256 lastNftId = unstakedNftIds.at(lastIndex);
-      unstakedNftIds.remove(lastNftId);
-      nftsToTransfer[i] = lastNftId;
+    uint256[] memory tokenIdsToTransfer = new uint256[](withdrawalRequest[msg.sender]);
+    for (uint256 i = 0; i < withdrawalRequest[msg.sender]; i++) {
+      uint256 lastIndex = unstakedTokenIds.length() - 1;
+      uint256 lastTokenId = unstakedTokenIds.at(lastIndex);
+      unstakedTokenIds.remove(lastTokenId);
+      tokenIdsToTransfer[i] = lastTokenId;
     }
     // Then do a single batch transfer
     // TODO make sure ethix license contract supports batch transfers
-    nftContract.safeBatchTransferFrom(address(this), msg.sender, nftsToTransfer);
-
-    userWithdrawalRequests[msg.sender] = 0;
-    emit LicensesWithdrawn(msg.sender, uint32(nftsToTransfer.length));
+    licenseContract.safeBatchTransferFrom(address(this), msg.sender, tokenIdsToTransfer);
+    // TODO burn the receipt NFTs
+    withdrawalRequest[msg.sender] = 0;
+    emit LicensesWithdrawn(msg.sender, uint32(tokenIdsToTransfer.length));
   }
 
   // Off-Chain fns
 
-  function withdrawForStaking(uint256 _limit) external onlyRole(MANAGER_ROLE) {
-    if (_limit > unstakedNftIds.length()) {
-      _limit = unstakedNftIds.length();
+  function stakeValidator(bytes memory nodeID, bytes memory blsPublicKey, bytes memory blsPop, uint256 numTokens) external onlyRole(MANAGER_ROLE) {
+    if (numTokens > unstakedTokenIds.length()) revert NotEnoughLicenses();
+    uint256[] memory tokenIds = new uint256[](numTokens);
+    for (uint256 i = 0; i < numTokens; i++) {
+      uint256 lastIndex = unstakedTokenIds.length() - 1;
+      uint256 lastTokenId = unstakedTokenIds.at(lastIndex);
+      unstakedTokenIds.remove(lastTokenId);
+      stakedTokenIds.add(lastTokenId);
+      tokenIds[i] = lastTokenId;
     }
-
-    uint256[] memory nftsToTransfer = new uint256[](_limit);
-
-    for (uint256 i = 0; i < _limit; i++) {
-      uint256 nftId = unstakedNftIds.at(i);
-      unstakedNftIds.remove(nftId);
-      stakedNftIds.add(nftId);
-      nftsToTransfer[i] = nftId;
-    }
-    nftContract.safeBatchTransferFrom(address(this), msg.sender, nftsToTransfer);
+    bytes32 stakeId = nftStakingManager.initiateValidatorRegistration(nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, tokenIds);
+    stakeInfo[stakeId] = StakeInfo({
+      stakeId: stakeId,
+      nodeID: nodeID,
+      blsPublicKey: blsPublicKey,
+      blsPop: blsPop,
+      tokenIds: tokenIds,
+      registerL1ValidatorMessage: bytes("") // TODO
+    });
   }
 
-  function depositFromStaking(uint256[] calldata _nftIds) external onlyRole(MANAGER_ROLE) {
-    for (uint256 i = 0; i < _nftIds.length; i++) {
-      stakedNftIds.remove(_nftIds[i]);
-      unstakedNftIds.add(_nftIds[i]);
-    }
-    nftContract.safeBatchTransferFrom(msg.sender, address(this), _nftIds);
+  function unstakeValidator(bytes32 stakeId) external onlyRole(MANAGER_ROLE) {
+    nftStakingManager.initiateValidatorRemoval(stakeId);
+  }
+
+  function getStakeInfo(bytes32 stakeId) external view returns (StakeInfo memory) {
+    return stakeInfo[stakeId];
   }
 
   function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {

@@ -87,6 +87,8 @@ contract EthixLicense is Initializable, ERC721UpgradeableBatchable, AccessContro
     emit BatchMinted(msg.sender, recipients, tokenIds);
   }
 
+  // TODO disallow xfer if staked to NFT Staking Manager.
+
   function batchTransferFrom(address from, address to, uint256[] memory tokenIds) public {
     for (uint256 i = 0; i < tokenIds.length; i++) {
       transferFrom(from, to, tokenIds[i]);
