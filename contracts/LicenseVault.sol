@@ -92,9 +92,9 @@ contract LicenseVault is
     for (uint256 i = 0; i < tokenIds.length; i++) {
       unstakedTokenIds.add(tokenIds[i]);
       licenseCount[msg.sender]++;
+      licenseContract.transferFrom(msg.sender, address(this), tokenIds[i]);
+      // TODO mint soulbound receipt NFT (one or many?) maybe just mirror tokenIds
     }
-    licenseContract.safeBatchTransferFrom(msg.sender, address(this), tokenIds);
-    // TODO mint soulbound receipt NFTs
     emit LicensesDeposited(msg.sender, uint32(tokenIds.length));
   }
 
@@ -119,19 +119,22 @@ contract LicenseVault is
       revert LicensesNotAvailableForWithdrawal();
     }
 
-    // First collect all NFTs to transfer
+    // Collect all NFTs to transfer
     uint256[] memory tokenIdsToTransfer = new uint256[](withdrawalRequest[msg.sender]);
     for (uint256 i = 0; i < withdrawalRequest[msg.sender]; i++) {
       uint256 lastIndex = unstakedTokenIds.length() - 1;
       uint256 lastTokenId = unstakedTokenIds.at(lastIndex);
       unstakedTokenIds.remove(lastTokenId);
       tokenIdsToTransfer[i] = lastTokenId;
+      licenseContract.transferFrom(address(this), msg.sender, lastTokenId);
     }
-    // Then do a single batch transfer
-    licenseContract.safeBatchTransferFrom(address(this), msg.sender, tokenIdsToTransfer);
     // TODO burn the receipt NFTs
     withdrawalRequest[msg.sender] = 0;
     emit LicensesWithdrawn(msg.sender, uint32(tokenIdsToTransfer.length));
+  }
+
+  function balanceOf(address account) external view returns (uint256) {
+    return licenseCount[account];
   }
 
   // Off-Chain fns
@@ -157,6 +160,7 @@ contract LicenseVault is
     });
   }
 
+  /// @dev The tokenIds will not be unlocked until NFTStakingManagercompleteValidatorRemoval is called
   function unstakeValidator(bytes32 stakeId) external onlyRole(MANAGER_ROLE) {
     nftStakingManager.initiateValidatorRemoval(stakeId);
   }
