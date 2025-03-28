@@ -36,6 +36,7 @@ contract NFTStakingManagerTest is Base {
     bytes(hex"2341234123412341234123412341234123412341");
   bytes public constant DEFAULT_INITIAL_VALIDATOR_NODE_ID_2 =
     bytes(hex"3412341234123412341234123412341234123412");
+
   uint64 public constant DEFAULT_WEIGHT = 1e6;
   // Set the default weight to 1e10 to avoid churn issues
   uint64 public constant DEFAULT_INITIAL_VALIDATOR_WEIGHT = DEFAULT_WEIGHT * 1e4;
@@ -104,11 +105,11 @@ contract NFTStakingManagerTest is Base {
 
     _mockGetBlockchainID();
 
-    ConversionData memory conversion = _defaultConversionDataTotalWeight5();
+    ConversionData memory conversion = _defaultConversionData();
     bytes32 id = sha256(ValidatorMessages.packConversionData(conversion));
     _mockGetPChainWarpMessage(ValidatorMessages.packSubnetToL1ConversionMessage(id), true);
 
-    validatorManager.initializeValidatorSet(_defaultConversionDataTotalWeight5(), 0);
+    validatorManager.initializeValidatorSet(_defaultConversionData(), 0);
     console2.log("validator set initialized");
   }
 
@@ -222,5 +223,85 @@ contract NFTStakingManagerTest is Base {
       WARP_PRECOMPILE_ADDRESS,
       abi.encodeCall(IWarpMessenger.getVerifiedWarpMessage, 0)
     );
+  }
+
+  function _setUpInitializeValidatorRegistration(
+    bytes memory nodeID,
+    bytes32 subnetID,
+    uint64 weight,
+    uint64 registrationExpiry,
+    bytes memory blsPublicKey
+  ) internal returns (bytes32 validationID) {
+    (validationID, ) = ValidatorMessages.packRegisterL1ValidatorMessage(
+      ValidatorMessages.ValidationPeriod({
+        nodeID: nodeID,
+        subnetID: subnetID,
+        blsPublicKey: blsPublicKey,
+        registrationExpiry: registrationExpiry,
+        remainingBalanceOwner: DEFAULT_P_CHAIN_OWNER,
+        disableOwner: DEFAULT_P_CHAIN_OWNER,
+        weight: weight
+      })
+    );
+    bytes20 fixedID = _fixedNodeID(nodeID);
+    (, bytes memory registerL1ValidatorMessage) = ValidatorMessages.packRegisterL1ValidatorMessage(
+      ValidatorMessages.ValidationPeriod({
+        subnetID: subnetID,
+        nodeID: nodeID,
+        blsPublicKey: blsPublicKey,
+        registrationExpiry: registrationExpiry,
+        remainingBalanceOwner: DEFAULT_P_CHAIN_OWNER,
+        disableOwner: DEFAULT_P_CHAIN_OWNER,
+        weight: weight
+      })
+    );
+    vm.warp(registrationExpiry - 1);
+    _mockSendWarpMessage(registerL1ValidatorMessage, bytes32(0));
+
+    _beforeSend(_weightToValue(weight), address(this));
+    vm.expectEmit(true, true, true, true, address(validatorManager));
+    emit InitiatedValidatorRegistration(
+      validationID,
+      fixedID,
+      bytes32(0),
+      registrationExpiry,
+      weight
+    );
+
+    _initiateValidatorRegistration({
+      nodeID: nodeID,
+      blsPublicKey: blsPublicKey,
+      remainingBalanceOwner: DEFAULT_P_CHAIN_OWNER,
+      disableOwner: DEFAULT_P_CHAIN_OWNER,
+      registrationExpiry: registrationExpiry,
+      weight: weight
+    });
+  }
+
+  function _registerValidator(
+    bytes memory nodeID,
+    bytes32 subnetID,
+    uint64 weight,
+    uint64 registrationExpiry,
+    bytes memory blsPublicKey,
+    uint64 registrationTimestamp
+  ) internal returns (bytes32 validationID) {
+    validationID = _setUpInitializeValidatorRegistration(
+      nodeID,
+      subnetID,
+      weight,
+      registrationExpiry,
+      blsPublicKey
+    );
+    bytes memory l1ValidatorRegistrationMessage = ValidatorMessages
+      .packL1ValidatorRegistrationMessage(validationID, true);
+
+    _mockGetPChainWarpMessage(l1ValidatorRegistrationMessage, true);
+
+    vm.warp(registrationTimestamp);
+    vm.expectEmit(true, true, true, true, address(validatorManager));
+    emit CompletedValidatorRegistration(validationID, weight);
+
+    _completeValidatorRegistration(0);
   }
 }
