@@ -35,6 +35,10 @@ contract MockValidatorManager {
     created[lastNodeID] = false;
     return lastNodeID;
   }
+  
+  function initiateValidatorRemoval(bytes32 stakeID) external {
+    validating[stakeID] = false;
+  }
 }
 
 contract NFTStakingManagerTest is Base {
@@ -134,23 +138,39 @@ contract NFTStakingManagerTest is Base {
     assertEq(validatorManager.validating(keccak256(DEFAULT_NODE_ID)), true);
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 1);
   }
-
-  // this test depends on the error from validatormanager
-  function test_completeValidatorRegistration_twice() public {
+  
+  function test_initiateValidatorRemoval() public {
     address validator = getActor("Validator");
     uint256 tokenId = 1;
+    bytes32 stakeID = _initiateValidatorRegistration(validator, tokenId);
+    _completeValidatorRegistration(validator);
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 1);
 
-    _initiateValidatorRegistration(validator, tokenId);
-    _completeValidatorRegistration(validator, tokenId);
+    vm.startPrank(validator);
+    nftStakingManager.initiateValidatorRemoval(stakeID);
+    vm.stopPrank();
+    
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0);
+    assertEq(validatorManager.validating(stakeID), false);
   }
   
-  function _initiateValidatorRegistration(address validator, uint256 tokenId) internal {
+
+  // this test depends on the error from validatormanager
+  // function test_completeValidatorRegistration_twice() public {
+  //   address validator = getActor("Validator");
+  //   uint256 tokenId = 1;
+
+  //   _initiateValidatorRegistration(validator);
+  //   _completeValidatorRegistration(validator);
+  // }
+  
+  function _initiateValidatorRegistration(address validator, uint256 tokenId) internal returns (bytes32) {
     nft.mint(validator, tokenId);
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = tokenId;
 
     vm.startPrank(validator);
-    nftStakingManager.initiateValidatorRegistration(
+    bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
       DEFAULT_NODE_ID,
       DEFAULT_BLS_PUBLIC_KEY,
       DEFAULT_P_CHAIN_OWNER,
@@ -158,9 +178,10 @@ contract NFTStakingManagerTest is Base {
       tokenIds
     );
     vm.stopPrank();
+    return stakeID;
   }
   
-  function _completeValidatorRegistration(address validator, uint256 tokenId) internal {
+  function _completeValidatorRegistration(address validator) internal {
     vm.startPrank(validator);
     nftStakingManager.completeValidatorRegistration(0);
     vm.stopPrank();

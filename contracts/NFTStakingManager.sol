@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import {console2} from "forge-std-1.9.6/src/console2.sol";
+
 import { IERC721 } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
 import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
 import { AccessControlUpgradeable } from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
