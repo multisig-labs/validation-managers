@@ -5,6 +5,8 @@ import {console2} from "forge-std-1.9.6/src/console2.sol";
 
 import {IERC721} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
 import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+
+import {EnumerableSet} from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
@@ -22,6 +24,7 @@ struct StakeInfo {
   bytes32 validationId;
   uint256[] tokenIds;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
+  EnumerableSet.UintSet claimableEpochNumbers;
 }
 
 // Without nested mappings, for view functions
@@ -45,6 +48,8 @@ struct NFTStakingManagerSettings {
 
 contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
   using Address for address payable;
+  using EnumerableSet for EnumerableSet.UintSet;
+  using EnumerableSet for EnumerableSet.Bytes32Set;
 
   error TokenAlreadyLocked(uint256 tokenId);
   error UnauthorizedOwner(address owner);
@@ -186,19 +191,26 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
     uint256 rewards = calculateRewardsPerLicense(epochNumber) * stake.tokenIds.length;
     stake.claimableRewardsPerEpoch[epochNumber] = rewards;
-    // TODO mint rewards using nativeminter
+    stake.claimableEpochNumbers.add(uint256(epochNumber));
+    // TODO mint rewards using nativeminter (vm.etch a mock onto the precompile addr for testing)
     emit RewardsMinted(epochNumber, stakeId, rewards);
   }
 
-  function claimRewards(bytes32 stakeId, uint32[] calldata epochNumbers) external {
+  function claimRewards(bytes32 stakeId, uint32 maxEpochs) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     StakeInfo storage stake = $.stakeInfo[stakeId];
     if (stake.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
+    if (stake.claimableEpochNumbers.length() > maxEpochs) {
+      maxEpochs = uint32(stake.claimableEpochNumbers.length());
+    }
     uint256 totalRewards = 0;
-    for (uint32 i = 0; i < epochNumbers.length; i++) {
-      uint256 rewards = stake.claimableRewardsPerEpoch[epochNumbers[i]];
-      stake.claimableRewardsPerEpoch[epochNumbers[i]] = 0;
-      emit RewardsClaimed(epochNumbers[i], stakeId, rewards);
+    for (uint32 i = 0; i < maxEpochs; i++) {
+      uint32 epochNumber = uint32(stake.claimableEpochNumbers.at(i));
+      stake.claimableEpochNumbers.remove(uint256(epochNumber));
+
+      uint256 rewards = stake.claimableRewardsPerEpoch[epochNumber];
+      stake.claimableRewardsPerEpoch[epochNumber] = 0;
+      emit RewardsClaimed(epochNumber, stakeId, rewards);
       totalRewards += rewards;
     }
     payable(stake.owner).sendValue(totalRewards);

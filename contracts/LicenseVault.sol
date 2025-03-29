@@ -37,6 +37,7 @@ contract LicenseVault is
 {
   using Address for address payable;
   using EnumerableSet for EnumerableSet.UintSet;
+  using EnumerableSet for EnumerableSet.Bytes32Set;
 
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
@@ -56,6 +57,7 @@ contract LicenseVault is
   mapping(address depositor => uint32 count) withdrawalRequest;
   // Track the stake info for each stakeId
   mapping(bytes32 stakeId => StakeInfo stakeInfo) stakeInfo;
+  EnumerableSet.Bytes32Set stakeIds;
 
   event LicensesDeposited(address depositor, uint32 count);
   event LicensesWithdrawn(address withdrawer, uint32 count);
@@ -164,12 +166,18 @@ contract LicenseVault is
       tokenIds: tokenIds,
       registerL1ValidatorMessage: bytes("") // TODO
     });
+    stakeIds.add(stakeId);
     return stakeId;
   }
 
   /// @dev The tokenIds will not be unlocked until NFTStakingManager.completeValidatorRemoval is called
   function unstakeValidator(bytes32 stakeId) external onlyRole(MANAGER_ROLE) {
+    stakeIds.remove(stakeId);
     nftStakingManager.initiateValidatorRemoval(stakeId);
+  }
+
+  function claimRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
+    nftStakingManager.claimRewards(stakeId, maxEpochs);
   }
 
   function getStakeInfo(bytes32 stakeId) external view returns (StakeInfo memory) {
