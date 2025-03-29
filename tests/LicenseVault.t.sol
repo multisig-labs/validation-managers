@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Base} from "./utils/Base.sol";
 
 import {LicenseVault} from "../contracts/LicenseVault.sol";
-import {NFTStakingManager, NFTStakingManagerSettings} from "../contracts/NFTStakingManager.sol";
+import {NFTStakingManager, NFTStakingManagerSettings, StakeInfoView} from "../contracts/NFTStakingManager.sol";
 import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
 import {ValidatorManagerMock} from "../contracts/mocks/ValidatorManagerMock.sol";
 import {IWarpMessenger, WarpMessage} from "./utils/IWarpMessenger.sol";
@@ -48,20 +48,79 @@ contract LicenseVaultTest is Base {
     vm.stopPrank();
   }
 
-  function test_initiateValidatorRegistration() public {
+  function test_deposit_withdraw() public {
     address validator = getActor("Validator");
-    nft.mint(validator, 1);
+    uint256[] memory tokenIds = nft.batchMint(validator, 10);
 
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
+    vm.startPrank(validator);
+
+    nft.setApprovalForAll(address(licenseVault), true);
+    licenseVault.deposit(tokenIds);
+
+    assertEq(nft.balanceOf(validator), 0);
+    assertEq(licenseVault.balanceOf(validator), 10);
+
+    vm.expectRevert(LicenseVault.NoWithdrawalRequest.selector);
+    licenseVault.withdraw();
+
+    vm.expectRevert(LicenseVault.NotEnoughLicenses.selector);
+    licenseVault.requestWithdrawal(11);
+
+    licenseVault.requestWithdrawal(10);
+    licenseVault.withdraw();
+
+    assertEq(licenseVault.balanceOf(validator), 0);
+    assertEq(nft.balanceOf(validator), 10);
+  }
+
+  function test_stake_unstake() public {
+    address validator = getActor("Validator");
+    address unprivledged = getActor("unprivledged");
+    uint256[] memory tokenIds = nft.batchMint(validator, 10);
 
     vm.startPrank(validator);
     nft.setApprovalForAll(address(licenseVault), true);
     licenseVault.deposit(tokenIds);
-    vm.stopPrank();
 
-    assertEq(nft.balanceOf(validator), 0);
-    assertEq(licenseVault.balanceOf(validator), 1);
+    vm.startPrank(admin);
+    vm.expectRevert(LicenseVault.NotEnoughLicenses.selector);
+    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 11);
+
+    stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    // validator is in pending state...
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0);
+    assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
+    StakeInfoView memory stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+    assertEq(stakeInfoView.owner, address(licenseVault));
+    assertEq(stakeInfoView.validationId, stakeId);
+    assertEq(stakeInfoView.startEpoch, 0);
+    assertEq(stakeInfoView.endEpoch, 0);
+    assertEq(stakeInfoView.tokenIds.length, 10);
+
+    vm.startPrank(unprivledged);
+    nftStakingManager.completeValidatorRegistration(0);
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 10);
+    assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
+    stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+    assertEq(stakeInfoView.owner, address(licenseVault));
+    assertEq(stakeInfoView.validationId, stakeId);
+    assertEq(stakeInfoView.startEpoch, nftStakingManager.getCurrentEpoch());
+    assertEq(stakeInfoView.endEpoch, 0);
+    assertEq(stakeInfoView.tokenIds.length, 10);
+
+    // Unstake
+    vm.startPrank(admin);
+    licenseVault.unstakeValidator(stakeId);
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0);
+    stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+    assertEq(stakeInfoView.endEpoch, nftStakingManager.getCurrentEpoch());
+    assertEq(stakeInfoView.tokenIds.length, 10);
+    assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
+
+    vm.startPrank(unprivledged);
+    nftStakingManager.completeValidatorRemoval(0);
+    stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+    assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), bytes32(0));
   }
 
   function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {

@@ -84,6 +84,7 @@ contract LicenseVault is
     remainingBalanceOwner = remainingBalanceOwner_;
     disableOwner = disableOwner_;
     _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
+    _grantRole(MANAGER_ROLE, initialAdmin);
 
     _pause();
   }
@@ -125,6 +126,7 @@ contract LicenseVault is
       uint256 lastIndex = unstakedTokenIds.length() - 1;
       uint256 lastTokenId = unstakedTokenIds.at(lastIndex);
       unstakedTokenIds.remove(lastTokenId);
+      licenseCount[msg.sender]--;
       tokenIdsToTransfer[i] = lastTokenId;
       licenseContract.transferFrom(address(this), msg.sender, lastTokenId);
     }
@@ -139,7 +141,11 @@ contract LicenseVault is
 
   // Off-Chain fns
 
-  function stakeValidator(bytes memory nodeID, bytes memory blsPublicKey, bytes memory blsPop, uint256 numTokens) external onlyRole(MANAGER_ROLE) {
+  function stakeValidator(bytes memory nodeID, bytes memory blsPublicKey, bytes memory blsPop, uint256 numTokens)
+    external
+    onlyRole(MANAGER_ROLE)
+    returns (bytes32)
+  {
     if (numTokens > unstakedTokenIds.length()) revert NotEnoughLicenses();
     uint256[] memory tokenIds = new uint256[](numTokens);
     for (uint256 i = 0; i < numTokens; i++) {
@@ -158,9 +164,10 @@ contract LicenseVault is
       tokenIds: tokenIds,
       registerL1ValidatorMessage: bytes("") // TODO
     });
+    return stakeId;
   }
 
-  /// @dev The tokenIds will not be unlocked until NFTStakingManagercompleteValidatorRemoval is called
+  /// @dev The tokenIds will not be unlocked until NFTStakingManager.completeValidatorRemoval is called
   function unstakeValidator(bytes32 stakeId) external onlyRole(MANAGER_ROLE) {
     nftStakingManager.initiateValidatorRemoval(stakeId);
   }

@@ -3,13 +3,13 @@ pragma solidity ^0.8.25;
 
 import {console2} from "forge-std-1.9.6/src/console2.sol";
 
-import { IERC721 } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
-import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import { AccessControlUpgradeable } from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
-import { Initializable } from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
-import { UUPSUpgradeable } from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import { PChainOwner, Validator, ValidatorStatus } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
-import { ValidatorManager } from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+import {IERC721} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
+import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import {PChainOwner, Validator, ValidatorStatus} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import {ValidatorManager} from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
 
 struct EpochInfo {
   uint256 totalStakedLicenses;
@@ -22,6 +22,15 @@ struct StakeInfo {
   bytes32 validationId;
   uint256[] tokenIds;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
+}
+
+// Without nested mappings, for view functions
+struct StakeInfoView {
+  address owner;
+  uint32 startEpoch;
+  uint32 endEpoch;
+  bytes32 validationId;
+  uint256[] tokenIds;
 }
 
 struct NFTStakingManagerSettings {
@@ -47,8 +56,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
 
   // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
-  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
-    0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
+  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION = 0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
 
   struct NFTStakingManagerStorage {
     ValidatorManager manager;
@@ -97,17 +105,12 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint256[] calldata tokenIds
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    if (tokenIds.length == 0 || tokenIds.length > $.maxLicensesPerValidator)
+    if (tokenIds.length == 0 || tokenIds.length > $.maxLicensesPerValidator) {
       revert("Invalid license count");
+    }
     uint64 weight = uint64(tokenIds.length * $.licenseWeight);
-    bytes32 stakeId = $.manager.initiateValidatorRegistration(
-      nodeID,
-      blsPublicKey,
-      uint64(block.timestamp + 1 days),
-      remainingBalanceOwner,
-      disableOwner,
-      weight
-    );
+    bytes32 stakeId =
+      $.manager.initiateValidatorRegistration(nodeID, blsPublicKey, uint64(block.timestamp + 1 days), remainingBalanceOwner, disableOwner, weight);
     // do not xfer, just mark tokens as locked by this stakeId
     // msg.sender must own all the tokens
     _lockTokens(stakeId, tokenIds);
@@ -152,8 +155,9 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function rewardsSnapshot() external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     uint32 lastEpoch = getCurrentEpoch() - 1;
-    if ($.epochInfo[lastEpoch].totalStakedLicenses != 0)
+    if ($.epochInfo[lastEpoch].totalStakedLicenses != 0) {
       revert("Rewards already snapped for this epoch");
+    }
     $.epochInfo[lastEpoch].totalStakedLicenses = $.currentTotalStakedLicenses;
   }
 
@@ -161,8 +165,9 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   // In future this could accept uptime proof as well.
   function mintRewards(uint32 epochNumber, bytes32 stakeId) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    if ($.epochInfo[epochNumber].totalStakedLicenses == 0)
+    if ($.epochInfo[epochNumber].totalStakedLicenses == 0) {
       revert("Rewards not snapped for this epoch");
+    }
     StakeInfo storage stake = $.stakeInfo[stakeId];
     uint32 currentEpoch = getCurrentEpoch();
     if (currentEpoch < stake.startEpoch || currentEpoch > stake.endEpoch) {
@@ -171,10 +176,12 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     for (uint256 i = 0; i < stake.tokenIds.length; i++) {
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
-      if ($.tokenLockedBy[stake.tokenIds[i]] != stakeId)
+      if ($.tokenLockedBy[stake.tokenIds[i]] != stakeId) {
         revert("Token not locked by this stakeId");
-      if ($.isRewardsMinted[epochNumber][stake.tokenIds[i]])
+      }
+      if ($.isRewardsMinted[epochNumber][stake.tokenIds[i]]) {
         revert("Rewards already minted for this tokenId");
+      }
       $.isRewardsMinted[epochNumber][stake.tokenIds[i]] = true;
     }
     uint256 rewards = calculateRewardsPerLicense(epochNumber) * stake.tokenIds.length;
@@ -197,11 +204,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     payable(stake.owner).sendValue(totalRewards);
   }
 
-  function _getNFTStakingManagerStorage()
-    private
-    pure
-    returns (NFTStakingManagerStorage storage $)
-  {
+  function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
     // solhint-disable-next-line no-inline-assembly
     assembly {
       $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
@@ -247,13 +250,33 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function getCurrentEpoch() public view returns (uint32) {
     return getEpochByTimestamp(uint32(block.timestamp));
   }
-  
+
   function getCurrentTotalStakedLicenses() public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.currentTotalStakedLicenses;
   }
 
-  function _authorizeUpgrade(
-    address newImplementation
-  ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  function getTokenLockedBy(uint256 tokenId) public view returns (bytes32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.tokenLockedBy[tokenId];
+  }
+
+  function getStakeInfoView(bytes32 stakeId) public view returns (StakeInfoView memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    StakeInfo storage stake = $.stakeInfo[stakeId];
+    return StakeInfoView({
+      owner: stake.owner,
+      tokenIds: stake.tokenIds,
+      startEpoch: stake.startEpoch,
+      endEpoch: stake.endEpoch,
+      validationId: stake.validationId
+    });
+  }
+
+  function getStakeRewardsForEpoch(bytes32 stakeId, uint32 epoch) public view returns (uint256) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.stakeInfo[stakeId].claimableRewardsPerEpoch[epoch];
+  }
+
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

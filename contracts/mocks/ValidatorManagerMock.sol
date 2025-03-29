@@ -31,4 +31,8 @@ contract ValidatorManagerMock {
   function initiateValidatorRemoval(bytes32 stakeID) external {
     validating[stakeID] = false;
   }
+
+  function completeValidatorRemoval(uint32) external view returns (bytes32) {
+    return lastNodeID;
+  }
 }
