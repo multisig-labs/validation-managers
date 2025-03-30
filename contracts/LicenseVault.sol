@@ -114,7 +114,7 @@ contract LicenseVault is
   }
 
   // Assumes we actually have enough NFTs back from the staking contract
-  function withdraw() external nonReentrant {
+  function completeWithdrawal() external nonReentrant {
     if (withdrawalRequest[msg.sender] == 0) {
       revert NoWithdrawalRequest();
     }
@@ -176,6 +176,8 @@ contract LicenseVault is
     nftStakingManager.initiateValidatorRemoval(stakeId);
   }
 
+  /// @dev maxEpochs is the number of unclaimed epochs to claim rewards for, allowing for claiming
+  ///      a subset of epochs if gas costs are too high
   function claimRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
     nftStakingManager.claimRewards(stakeId, maxEpochs);
   }

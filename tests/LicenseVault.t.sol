@@ -61,13 +61,13 @@ contract LicenseVaultTest is Base {
     assertEq(licenseVault.balanceOf(validator), 10);
 
     vm.expectRevert(LicenseVault.NoWithdrawalRequest.selector);
-    licenseVault.withdraw();
+    licenseVault.completeWithdrawal();
 
     vm.expectRevert(LicenseVault.NotEnoughLicenses.selector);
     licenseVault.requestWithdrawal(11);
 
     licenseVault.requestWithdrawal(10);
-    licenseVault.withdraw();
+    licenseVault.completeWithdrawal();
 
     assertEq(licenseVault.balanceOf(validator), 0);
     assertEq(nft.balanceOf(validator), 10);

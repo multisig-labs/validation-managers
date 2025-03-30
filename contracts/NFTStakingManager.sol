@@ -66,16 +66,17 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   struct NFTStakingManagerStorage {
     ValidatorManager manager;
     IERC721 licenseContract;
+    uint16 maxLicensesPerValidator; // 100
     uint32 currentTotalStakedLicenses;
     uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC
     uint32 epochDuration; // 1 days
     uint64 licenseWeight; // 1000
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
-    uint16 maxLicensesPerValidator; // 100
     mapping(uint32 epochNumber => EpochInfo) epochInfo;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 stakeID) tokenLockedBy;
     // stakeId = validationId but in future could also be delegationId if we support that
+    EnumerableSet.Bytes32Set stakeIds;
     mapping(bytes32 stakeId => StakeInfo) stakeInfo;
     // Ensure that we only ever mint rewards once for a given epochNumber/tokenId combo
     // Gas is cheap so nested mapping is the clearest
@@ -166,9 +167,16 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     $.epochInfo[lastEpoch].totalStakedLicenses = $.currentTotalStakedLicenses;
   }
 
-  // Anyone can call this function to mint rewards (prob backend cron process)
-  // In future this could accept uptime proof as well.
-  function mintRewards(uint32 epochNumber, bytes32 stakeId) external {
+  // Anyone can call mintRewards functions to mint rewards (prob backend cron process)
+  // No special permissions necessary. In future this could accept uptime proof as well.
+
+  function mintRewards(uint32 epochNumber, bytes32[] calldata stakeIds) external {
+    for (uint256 i = 0; i < stakeIds.length; i++) {
+      _mintRewards(epochNumber, stakeIds[i]);
+    }
+  }
+
+  function _mintRewards(uint32 epochNumber, bytes32 stakeId) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     if ($.epochInfo[epochNumber].totalStakedLicenses == 0) {
       revert("Rewards not snapped for this epoch");
@@ -196,24 +204,36 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     emit RewardsMinted(epochNumber, stakeId, rewards);
   }
 
-  function claimRewards(bytes32 stakeId, uint32 maxEpochs) external {
+  function claimRewards(bytes32 stakeId, uint32 maxEpochs) external returns (uint256, uint32[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     StakeInfo storage stake = $.stakeInfo[stakeId];
+
     if (stake.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
     if (stake.claimableEpochNumbers.length() > maxEpochs) {
       maxEpochs = uint32(stake.claimableEpochNumbers.length());
     }
+
     uint256 totalRewards = 0;
+    uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
+
     for (uint32 i = 0; i < maxEpochs; i++) {
       uint32 epochNumber = uint32(stake.claimableEpochNumbers.at(i));
-      stake.claimableEpochNumbers.remove(uint256(epochNumber));
-
       uint256 rewards = stake.claimableRewardsPerEpoch[epochNumber];
+
+      // State changes
+      stake.claimableEpochNumbers.remove(uint256(epochNumber));
       stake.claimableRewardsPerEpoch[epochNumber] = 0;
-      emit RewardsClaimed(epochNumber, stakeId, rewards);
+      claimedEpochNumbers[i] = epochNumber;
       totalRewards += rewards;
     }
+
+    // Events (after all state changes)
+    for (uint32 i = 0; i < maxEpochs; i++) {
+      emit RewardsClaimed(claimedEpochNumbers[i], stakeId, stake.claimableRewardsPerEpoch[claimedEpochNumbers[i]]);
+    }
+
     payable(stake.owner).sendValue(totalRewards);
+    return (totalRewards, claimedEpochNumbers);
   }
 
   function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
@@ -263,17 +283,22 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     return getEpochByTimestamp(uint32(block.timestamp));
   }
 
-  function getCurrentTotalStakedLicenses() public view returns (uint32) {
+  function getCurrentTotalStakedLicenses() external view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.currentTotalStakedLicenses;
   }
 
-  function getTokenLockedBy(uint256 tokenId) public view returns (bytes32) {
+  function getTokenLockedBy(uint256 tokenId) external view returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.tokenLockedBy[tokenId];
   }
 
-  function getStakeInfoView(bytes32 stakeId) public view returns (StakeInfoView memory) {
+  function getStakeIds() external view returns (bytes32[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.stakeIds.values();
+  }
+
+  function getStakeInfoView(bytes32 stakeId) external view returns (StakeInfoView memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     StakeInfo storage stake = $.stakeInfo[stakeId];
     return StakeInfoView({
@@ -285,7 +310,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     });
   }
 
-  function getStakeRewardsForEpoch(bytes32 stakeId, uint32 epoch) public view returns (uint256) {
+  function getStakeRewardsForEpoch(bytes32 stakeId, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.stakeInfo[stakeId].claimableRewardsPerEpoch[epoch];
   }
