@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.25;
 
-import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+import {AccessControlDefaultAdminRulesUpgradeable} from
+  "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
@@ -12,9 +13,8 @@ import {ERC721BurnableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2
 // This is a soulbound token, meaning it cannot be transferred.
 // It can be burned when the user leaves the vault.
 
-contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract ReceiptToken is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-  bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
   string private _baseTokenURI;
   uint256 private _nextTokenId;
@@ -24,14 +24,10 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
     _disableInitializers();
   }
 
-  function initialize(
-    address defaultAdmin,
-    address minter,
-    address upgrader,
-    string calldata name,
-    string calldata symbol,
-    string calldata baseTokenURI
-  ) public initializer {
+  function initialize(address defaultAdmin, address minter, string calldata name, string calldata symbol, string calldata baseTokenURI)
+    public
+    initializer
+  {
     __ERC721_init(name, symbol);
     __AccessControl_init();
     __UUPSUpgradeable_init();
@@ -39,7 +35,6 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
     _nextTokenId = 1;
     _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
     _grantRole(MINTER_ROLE, minter);
-    _grantRole(UPGRADER_ROLE, upgrader);
     _baseTokenURI = baseTokenURI;
   }
 
@@ -49,7 +44,6 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
     return tokenId;
   }
 
-  // TODO Not sure how to use ERC721BurnableUpgradeable,
   function burn(uint256 tokenId) public override onlyRole(MINTER_ROLE) {
     _burn(tokenId);
   }
@@ -63,7 +57,7 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
     return super._update(to, tokenId, auth);
   }
 
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
   function _baseURI() internal view override returns (string memory) {
     return _baseTokenURI;
@@ -71,7 +65,7 @@ contract Receipt is Initializable, ERC721Upgradeable, ERC721BurnableUpgradeable,
 
   // The following functions are overrides required by Solidity.
 
-  function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+  function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable) returns (bool) {
     return super.supportsInterface(interfaceId);
   }
 }
