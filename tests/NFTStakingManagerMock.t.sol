@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import {Base} from "./utils/Base.sol";
 
-import {NFTStakingManager, NFTStakingManagerSettings} from "../contracts/NFTStakingManager.sol";
+import {NFTStakingManager, NFTStakingManagerSettings, StakeInfo} from "../contracts/NFTStakingManager.sol";
 import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
 import {IWarpMessenger, WarpMessage} from "./utils/IWarpMessenger.sol";
 
@@ -17,6 +17,8 @@ contract MockValidatorManager {
 
   bytes32 public lastNodeID;
 
+  uint256 private randNonce = 0;
+
   function initiateValidatorRegistration(
     bytes memory nodeID,
     bytes memory, //bls public key
@@ -25,7 +27,7 @@ contract MockValidatorManager {
     PChainOwner memory, // disable owner
     uint64 // weight
   ) external returns (bytes32) {
-    lastNodeID = keccak256(nodeID);
+    lastNodeID = _getValidationID();
     created[lastNodeID] = true;
     return lastNodeID;
   }
@@ -38,6 +40,10 @@ contract MockValidatorManager {
 
   function initiateValidatorRemoval(bytes32 stakeID) external {
     validating[stakeID] = false;
+  }
+
+  function _getValidationID() internal returns (bytes32) {
+    return bytes32(uint256(randNonce++));
   }
 }
 
@@ -130,6 +136,33 @@ contract NFTStakingManagerTest is Base {
 
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0);
     assertEq(validatorManager.validating(stakeID), false);
+  }
+
+  function test_rewards() public {
+    address validator = getActor("Validator");
+    uint256 tokenId = 1;
+    bytes32 stakeID1 = _initiateValidatorRegistration(validator, tokenId);
+    _completeValidatorRegistration(validator);
+
+    address validator2 = getActor("Validator2");
+    uint256 tokenId2 = 2;
+    bytes32 stakeID2 = _initiateValidatorRegistration(validator2, tokenId2);
+    _completeValidatorRegistration(validator2);
+
+    uint32 lastEpoch = nftStakingManager.getCurrentEpoch();
+
+    vm.warp(block.timestamp + 1 days);
+    nftStakingManager.rewardsSnapshot();
+
+    nftStakingManager.mintRewards(lastEpoch, stakeID1);
+    nftStakingManager.mintRewards(lastEpoch, stakeID2);
+
+    vm.prank(validator);
+    uint256 claimableRewards1 = nftStakingManager.getClaimableRewards(stakeID1, lastEpoch);
+    vm.prank(validator2);
+    uint256 claimableRewards2 = nftStakingManager.getClaimableRewards(stakeID2, lastEpoch);
+    console2.log("claimablerewards1", claimableRewards1);
+    console2.log("claimablerewards2", claimableRewards2);
   }
 
   // this test depends on the error from validatormanager

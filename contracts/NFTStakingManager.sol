@@ -159,6 +159,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   // TODO what happens if we miss an epoch? Maybe admin fn to hardcode a snapshot?
   function rewardsSnapshot() external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    // what to do if this is the first epoch? then I guess it can't be called
+    if (getCurrentEpoch() == 0) revert("second epoch has not started yet");
     uint32 lastEpoch = getCurrentEpoch() - 1;
     if ($.epochInfo[lastEpoch].totalStakedLicenses != 0) {
       revert("Rewards already snapped for this epoch");
@@ -175,9 +177,18 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
     StakeInfo storage stake = $.stakeInfo[stakeId];
     uint32 currentEpoch = getCurrentEpoch();
-    if (currentEpoch < stake.startEpoch || currentEpoch > stake.endEpoch) {
-      revert EpochOutOfRange(currentEpoch, stake.startEpoch, stake.endEpoch);
+
+    if (stake.endEpoch == 0) {
+      if (currentEpoch < stake.startEpoch) {
+        revert EpochOutOfRange(currentEpoch, stake.startEpoch, stake.endEpoch);
+      }
+    } else {
+      if (currentEpoch < stake.startEpoch || currentEpoch > stake.endEpoch) {
+        revert EpochOutOfRange(currentEpoch, stake.startEpoch, stake.endEpoch);
+      }
     }
+
+    // for each tokenId do the following
     for (uint256 i = 0; i < stake.tokenIds.length; i++) {
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
@@ -214,6 +225,17 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       totalRewards += rewards;
     }
     payable(stake.owner).sendValue(totalRewards);
+  }
+
+  function getStakeInfo(bytes32 stakeId) external view returns (StakeInfoView memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    StakeInfo storage stake = $.stakeInfo[stakeId];
+    return StakeInfoView(stake.owner, stake.startEpoch, stake.endEpoch, stake.validationId, stake.tokenIds);
+  }
+
+  function getClaimableRewards(bytes32 stakeId, uint32 epochNumber) external view returns (uint256) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.stakeInfo[stakeId].claimableRewardsPerEpoch[epochNumber];
   }
 
   function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
