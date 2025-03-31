@@ -38,6 +38,7 @@ contract LicenseVault is
   using Address for address payable;
   using EnumerableSet for EnumerableSet.UintSet;
   using EnumerableSet for EnumerableSet.Bytes32Set;
+  using EnumerableSet for EnumerableSet.AddressSet;
 
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
@@ -51,6 +52,7 @@ contract LicenseVault is
   EnumerableSet.UintSet unstakedTokenIds;
   // These are the ones that have been deposited to the staking contract
   EnumerableSet.UintSet stakedTokenIds;
+  EnumerableSet.AddressSet depositors;
   // Track how many licenses each user has deposited
   mapping(address depositor => uint32 count) licenseCount;
   // Track how many licenses each user has requested to withdraw
@@ -58,6 +60,8 @@ contract LicenseVault is
   // Track the stake info for each stakeId
   mapping(bytes32 stakeId => StakeInfo stakeInfo) stakeInfo;
   EnumerableSet.Bytes32Set stakeIds;
+
+  mapping(address depositor => uint256 balance) public claimableRewards;
 
   event LicensesDeposited(address depositor, uint32 count);
   event LicensesWithdrawn(address withdrawer, uint32 count);
@@ -98,6 +102,7 @@ contract LicenseVault is
       licenseContract.transferFrom(msg.sender, address(this), tokenIds[i]);
       // TODO mint soulbound receipt NFT (one or many?) maybe just mirror tokenIds
     }
+    depositors.add(msg.sender);
     emit LicensesDeposited(msg.sender, uint32(tokenIds.length));
   }
 
@@ -114,6 +119,7 @@ contract LicenseVault is
   }
 
   // Assumes we actually have enough NFTs back from the staking contract
+  // TODO enforce a time delay
   function completeWithdrawal() external nonReentrant {
     if (withdrawalRequest[msg.sender] == 0) {
       revert NoWithdrawalRequest();
@@ -134,6 +140,9 @@ contract LicenseVault is
     }
     // TODO burn the receipt NFTs
     withdrawalRequest[msg.sender] = 0;
+    if (licenseCount[msg.sender] == 0) {
+      depositors.remove(msg.sender);
+    }
     emit LicensesWithdrawn(msg.sender, uint32(tokenIdsToTransfer.length));
   }
 
@@ -176,10 +185,27 @@ contract LicenseVault is
     nftStakingManager.initiateValidatorRemoval(stakeId);
   }
 
+  // Calls into NFTStakingManager to claim rewards and distribute evenly to all depositors
+  // TODO check gas limits
   /// @dev maxEpochs is the number of unclaimed epochs to claim rewards for, allowing for claiming
   ///      a subset of epochs if gas costs are too high
-  function claimRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
-    nftStakingManager.claimRewards(stakeId, maxEpochs);
+  function claimValidatorRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
+    (uint256 rewards,) = nftStakingManager.claimRewards(stakeId, maxEpochs);
+    uint256 totalDepositors = depositors.length();
+    uint256 rewardPerDepositor = rewards / totalDepositors;
+    for (uint256 i = 0; i < totalDepositors; i++) {
+      claimableRewards[depositors.at(i)] += rewardPerDepositor;
+    }
+  }
+
+  function claimDepositorRewards() external {
+    uint256 amount = claimableRewards[msg.sender];
+    claimableRewards[msg.sender] = 0;
+    payable(msg.sender).sendValue(amount);
+  }
+
+  function getClaimableRewards(address depositor) external view returns (uint256) {
+    return claimableRewards[depositor];
   }
 
   function getStakeInfo(bytes32 stakeId) external view returns (StakeInfo memory) {

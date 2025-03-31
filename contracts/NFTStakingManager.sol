@@ -156,7 +156,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   }
 
   // Anyone can call. Must be called right **after** a new epoch has started, and we will
-  // snapshot the total staked licenses for the epoch
+  // snapshot the total staked licenses for the prev epoch
   // TODO what happens if we miss an epoch? Maybe admin fn to hardcode a snapshot?
   function rewardsSnapshot() external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
@@ -182,9 +182,9 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       revert("Rewards not snapped for this epoch");
     }
     StakeInfo storage stake = $.stakeInfo[stakeId];
-    uint32 currentEpoch = getCurrentEpoch();
-    if (currentEpoch < stake.startEpoch || currentEpoch > stake.endEpoch) {
-      revert EpochOutOfRange(currentEpoch, stake.startEpoch, stake.endEpoch);
+
+    if (epochNumber < stake.startEpoch || (epochNumber > stake.endEpoch && stake.endEpoch != 0)) {
+      revert EpochOutOfRange(epochNumber, stake.startEpoch, stake.endEpoch);
     }
     for (uint256 i = 0; i < stake.tokenIds.length; i++) {
       // TODO if either of these happen it seems unrecoverable? How would we fix?

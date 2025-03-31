@@ -123,6 +123,31 @@ contract LicenseVaultTest is Base {
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), bytes32(0));
   }
 
+  function test_stake_claim_rewards() public {
+    address depositor = getActor("Depositor");
+    address unprivledged = getActor("Unprivledged");
+    uint256[] memory tokenIds = nft.batchMint(depositor, 10);
+
+    skip(1 days);
+
+    vm.startPrank(depositor);
+    nft.setApprovalForAll(address(licenseVault), true);
+    licenseVault.deposit(tokenIds);
+
+    vm.startPrank(admin);
+    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    nftStakingManager.completeValidatorRegistration(0);
+
+    skip(1 days);
+    nftStakingManager.rewardsSnapshot();
+    bytes32[] memory stakeIds = new bytes32[](1);
+    stakeIds[0] = stakeId;
+    nftStakingManager.mintRewards(1, stakeIds);
+
+    licenseVault.claimValidatorRewards(stakeId, 10);
+    assertEq(licenseVault.getClaimableRewards(depositor), 1000 ether);
+  }
+
   function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {
     return NFTStakingManagerSettings({
       validatorManager: validatorManager_,
