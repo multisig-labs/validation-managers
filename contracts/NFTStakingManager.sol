@@ -13,6 +13,10 @@ import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/u
 import {PChainOwner, Validator, ValidatorStatus} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 import {ValidatorManager} from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
 
+interface INativeMinter {
+  function mintNativeCoin(address addr, uint256 amount) external;
+}
+
 struct EpochInfo {
   uint256 totalStakedLicenses;
 }
@@ -21,7 +25,6 @@ struct StakeInfo {
   address owner;
   uint32 startEpoch;
   uint32 endEpoch;
-  bytes32 validationId;
   uint256[] tokenIds;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
   EnumerableSet.UintSet claimableEpochNumbers;
@@ -32,7 +35,6 @@ struct StakeInfoView {
   address owner;
   uint32 startEpoch;
   uint32 endEpoch;
-  bytes32 validationId;
   uint256[] tokenIds;
 }
 
@@ -72,14 +74,13 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint32 epochDuration; // 1 days
     uint64 licenseWeight; // 1000
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
-    mapping(uint32 epochNumber => EpochInfo) epochInfo;
-    // We dont xfer nft to this contract, we just mark it as locked
-    mapping(uint256 tokenId => bytes32 stakeID) tokenLockedBy;
     // stakeId = validationId but in future could also be delegationId if we support that
     EnumerableSet.Bytes32Set stakeIds;
     mapping(bytes32 stakeId => StakeInfo) stakeInfo;
+    mapping(uint32 epochNumber => EpochInfo) epochInfo;
+    // We dont xfer nft to this contract, we just mark it as locked
+    mapping(uint256 tokenId => bytes32 stakeID) tokenLockedBy;
     // Ensure that we only ever mint rewards once for a given epochNumber/tokenId combo
-    // Gas is cheap so nested mapping is the clearest
     mapping(uint32 epochNumber => mapping(uint256 tokenId => bool isRewardsMinted)) isRewardsMinted;
   }
 
@@ -99,8 +100,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     $.licenseWeight = settings.licenseWeight;
     $.epochRewards = settings.epochRewards;
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
-
-    // ... rest of initialization
   }
 
   function initiateValidatorRegistration(
@@ -117,14 +116,10 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint64 weight = uint64(tokenIds.length * $.licenseWeight);
     bytes32 stakeId =
       $.manager.initiateValidatorRegistration(nodeID, blsPublicKey, uint64(block.timestamp + 1 days), remainingBalanceOwner, disableOwner, weight);
-    // do not xfer, just mark tokens as locked by this stakeId
-    // msg.sender must own all the tokens
     _lockTokens(stakeId, tokenIds);
-    // create StakeInfo and add to mapping
     StakeInfo storage newStake = $.stakeInfo[stakeId];
     newStake.owner = msg.sender;
     newStake.tokenIds = tokenIds;
-    newStake.validationId = stakeId;
 
     return stakeId;
   }
@@ -200,7 +195,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint256 rewards = calculateRewardsPerLicense(epochNumber) * stake.tokenIds.length;
     stake.claimableRewardsPerEpoch[epochNumber] = rewards;
     stake.claimableEpochNumbers.add(uint256(epochNumber));
-    // TODO mint rewards using nativeminter (vm.etch a mock onto the precompile addr for testing)
+    INativeMinter(0x0200000000000000000000000000000000000001).mintNativeCoin(address(this), rewards);
     emit RewardsMinted(epochNumber, stakeId, rewards);
   }
 
@@ -209,7 +204,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     StakeInfo storage stake = $.stakeInfo[stakeId];
 
     if (stake.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
-    if (stake.claimableEpochNumbers.length() > maxEpochs) {
+    if (maxEpochs > stake.claimableEpochNumbers.length()) {
       maxEpochs = uint32(stake.claimableEpochNumbers.length());
     }
 
@@ -301,13 +296,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function getStakeInfoView(bytes32 stakeId) external view returns (StakeInfoView memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     StakeInfo storage stake = $.stakeInfo[stakeId];
-    return StakeInfoView({
-      owner: stake.owner,
-      tokenIds: stake.tokenIds,
-      startEpoch: stake.startEpoch,
-      endEpoch: stake.endEpoch,
-      validationId: stake.validationId
-    });
+    return StakeInfoView({owner: stake.owner, tokenIds: stake.tokenIds, startEpoch: stake.startEpoch, endEpoch: stake.endEpoch});
   }
 
   function getStakeRewardsForEpoch(bytes32 stakeId, uint32 epoch) external view returns (uint256) {
