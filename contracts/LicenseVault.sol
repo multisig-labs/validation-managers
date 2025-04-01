@@ -221,6 +221,7 @@ contract LicenseVault is
   // Calls into NFTStakingManager to claim rewards and distribute evenly to all depositors
   // TODO check gas limits, expect MAX of 10,000 depositors
   // TODO check precision loss
+  // Since we are tracking epochs in nftStakingManager, we dont need to do it up here (right?)
   /// @dev maxEpochs is the number of unclaimed epochs to claim rewards for, allowing for claiming
   ///      a subset of epochs if gas costs are too high
   function claimValidatorRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
