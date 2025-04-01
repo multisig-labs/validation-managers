@@ -19,7 +19,6 @@ import {ReceiptToken} from "./tokens/ReceiptToken.sol";
 
 // TODO also store $._pendingRegisterValidationMessages[validationID] = registerL1ValidatorMessage; from the validator manager
 struct StakeInfo {
-  bytes32 stakeId;
   bytes nodeID;
   bytes blsPublicKey;
   bytes blsPop;
@@ -30,6 +29,7 @@ struct StakeInfo {
 struct DepositorInfo {
   uint32 licenseCount;
   uint32 withdrawalRequest;
+  uint32 withdrawalRequestTimestamp;
   uint256 claimableRewards;
   uint256 receiptId;
 }
@@ -48,6 +48,7 @@ contract LicenseVault is
   using EnumerableSet for EnumerableSet.AddressSet;
 
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
+  uint32 public constant WITHDRAWAL_DELAY = 14 days;
 
   NodeLicense public nodeLicense;
   ReceiptToken public receiptToken;
@@ -55,6 +56,8 @@ contract LicenseVault is
   // These will be used for each new hardware node created
   PChainOwner public remainingBalanceOwner;
   PChainOwner public disableOwner;
+
+  uint256 public totalDepositedLicenses;
   // As NFTs are added, we lump them all together and do not track which user had which id
   // This is the set that are in this contract and not staking
   EnumerableSet.UintSet unstakedTokenIds;
@@ -68,11 +71,16 @@ contract LicenseVault is
   event LicensesDeposited(address depositor, uint32 count);
   event LicensesWithdrawn(address withdrawer, uint32 count);
   event WithdrawalRequested(address withdrawer, uint32 count);
+  event ValidatorStaked(bytes32 indexed stakeId, uint256[] tokenIds);
+  event ValidatorUnstakingInitiated(bytes32 indexed stakeId);
 
   error LicensesNotAvailableForWithdrawal();
   error NotEnoughLicenses();
-  error WithdrawalAlreadyRequested();
+  error NoLicensesDeposited();
   error NoWithdrawalRequest();
+  error NoRewardsToClaim();
+  error WithdrawalAlreadyRequested();
+  error WithdrawalDelayNotMet();
 
   // Initializer instead of constructor
   function initialize(
@@ -102,6 +110,7 @@ contract LicenseVault is
   function deposit(uint256[] calldata tokenIds) external nonReentrant {
     depositors.add(msg.sender);
     depositorInfo[msg.sender].licenseCount += uint32(tokenIds.length);
+    totalDepositedLicenses += tokenIds.length;
     for (uint256 i = 0; i < tokenIds.length; i++) {
       unstakedTokenIds.add(tokenIds[i]);
       nodeLicense.transferFrom(msg.sender, address(this), tokenIds[i]);
@@ -123,6 +132,7 @@ contract LicenseVault is
     }
 
     depositorInfo[msg.sender].withdrawalRequest = count;
+    depositorInfo[msg.sender].withdrawalRequestTimestamp = uint32(block.timestamp);
     emit WithdrawalRequested(msg.sender, count);
   }
 
@@ -137,6 +147,11 @@ contract LicenseVault is
     if (info.withdrawalRequest > unstakedTokenIds.length()) {
       revert LicensesNotAvailableForWithdrawal();
     }
+    if (block.timestamp < info.withdrawalRequestTimestamp + WITHDRAWAL_DELAY) {
+      revert WithdrawalDelayNotMet();
+    }
+
+    totalDepositedLicenses -= info.withdrawalRequest;
 
     // Collect all NFTs to transfer
     uint256[] memory tokenIdsToTransfer = new uint256[](info.withdrawalRequest);
@@ -185,7 +200,6 @@ contract LicenseVault is
     }
     bytes32 stakeId = nftStakingManager.initiateValidatorRegistration(nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, tokenIds);
     stakeInfo[stakeId] = StakeInfo({
-      stakeId: stakeId,
       nodeID: nodeID,
       blsPublicKey: blsPublicKey,
       blsPop: blsPop,
@@ -193,6 +207,7 @@ contract LicenseVault is
       registerL1ValidatorMessage: bytes("") // TODO
     });
     stakeIds.add(stakeId);
+    emit ValidatorStaked(stakeId, tokenIds);
     return stakeId;
   }
 
@@ -200,23 +215,35 @@ contract LicenseVault is
   function unstakeValidator(bytes32 stakeId) external onlyRole(MANAGER_ROLE) {
     stakeIds.remove(stakeId);
     nftStakingManager.initiateValidatorRemoval(stakeId);
+    emit ValidatorUnstakingInitiated(stakeId);
   }
 
   // Calls into NFTStakingManager to claim rewards and distribute evenly to all depositors
-  // TODO check gas limits
+  // TODO check gas limits, expect MAX of 10,000 depositors
+  // TODO check precision loss
   /// @dev maxEpochs is the number of unclaimed epochs to claim rewards for, allowing for claiming
   ///      a subset of epochs if gas costs are too high
   function claimValidatorRewards(bytes32 stakeId, uint32 maxEpochs) external onlyRole(MANAGER_ROLE) {
     (uint256 rewards,) = nftStakingManager.claimRewards(stakeId, maxEpochs);
-    uint256 totalDepositors = depositors.length();
-    uint256 rewardPerDepositor = rewards / totalDepositors; //math
-    for (uint256 i = 0; i < totalDepositors; i++) {
-      depositorInfo[depositors.at(i)].claimableRewards += rewardPerDepositor;
+
+    uint256 totalLicenses = totalDepositedLicenses;
+    if (totalLicenses == 0) revert NoLicensesDeposited();
+
+    for (uint256 i = 0; i < depositors.length(); i++) {
+      address currentDepositor = depositors.at(i);
+      uint256 depositorLicenses = depositorInfo[currentDepositor].licenseCount;
+
+      // Calculate: (rewards * depositorLicenses) / totalLicenses
+      // Multiply first to maintain precision
+      uint256 rewardForDepositor = (rewards * depositorLicenses) / totalLicenses;
+
+      depositorInfo[currentDepositor].claimableRewards += rewardForDepositor;
     }
   }
 
-  function claimDepositorRewards() external {
+  function claimDepositorRewards() external nonReentrant {
     uint256 amount = depositorInfo[msg.sender].claimableRewards;
+    if (amount == 0) revert NoRewardsToClaim();
     depositorInfo[msg.sender].claimableRewards = 0;
     payable(msg.sender).sendValue(amount);
   }
