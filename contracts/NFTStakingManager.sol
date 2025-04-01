@@ -175,10 +175,15 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function _mintRewards(uint32 epochNumber, bytes32 stakeId) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    StakeInfo storage stake = $.stakeInfo[stakeId];
+
+    if (stake.owner == address(0)) {
+        revert("Stake does not exist");
+    }
+
     if ($.epochInfo[epochNumber].totalStakedLicenses == 0) {
       revert("Rewards not snapped for this epoch");
     }
-    StakeInfo storage stake = $.stakeInfo[stakeId];
 
     if (epochNumber < stake.startEpoch || (epochNumber > stake.endEpoch && stake.endEpoch != 0)) {
       revert EpochOutOfRange(epochNumber, stake.startEpoch, stake.endEpoch);

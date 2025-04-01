@@ -18,6 +18,8 @@ Cargo.lock
 docs/
 coverage/
 
-
 # Soldeer
 /dependencies
+
+# development
+.env

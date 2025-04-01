@@ -31,7 +31,7 @@ solmate = "6.8.0"
 # whether Soldeer manages remappings
 remappings_generate = true
 # whether Soldeer re-generates all remappings when installing, updating or uninstalling deps
-remappings_regenerate = true
+remappings_regenerate = false
 # whether to suffix the remapping with the version requirement string: `name-a.b.c`
 remappings_version = true
 # whether to install sub-dependencies or not. If true this will install the dependencies of dependencies recursively.
