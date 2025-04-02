@@ -64,7 +64,7 @@ contract NFTStakingManagerTest is Base {
 
   address public admin;
   address public deployer;
-  
+
   uint256 public epochRewards = 1000 ether;
   uint16 public MAX_LICENSES_PER_VALIDATOR = 10;
 
@@ -181,7 +181,7 @@ contract NFTStakingManagerTest is Base {
     uint256 claimableRewards1 = nftStakingManager.getStakeRewardsForEpoch(stakeID1, lastEpoch);
     vm.prank(validator2);
     uint256 claimableRewards2 = nftStakingManager.getStakeRewardsForEpoch(stakeID2, lastEpoch);
-    
+
     assertEq(claimableRewards1, epochRewards / 2);
     assertEq(claimableRewards2, epochRewards / 2);
   }
@@ -194,7 +194,7 @@ contract NFTStakingManagerTest is Base {
 
     // Move to next epoch
     vm.warp(block.timestamp + 1 days);
-    
+
     // First snapshot should succeed
     nftStakingManager.rewardsSnapshot();
 
@@ -204,14 +204,14 @@ contract NFTStakingManagerTest is Base {
 
     // Move to next epoch
     vm.warp(block.timestamp + 1 days);
-    
+
     // Should succeed for new epoch
     nftStakingManager.rewardsSnapshot();
   }
 
   function test_initiateValidatorRegistration_maxLicenses() public {
     address validator = getActor("Validator");
-    
+
     // Mint tokens up to maxLicensesPerValidator + 1
     uint256[] memory tokenIds = new uint256[](MAX_LICENSES_PER_VALIDATOR + 1); // max is 10
     for (uint256 i = 0; i < tokenIds.length; i++) {
@@ -220,26 +220,16 @@ contract NFTStakingManagerTest is Base {
     }
 
     vm.startPrank(validator);
-    
+
     // Should revert when trying to stake more than maxLicensesPerValidator
     vm.expectRevert("Invalid license count");
-    nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID,
-      DEFAULT_BLS_PUBLIC_KEY,
-      DEFAULT_P_CHAIN_OWNER,
-      DEFAULT_P_CHAIN_OWNER,
-      tokenIds
-    );
+    nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
 
     // Should also revert when trying to stake 0 tokens
     uint256[] memory emptyTokenIds = new uint256[](0);
     vm.expectRevert("Invalid license count");
     nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID,
-      DEFAULT_BLS_PUBLIC_KEY,
-      DEFAULT_P_CHAIN_OWNER,
-      DEFAULT_P_CHAIN_OWNER,
-      emptyTokenIds
+      DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, emptyTokenIds
     );
 
     // Should succeed with exactly maxLicensesPerValidator
@@ -248,11 +238,7 @@ contract NFTStakingManagerTest is Base {
       validTokenIds[i] = i + 1;
     }
     bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID,
-      DEFAULT_BLS_PUBLIC_KEY,
-      DEFAULT_P_CHAIN_OWNER,
-      DEFAULT_P_CHAIN_OWNER,
-      validTokenIds
+      DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, validTokenIds
     );
 
     assertEq(validatorManager.created(stakeID), true);
@@ -264,7 +250,7 @@ contract NFTStakingManagerTest is Base {
     uint256 tokenId = 1;
     bytes32 stakeID = _initiateValidatorRegistration(validator, tokenId);
     _completeValidatorRegistration(validator);
-    
+
     // Verify initial state
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 1);
     assertEq(nftStakingManager.getTokenLockedBy(tokenId), stakeID);
@@ -285,7 +271,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0, "Total staked licenses should be 0");
     assertEq(nftStakingManager.getTokenLockedBy(tokenId), bytes32(0), "Token should be unlocked");
     assertEq(validatorManager.validating(stakeID), false, "Validator should not be validating");
-    
+
     // Verify token is still owned by validator
     assertEq(nft.ownerOf(tokenId), validator, "Validator should still own the token");
   }

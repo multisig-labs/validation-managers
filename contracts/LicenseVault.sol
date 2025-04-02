@@ -230,6 +230,7 @@ contract LicenseVault is
     uint256 totalLicenses = totalDepositedLicenses;
     if (totalLicenses == 0) revert NoLicensesDeposited();
 
+    // TODO: what happens if there's a delay between minting rewards and claiming here
     for (uint256 i = 0; i < depositors.length(); i++) {
       address currentDepositor = depositors.at(i);
       uint256 depositorLicenses = depositorInfo[currentDepositor].licenseCount;
@@ -257,9 +258,15 @@ contract LicenseVault is
     return stakeInfo[stakeId];
   }
 
+  function getDepositorInfo(address depositor) external view returns (DepositorInfo memory) {
+    return depositorInfo[depositor];
+  }
+
   function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
     return this.onERC721Received.selector;
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+  receive() external payable {}
 }

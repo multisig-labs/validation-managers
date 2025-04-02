@@ -53,7 +53,7 @@ contract LicenseVaultTest is Base {
         (address(nodeLicense), address(receiptToken), address(nftStakingManager), admin, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER)
       )
     );
-    licenseVault = LicenseVault(address(licenseVaultProxy));
+    licenseVault = LicenseVault(payable(address(licenseVaultProxy)));
 
     vm.startPrank(admin);
     receiptToken.grantRole(receiptToken.MINTER_ROLE(), address(licenseVault));
@@ -159,6 +159,52 @@ contract LicenseVaultTest is Base {
 
     licenseVault.claimValidatorRewards(stakeId, 10);
     assertEq(licenseVault.getClaimableRewards(depositor), 1000 ether);
+  }
+
+  function test_fullCycleRewards() public {
+    uint256 expectedRewards = 1000 ether;
+    vm.warp(100 seconds);
+    vm.warp(1 days + block.timestamp);
+    address validator = getActor("Validator");
+    uint256[] memory tokenIds = mintNodeLicenses(validator, 10);
+
+    vm.startPrank(validator);
+    nodeLicense.setApprovalForAll(address(licenseVault), true);
+    licenseVault.deposit(tokenIds);
+
+    vm.startPrank(admin);
+    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    nftStakingManager.completeValidatorRegistration(0);
+    vm.stopPrank();
+
+    StakeInfoView memory stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+
+    bytes32[] memory stakeIds = new bytes32[](1);
+    stakeIds[0] = stakeId;
+
+    uint32 epoch = nftStakingManager.getCurrentEpoch();
+
+    // skip ahead to the next epoch, so we can track rewards for the previous epoch
+    vm.warp(1 days + block.timestamp);
+    uint32 currentEpoch = nftStakingManager.getCurrentEpoch();
+    uint32 lastEpoch = currentEpoch - 1;
+    nftStakingManager.rewardsSnapshot();
+    nftStakingManager.mintRewards(lastEpoch, stakeIds);
+
+    uint256 vaultBalanceBefore = address(licenseVault).balance;
+
+    vm.startPrank(admin);
+    licenseVault.claimValidatorRewards(stakeId, 1);
+
+    uint256 vaultBalanceAfter = address(licenseVault).balance;
+    assertEq(vaultBalanceAfter, vaultBalanceBefore + expectedRewards);
+
+
+    assertEq(licenseVault.getClaimableRewards(validator), expectedRewards);
+
+    vm.startPrank(validator);
+    licenseVault.claimDepositorRewards();
+    assertEq(validator.balance, expectedRewards);
   }
 
   function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {

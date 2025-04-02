@@ -121,6 +121,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     newStake.owner = msg.sender;
     newStake.tokenIds = tokenIds;
 
+    // should we do something with stakeIds here
+
     return stakeId;
   }
 
@@ -178,9 +180,10 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     StakeInfo storage stake = $.stakeInfo[stakeId];
 
     if (stake.owner == address(0)) {
-        revert("Stake does not exist");
+      revert("Stake does not exist");
     }
 
+    // TODO: Handle the case where there are no licenses staked
     if ($.epochInfo[epochNumber].totalStakedLicenses == 0) {
       revert("Rewards not snapped for this epoch");
     }
