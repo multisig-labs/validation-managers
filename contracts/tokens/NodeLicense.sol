@@ -2,24 +2,20 @@
 
 pragma solidity ^0.8.25;
 
-import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+import {AccessControlDefaultAdminRulesUpgradeable} from
+  "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 
 import {IERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
 import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
 
-import {ERC721UpgradeableBatchable} from "./ERC721UpgradeableBatchable.sol";
-
-contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControlUpgradeable, UUPSUpgradeable {
+contract NodeLicense is Initializable, ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable, UUPSUpgradeable {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-  bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
   string private _baseTokenURI;
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
-
-  event BatchMinted(address indexed minter, address[] recipients, uint256[] tokenIds);
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
@@ -35,7 +31,6 @@ contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControl
   function initialize(
     address defaultAdmin,
     address minter,
-    address upgrader,
     uint32 unlockTime,
     string calldata name,
     string calldata symbol,
@@ -46,9 +41,8 @@ contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControl
     __UUPSUpgradeable_init();
 
     _nextTokenId = 1;
-    // _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
+    _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
     _grantRole(MINTER_ROLE, minter);
-    _grantRole(UPGRADER_ROLE, upgrader);
     _baseTokenURI = baseTokenURI;
     _lockedUntil = unlockTime;
   }
@@ -84,7 +78,6 @@ contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControl
         currentIndex++;
       }
     }
-    emit BatchMinted(msg.sender, recipients, tokenIds);
   }
 
   // TODO disallow xfer if staked to NFT Staking Manager.
@@ -112,7 +105,7 @@ contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControl
     return super._update(to, tokenId, auth);
   }
 
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
   function _baseURI() internal view override returns (string memory) {
     return _baseTokenURI;
@@ -130,7 +123,7 @@ contract NodeLicense is Initializable, ERC721UpgradeableBatchable, AccessControl
 
   // The following functions are overrides required by Solidity.
 
-  function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+  function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable) returns (bool) {
     return super.supportsInterface(interfaceId);
   }
 }

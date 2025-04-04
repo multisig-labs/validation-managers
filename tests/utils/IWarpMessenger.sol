@@ -40,9 +40,7 @@ interface IWarpMessenger {
   // If the message exists and passes verification, returns the verified message
   // and true.
   // Otherwise, returns false and the empty value for the message.
-  function getVerifiedWarpBlockHash(
-    uint32 index
-  ) external view returns (WarpBlockHash calldata warpBlockHash, bool valid);
+  function getVerifiedWarpBlockHash(uint32 index) external view returns (WarpBlockHash calldata warpBlockHash, bool valid);
 
   // getBlockchainID returns the snow.Context BlockchainID of this chain.
   // This blockchainID is the hash of the transaction that created this blockchain on the P-Chain

@@ -5,81 +5,98 @@ import {Base} from "./utils/Base.sol";
 
 import {LicenseVault} from "../contracts/LicenseVault.sol";
 import {NFTStakingManager, NFTStakingManagerSettings, StakeInfoView} from "../contracts/NFTStakingManager.sol";
-import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
-import {ValidatorManagerMock} from "../contracts/mocks/ValidatorManagerMock.sol";
-import {IWarpMessenger, WarpMessage} from "./utils/IWarpMessenger.sol";
 
+import {NativeMinterMock} from "../contracts/mocks/NativeMinterMock.sol";
+import {ValidatorManagerMock} from "../contracts/mocks/ValidatorManagerMock.sol";
+import {NodeLicense} from "../contracts/tokens/NodeLicense.sol";
+import {ReceiptToken} from "../contracts/tokens/ReceiptToken.sol";
 import {ERC1967Proxy} from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
 import {console2} from "forge-std-1.9.6/src/console2.sol";
 import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
 contract LicenseVaultTest is Base {
-  ERC721Mock public nft;
+  NodeLicense public nodeLicense;
+  ReceiptToken public receiptToken;
   ValidatorManagerMock public validatorManager;
   NFTStakingManager public nftStakingManager;
   LicenseVault public licenseVault;
 
   address public admin;
-  address public deployer;
 
   function setUp() public override {
     super.setUp();
     admin = getActor("Admin");
-    deployer = getActor("Deployer");
-
-    vm.startPrank(deployer);
 
     validatorManager = new ValidatorManagerMock();
-    nft = new ERC721Mock("NFT License", "NFTL");
+
+    NodeLicense nodeLicenseImpl = new NodeLicense();
+    ERC1967Proxy nodeLicenseProxy =
+      new ERC1967Proxy(address(nodeLicenseImpl), abi.encodeCall(NodeLicense.initialize, (admin, admin, 0, "NFT License", "NFTL", "")));
+    nodeLicense = NodeLicense(address(nodeLicenseProxy));
+
+    ReceiptToken receiptImpl = new ReceiptToken();
+    ERC1967Proxy receiptProxy = new ERC1967Proxy(address(receiptImpl), abi.encodeCall(ReceiptToken.initialize, (admin, admin, "Receipt", "REC", "")));
+    receiptToken = ReceiptToken(address(receiptProxy));
 
     NFTStakingManager nftImpl = new NFTStakingManager();
     ERC1967Proxy nftProxy = new ERC1967Proxy(
-      address(nftImpl), abi.encodeCall(NFTStakingManager.initialize, _defaultNFTStakingManagerSettings(address(validatorManager), address(nft)))
+      address(nftImpl),
+      abi.encodeCall(NFTStakingManager.initialize, _defaultNFTStakingManagerSettings(address(validatorManager), address(nodeLicense)))
     );
     nftStakingManager = NFTStakingManager(address(nftProxy));
 
     LicenseVault licenseVaultImpl = new LicenseVault();
     ERC1967Proxy licenseVaultProxy = new ERC1967Proxy(
       address(licenseVaultImpl),
-      abi.encodeCall(LicenseVault.initialize, (address(nft), address(nftStakingManager), admin, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER))
+      abi.encodeCall(
+        LicenseVault.initialize,
+        (address(nodeLicense), address(receiptToken), address(nftStakingManager), admin, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER)
+      )
     );
-    licenseVault = LicenseVault(address(licenseVaultProxy));
+    licenseVault = LicenseVault(payable(address(licenseVaultProxy)));
 
-    vm.stopPrank();
+    vm.startPrank(admin);
+    receiptToken.grantRole(receiptToken.MINTER_ROLE(), address(licenseVault));
+    NativeMinterMock nativeMinter = new NativeMinterMock();
+    vm.etch(0x0200000000000000000000000000000000000001, address(nativeMinter).code);
   }
 
   function test_deposit_withdraw() public {
+    uint256 withdrawalDelay = 14 days;
     address validator = getActor("Validator");
-    uint256[] memory tokenIds = nft.batchMint(validator, 10);
+    uint256[] memory tokenIds = mintNodeLicenses(validator, 10);
 
     vm.startPrank(validator);
 
-    nft.setApprovalForAll(address(licenseVault), true);
+    nodeLicense.setApprovalForAll(address(licenseVault), true);
     licenseVault.deposit(tokenIds);
 
-    assertEq(nft.balanceOf(validator), 0);
+    assertEq(nodeLicense.balanceOf(validator), 0);
     assertEq(licenseVault.balanceOf(validator), 10);
+    assertEq(receiptToken.balanceOf(validator), 1);
 
     vm.expectRevert(LicenseVault.NoWithdrawalRequest.selector);
-    licenseVault.withdraw();
+    licenseVault.completeWithdrawal();
 
     vm.expectRevert(LicenseVault.NotEnoughLicenses.selector);
     licenseVault.requestWithdrawal(11);
 
     licenseVault.requestWithdrawal(10);
-    licenseVault.withdraw();
+    vm.warp(block.timestamp + withdrawalDelay);
+    licenseVault.completeWithdrawal();
 
     assertEq(licenseVault.balanceOf(validator), 0);
-    assertEq(nft.balanceOf(validator), 10);
+    assertEq(nodeLicense.balanceOf(validator), 10);
+    assertEq(receiptToken.balanceOf(validator), 0);
   }
 
   function test_stake_unstake() public {
     address validator = getActor("Validator");
-    address unprivledged = getActor("unprivledged");
-    uint256[] memory tokenIds = nft.batchMint(validator, 10);
+    address unpriviledged = getActor("unpriviledged");
+    uint256[] memory tokenIds = mintNodeLicenses(validator, 10);
 
     vm.startPrank(validator);
-    nft.setApprovalForAll(address(licenseVault), true);
+    nodeLicense.setApprovalForAll(address(licenseVault), true);
     licenseVault.deposit(tokenIds);
 
     vm.startPrank(admin);
@@ -92,18 +109,16 @@ contract LicenseVaultTest is Base {
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
     StakeInfoView memory stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
     assertEq(stakeInfoView.owner, address(licenseVault));
-    assertEq(stakeInfoView.validationId, stakeId);
     assertEq(stakeInfoView.startEpoch, 0);
     assertEq(stakeInfoView.endEpoch, 0);
     assertEq(stakeInfoView.tokenIds.length, 10);
 
-    vm.startPrank(unprivledged);
+    vm.startPrank(unpriviledged);
     nftStakingManager.completeValidatorRegistration(0);
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 10);
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
     stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
     assertEq(stakeInfoView.owner, address(licenseVault));
-    assertEq(stakeInfoView.validationId, stakeId);
     assertEq(stakeInfoView.startEpoch, nftStakingManager.getCurrentEpoch());
     assertEq(stakeInfoView.endEpoch, 0);
     assertEq(stakeInfoView.tokenIds.length, 10);
@@ -117,10 +132,81 @@ contract LicenseVaultTest is Base {
     assertEq(stakeInfoView.tokenIds.length, 10);
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
 
-    vm.startPrank(unprivledged);
+    vm.startPrank(unpriviledged);
     nftStakingManager.completeValidatorRemoval(0);
     stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), bytes32(0));
+  }
+
+  function test_stake_claim_rewards() public {
+    address depositor = getActor("Depositor");
+    address unpriviledged = getActor("Unpriviledged");
+    uint256[] memory tokenIds = mintNodeLicenses(depositor, 10);
+
+    skip(1 days);
+
+    vm.startPrank(depositor);
+    nodeLicense.setApprovalForAll(address(licenseVault), true);
+    licenseVault.deposit(tokenIds);
+
+    vm.startPrank(admin);
+    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    nftStakingManager.completeValidatorRegistration(0);
+
+    skip(1 days);
+    nftStakingManager.rewardsSnapshot();
+    bytes32[] memory stakeIds = new bytes32[](1);
+    stakeIds[0] = stakeId;
+    nftStakingManager.mintRewards(1, stakeIds);
+
+    licenseVault.claimValidatorRewards(stakeId, 10);
+    assertEq(licenseVault.getClaimableRewards(depositor), 1000 ether);
+  }
+
+  function test_fullCycleRewards() public {
+    uint256 expectedRewards = 1000 ether;
+    vm.warp(100 seconds);
+    vm.warp(1 days + block.timestamp);
+    address validator = getActor("Validator");
+    uint256[] memory tokenIds = mintNodeLicenses(validator, 10);
+
+    vm.startPrank(validator);
+    nodeLicense.setApprovalForAll(address(licenseVault), true);
+    licenseVault.deposit(tokenIds);
+
+    vm.startPrank(admin);
+    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    nftStakingManager.completeValidatorRegistration(0);
+    vm.stopPrank();
+
+    StakeInfoView memory stakeInfoView = nftStakingManager.getStakeInfoView(stakeId);
+
+    bytes32[] memory stakeIds = new bytes32[](1);
+    stakeIds[0] = stakeId;
+
+    uint32 epoch = nftStakingManager.getCurrentEpoch();
+
+    // skip ahead to the next epoch, so we can track rewards for the previous epoch
+    vm.warp(1 days + block.timestamp);
+    uint32 currentEpoch = nftStakingManager.getCurrentEpoch();
+    uint32 lastEpoch = currentEpoch - 1;
+    nftStakingManager.rewardsSnapshot();
+    nftStakingManager.mintRewards(lastEpoch, stakeIds);
+
+    uint256 vaultBalanceBefore = address(licenseVault).balance;
+
+    vm.startPrank(admin);
+    licenseVault.claimValidatorRewards(stakeId, 1);
+
+    uint256 vaultBalanceAfter = address(licenseVault).balance;
+    assertEq(vaultBalanceAfter, vaultBalanceBefore + expectedRewards);
+
+
+    assertEq(licenseVault.getClaimableRewards(validator), expectedRewards);
+
+    vm.startPrank(validator);
+    licenseVault.claimDepositorRewards();
+    assertEq(validator.balance, expectedRewards);
   }
 
   function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {
@@ -133,5 +219,15 @@ contract LicenseVaultTest is Base {
       epochRewards: 1000 ether,
       maxLicensesPerValidator: 10
     });
+  }
+
+  function mintNodeLicenses(address to, uint256 amount) internal returns (uint256[] memory) {
+    vm.startPrank(admin);
+    uint256[] memory tokenIds = new uint256[](amount);
+    for (uint256 i = 0; i < amount; i++) {
+      tokenIds[i] = nodeLicense.mint(to);
+    }
+    vm.stopPrank();
+    return tokenIds;
   }
 }
