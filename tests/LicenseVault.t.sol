@@ -62,6 +62,7 @@ contract LicenseVaultTest is Base {
   }
 
   function test_deposit_withdraw() public {
+    uint256 withdrawalDelay = 14 days;
     address validator = getActor("Validator");
     uint256[] memory tokenIds = mintNodeLicenses(validator, 10);
 
@@ -81,6 +82,7 @@ contract LicenseVaultTest is Base {
     licenseVault.requestWithdrawal(11);
 
     licenseVault.requestWithdrawal(10);
+    vm.warp(block.timestamp + withdrawalDelay);
     licenseVault.completeWithdrawal();
 
     assertEq(licenseVault.balanceOf(validator), 0);
