@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import {IERC721Receiver} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721Receiver.sol";
+import { IERC721Receiver } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721Receiver.sol";
 
-import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import {AccessControlDefaultAdminRulesUpgradeable} from
+import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { AccessControlDefaultAdminRulesUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
-import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
-import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { UUPSUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import { PausableUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
+import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
-import {EnumerableSet} from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
+import { EnumerableSet } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
 
-import {NFTStakingManager} from "./NFTStakingManager.sol";
-import {NodeLicense} from "./tokens/NodeLicense.sol";
-import {ReceiptToken} from "./tokens/ReceiptToken.sol";
+import { NFTStakingManager } from "./NFTStakingManager.sol";
+import { NodeLicense } from "./tokens/NodeLicense.sol";
+import { ReceiptToken } from "./tokens/ReceiptToken.sol";
 
 // TODO also store $._pendingRegisterValidationMessages[validationID] = registerL1ValidatorMessage; from the validator manager
 struct StakeInfo {
@@ -184,11 +187,12 @@ contract LicenseVault is
 
   // Off-Chain fns
 
-  function stakeValidator(bytes memory nodeID, bytes memory blsPublicKey, bytes memory blsPop, uint256 numTokens)
-    external
-    onlyRole(MANAGER_ROLE)
-    returns (bytes32)
-  {
+  function stakeValidator(
+    bytes memory nodeID,
+    bytes memory blsPublicKey,
+    bytes memory blsPop,
+    uint256 numTokens
+  ) external onlyRole(MANAGER_ROLE) returns (bytes32) {
     if (numTokens > unstakedTokenIds.length()) revert NotEnoughLicenses();
     uint256[] memory tokenIds = new uint256[](numTokens);
     for (uint256 i = 0; i < numTokens; i++) {
@@ -198,14 +202,16 @@ contract LicenseVault is
       stakedTokenIds.add(lastTokenId);
       tokenIds[i] = lastTokenId;
     }
-    bytes32 stakeId = nftStakingManager.initiateValidatorRegistration(nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, tokenIds);
+    bytes32 stakeId = nftStakingManager.initiateValidatorRegistration(
+      nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, tokenIds
+    );
     stakeInfo[stakeId] = StakeInfo({
       nodeID: nodeID,
       blsPublicKey: blsPublicKey,
       blsPop: blsPop,
       tokenIds: tokenIds,
       registerL1ValidatorMessage: bytes("") // TODO
-    });
+     });
     stakeIds.add(stakeId);
     emit ValidatorStaked(stakeId, tokenIds);
     return stakeId;
@@ -262,11 +268,20 @@ contract LicenseVault is
     return depositorInfo[depositor];
   }
 
-  function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
+  function onERC721Received(address, address, uint256, bytes calldata)
+    external
+    pure
+    override
+    returns (bytes4)
+  {
     return this.onERC721Received.selector;
   }
 
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  function _authorizeUpgrade(address newImplementation)
+    internal
+    override
+    onlyRole(DEFAULT_ADMIN_ROLE)
+  { }
 
-  receive() external payable {}
+  receive() external payable { }
 }

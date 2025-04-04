@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import {IERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
-import {IERC721} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
-import {AccessControlDefaultAdminRulesUpgradeable} from
+import { IERC20 } from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
+import { IERC721 } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
+import { AccessControlDefaultAdminRulesUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
-import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
+import { UUPSUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import { PausableUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
 
-import {IERC721Receiver} from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721Receiver.sol";
-import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import {MerkleProof} from "@openzeppelin-contracts-5.2.0/utils/cryptography/MerkleProof.sol";
+import { IERC721Receiver } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721Receiver.sol";
+import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { MerkleProof } from "@openzeppelin-contracts-5.2.0/utils/cryptography/MerkleProof.sol";
 
 contract NodeSaleWithWhitelist is
   ReentrancyGuardUpgradeable,
@@ -26,7 +29,8 @@ contract NodeSaleWithWhitelist is
   bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
   // keccak256(abi.encode(uint256(keccak256("ggp.nftsale.storage")) - 1)) & ~bytes32(uint256(0xff));
-  bytes32 private constant STORAGE_SLOT = 0x1c7c07bc1eb7695a9541428f3aa4217b112d3c1b2b303c501f8feaf957c5bb00;
+  bytes32 private constant STORAGE_SLOT =
+    0x1c7c07bc1eb7695a9541428f3aa4217b112d3c1b2b303c501f8feaf957c5bb00;
 
   // Struct to hold all state variables
   struct Storage {
@@ -65,7 +69,13 @@ contract NodeSaleWithWhitelist is
   }
 
   // Initializer instead of constructor
-  function initialize(address _nftContract, uint256 _price, uint256 _maxPerWallet, address _initialAdmin, address _treasury) external initializer {
+  function initialize(
+    address _nftContract,
+    uint256 _price,
+    uint256 _maxPerWallet,
+    address _initialAdmin,
+    address _treasury
+  ) external initializer {
     __ReentrancyGuard_init();
     __AccessControl_init();
     __Pausable_init();
@@ -84,7 +94,12 @@ contract NodeSaleWithWhitelist is
     _pause();
   }
 
-  function buyNFTs(uint256 quantity, bytes32[] calldata merkleProof) external payable whenNotPaused nonReentrant {
+  function buyNFTs(uint256 quantity, bytes32[] calldata merkleProof)
+    external
+    payable
+    whenNotPaused
+    nonReentrant
+  {
     Storage storage $ = _storage();
 
     if (block.timestamp < $.saleStartTime) revert SaleNotStarted();
@@ -129,7 +144,11 @@ contract NodeSaleWithWhitelist is
   // Append available token IDs (manager only, when paused)
   // @dev It is up to the caller to ensure no duplicate token IDs
   // are added and that the token IDs are owned by the contract
-  function appendAvailableTokenIds(uint256[] calldata newTokenIds) external onlyRole(MANAGER_ROLE) whenPaused {
+  function appendAvailableTokenIds(uint256[] calldata newTokenIds)
+    external
+    onlyRole(MANAGER_ROLE)
+    whenPaused
+  {
     Storage storage $ = _storage();
     for (uint256 i = 0; i < newTokenIds.length;) {
       $.availableTokenIds.push(newTokenIds[i]);
@@ -194,7 +213,12 @@ contract NodeSaleWithWhitelist is
     IERC20(token).transferFrom(address(this), $.treasury, IERC20(token).balanceOf(address(this)));
   }
 
-  function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
+  function onERC721Received(address, address, uint256, bytes calldata)
+    external
+    pure
+    override
+    returns (bytes4)
+  {
     return IERC721Receiver.onERC721Received.selector;
   }
 
@@ -203,7 +227,11 @@ contract NodeSaleWithWhitelist is
   }
 
   // UUPS: Authorize upgrade
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  function _authorizeUpgrade(address newImplementation)
+    internal
+    override
+    onlyRole(DEFAULT_ADMIN_ROLE)
+  { }
 
   // Getter functions for public variables (since they're now in storage struct)
   function nftContract() external view returns (IERC721) {

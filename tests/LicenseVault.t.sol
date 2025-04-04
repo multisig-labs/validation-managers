@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {Base} from "./utils/Base.sol";
+import { Base } from "./utils/Base.sol";
 
-import {LicenseVault} from "../contracts/LicenseVault.sol";
-import {NFTStakingManager, NFTStakingManagerSettings, StakeInfoView} from "../contracts/NFTStakingManager.sol";
+import { LicenseVault } from "../contracts/LicenseVault.sol";
+import {
+  NFTStakingManager,
+  NFTStakingManagerSettings,
+  StakeInfoView
+} from "../contracts/NFTStakingManager.sol";
 
-import {NativeMinterMock} from "../contracts/mocks/NativeMinterMock.sol";
-import {ValidatorManagerMock} from "../contracts/mocks/ValidatorManagerMock.sol";
-import {NodeLicense} from "../contracts/tokens/NodeLicense.sol";
-import {ReceiptToken} from "../contracts/tokens/ReceiptToken.sol";
-import {ERC1967Proxy} from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
-import {console2} from "forge-std-1.9.6/src/console2.sol";
-import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
+import { ValidatorManagerMock } from "../contracts/mocks/ValidatorManagerMock.sol";
+import { NodeLicense } from "../contracts/tokens/NodeLicense.sol";
+import { ReceiptToken } from "../contracts/tokens/ReceiptToken.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { console2 } from "forge-std-1.9.6/src/console2.sol";
+import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
 contract LicenseVaultTest is Base {
   NodeLicense public nodeLicense;
@@ -30,18 +34,26 @@ contract LicenseVaultTest is Base {
     validatorManager = new ValidatorManagerMock();
 
     NodeLicense nodeLicenseImpl = new NodeLicense();
-    ERC1967Proxy nodeLicenseProxy =
-      new ERC1967Proxy(address(nodeLicenseImpl), abi.encodeCall(NodeLicense.initialize, (admin, admin, 0, "NFT License", "NFTL", "")));
+    ERC1967Proxy nodeLicenseProxy = new ERC1967Proxy(
+      address(nodeLicenseImpl),
+      abi.encodeCall(NodeLicense.initialize, (admin, admin, 0, "NFT License", "NFTL", ""))
+    );
     nodeLicense = NodeLicense(address(nodeLicenseProxy));
 
     ReceiptToken receiptImpl = new ReceiptToken();
-    ERC1967Proxy receiptProxy = new ERC1967Proxy(address(receiptImpl), abi.encodeCall(ReceiptToken.initialize, (admin, admin, "Receipt", "REC", "")));
+    ERC1967Proxy receiptProxy = new ERC1967Proxy(
+      address(receiptImpl),
+      abi.encodeCall(ReceiptToken.initialize, (admin, admin, "Receipt", "REC", ""))
+    );
     receiptToken = ReceiptToken(address(receiptProxy));
 
     NFTStakingManager nftImpl = new NFTStakingManager();
     ERC1967Proxy nftProxy = new ERC1967Proxy(
       address(nftImpl),
-      abi.encodeCall(NFTStakingManager.initialize, _defaultNFTStakingManagerSettings(address(validatorManager), address(nodeLicense)))
+      abi.encodeCall(
+        NFTStakingManager.initialize,
+        _defaultNFTStakingManagerSettings(address(validatorManager), address(nodeLicense))
+      )
     );
     nftStakingManager = NFTStakingManager(address(nftProxy));
 
@@ -50,7 +62,14 @@ contract LicenseVaultTest is Base {
       address(licenseVaultImpl),
       abi.encodeCall(
         LicenseVault.initialize,
-        (address(nodeLicense), address(receiptToken), address(nftStakingManager), admin, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER)
+        (
+          address(nodeLicense),
+          address(receiptToken),
+          address(nftStakingManager),
+          admin,
+          DEFAULT_P_CHAIN_OWNER,
+          DEFAULT_P_CHAIN_OWNER
+        )
       )
     );
     licenseVault = LicenseVault(payable(address(licenseVaultProxy)));
@@ -101,9 +120,11 @@ contract LicenseVaultTest is Base {
 
     vm.startPrank(admin);
     vm.expectRevert(LicenseVault.NotEnoughLicenses.selector);
-    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 11);
+    bytes32 stakeId =
+      licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 11);
 
-    stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    stakeId =
+      licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
     // validator is in pending state...
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0);
     assertEq(nftStakingManager.getTokenLockedBy(tokenIds[0]), stakeId);
@@ -150,7 +171,8 @@ contract LicenseVaultTest is Base {
     licenseVault.deposit(tokenIds);
 
     vm.startPrank(admin);
-    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    bytes32 stakeId =
+      licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
     nftStakingManager.completeValidatorRegistration(0);
 
     skip(1 days);
@@ -175,7 +197,8 @@ contract LicenseVaultTest is Base {
     licenseVault.deposit(tokenIds);
 
     vm.startPrank(admin);
-    bytes32 stakeId = licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
+    bytes32 stakeId =
+      licenseVault.stakeValidator(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_BLS_POP, 10);
     nftStakingManager.completeValidatorRegistration(0);
     vm.stopPrank();
 
@@ -201,7 +224,6 @@ contract LicenseVaultTest is Base {
     uint256 vaultBalanceAfter = address(licenseVault).balance;
     assertEq(vaultBalanceAfter, vaultBalanceBefore + expectedRewards);
 
-
     assertEq(licenseVault.getClaimableRewards(validator), expectedRewards);
 
     vm.startPrank(validator);
@@ -209,7 +231,11 @@ contract LicenseVaultTest is Base {
     assertEq(validator.balance, expectedRewards);
   }
 
-  function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {
+  function _defaultNFTStakingManagerSettings(address validatorManager_, address license_)
+    internal
+    view
+    returns (NFTStakingManagerSettings memory)
+  {
     return NFTStakingManagerSettings({
       validatorManager: validatorManager_,
       license: license_,
