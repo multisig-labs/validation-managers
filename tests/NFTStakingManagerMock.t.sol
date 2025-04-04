@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {Base} from "./utils/Base.sol";
+import { Base } from "./utils/Base.sol";
 
-import {NFTStakingManager, NFTStakingManagerSettings, StakeInfo} from "../contracts/NFTStakingManager.sol";
-import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
-import {NativeMinterMock} from "../contracts/mocks/NativeMinterMock.sol";
-import {IWarpMessenger, WarpMessage} from "./utils/IWarpMessenger.sol";
+import {
+  NFTStakingManager,
+  NFTStakingManagerSettings,
+  StakeInfo
+} from "../contracts/NFTStakingManager.sol";
+import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
+import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
+import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
-import {ERC1967Proxy} from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
-import {console2} from "forge-std-1.9.6/src/console2.sol";
-import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { console2 } from "forge-std-1.9.6/src/console2.sol";
+import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
 contract MockValidatorManager {
   mapping(bytes32 nodeIDHash => bool created) public created;
@@ -75,7 +79,7 @@ contract NFTStakingManagerTest is Base {
 
     address[] memory addresses = new address[](1);
     addresses[0] = 0x1234567812345678123456781234567812345678;
-    DEFAULT_P_CHAIN_OWNER = PChainOwner({threshold: 1, addresses: addresses});
+    DEFAULT_P_CHAIN_OWNER = PChainOwner({ threshold: 1, addresses: addresses });
 
     vm.startPrank(deployer);
 
@@ -86,7 +90,10 @@ contract NFTStakingManagerTest is Base {
     NFTStakingManager stakingManagerImpl = new NFTStakingManager();
     ERC1967Proxy stakingManagerProxy = new ERC1967Proxy(
       address(stakingManagerImpl),
-      abi.encodeCall(NFTStakingManager.initialize, _defaultNFTStakingManagerSettings(address(validatorManager), address(nft)))
+      abi.encodeCall(
+        NFTStakingManager.initialize,
+        _defaultNFTStakingManagerSettings(address(validatorManager), address(nft))
+      )
     );
     nftStakingManager = NFTStakingManager(address(stakingManagerProxy));
 
@@ -103,8 +110,13 @@ contract NFTStakingManagerTest is Base {
     tokenIds[0] = 1;
 
     vm.startPrank(validator);
-    bytes32 stakeID =
-      nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
+    bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      tokenIds
+    );
     vm.stopPrank();
 
     assertEq(nft.balanceOf(validator), 1);
@@ -124,7 +136,13 @@ contract NFTStakingManagerTest is Base {
 
     vm.startPrank(validator);
     vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.TokenAlreadyLocked.selector, tokenId));
-    nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
+    nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      tokenIds
+    );
     vm.stopPrank();
   }
 
@@ -223,13 +241,23 @@ contract NFTStakingManagerTest is Base {
 
     // Should revert when trying to stake more than maxLicensesPerValidator
     vm.expectRevert("Invalid license count");
-    nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
+    nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      tokenIds
+    );
 
     // Should also revert when trying to stake 0 tokens
     uint256[] memory emptyTokenIds = new uint256[](0);
     vm.expectRevert("Invalid license count");
     nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, emptyTokenIds
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      emptyTokenIds
     );
 
     // Should succeed with exactly maxLicensesPerValidator
@@ -238,7 +266,11 @@ contract NFTStakingManagerTest is Base {
       validTokenIds[i] = i + 1;
     }
     bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, validTokenIds
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      validTokenIds
     );
 
     assertEq(validatorManager.created(stakeID), true);
@@ -268,7 +300,9 @@ contract NFTStakingManagerTest is Base {
 
     // Verify final state
     assertEq(removedStakeID, stakeID, "Returned stake ID should match");
-    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 0, "Total staked licenses should be 0");
+    assertEq(
+      nftStakingManager.getCurrentTotalStakedLicenses(), 0, "Total staked licenses should be 0"
+    );
     assertEq(nftStakingManager.getTokenLockedBy(tokenId), bytes32(0), "Token should be unlocked");
     assertEq(validatorManager.validating(stakeID), false, "Validator should not be validating");
 
@@ -276,14 +310,22 @@ contract NFTStakingManagerTest is Base {
     assertEq(nft.ownerOf(tokenId), validator, "Validator should still own the token");
   }
 
-  function _initiateValidatorRegistration(address validator, uint256 tokenId) internal returns (bytes32) {
+  function _initiateValidatorRegistration(address validator, uint256 tokenId)
+    internal
+    returns (bytes32)
+  {
     nft.mint(validator, tokenId);
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = tokenId;
 
     vm.startPrank(validator);
-    bytes32 stakeID =
-      nftStakingManager.initiateValidatorRegistration(DEFAULT_NODE_ID, DEFAULT_BLS_PUBLIC_KEY, DEFAULT_P_CHAIN_OWNER, DEFAULT_P_CHAIN_OWNER, tokenIds);
+    bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      tokenIds
+    );
     vm.stopPrank();
     return stakeID;
   }
@@ -294,7 +336,11 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
   }
 
-  function _defaultNFTStakingManagerSettings(address validatorManager_, address license_) internal view returns (NFTStakingManagerSettings memory) {
+  function _defaultNFTStakingManagerSettings(address validatorManager_, address license_)
+    internal
+    view
+    returns (NFTStakingManagerSettings memory)
+  {
     return NFTStakingManagerSettings({
       validatorManager: validatorManager_,
       license: license_,

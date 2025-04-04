@@ -2,10 +2,13 @@
 
 pragma solidity ^0.8.25;
 
-import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
-import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { AccessControlUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+import { Initializable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+import { UUPSUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
 
 // ClaimRewards is a contract that allows users to claim rewards from a vault.
 
@@ -48,7 +51,11 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
   // Calculate rewardPerLicense
   // Calculate rewardPerUser
   // call depositRewards(epoch, userAddr[], amt[]) as many times as necessary
-  function depositRewards(uint32 epoch, address[] calldata users, uint256[] calldata amounts) public payable onlyRole(DEFAULT_ADMIN_ROLE) {
+  function depositRewards(uint32 epoch, address[] calldata users, uint256[] calldata amounts)
+    public
+    payable
+    onlyRole(DEFAULT_ADMIN_ROLE)
+  {
     // Check arrays have same length
     if (users.length != amounts.length) {
       revert ArrayLengthMismatch();
@@ -100,5 +107,5 @@ contract ClaimRewards is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     userEpochRewardsDepositedBitmap[user][wordIndex] |= (1 << bitIndex);
   }
 
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) { }
 }

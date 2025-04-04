@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {ERC721Mock} from "../contracts/mocks/ERC721Mock.sol";
-import {ERC1967Proxy} from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {NodeSaleWithWhitelist} from "../contracts/node-sale/NodeSaleWithWhitelist.sol";
-import {Base} from "./utils/Base.sol";
-import {console} from "forge-std-1.9.6/src/console.sol";
+import { NodeSaleWithWhitelist } from "../contracts/node-sale/NodeSaleWithWhitelist.sol";
+import { Base } from "./utils/Base.sol";
+import { console } from "forge-std-1.9.6/src/console.sol";
 
 contract NodeSaleTest is Base {
   ERC721Mock public nft;
@@ -76,7 +76,7 @@ contract NodeSaleTest is Base {
       vm.deal(buyer, 10 ether);
 
       vm.startPrank(buyer);
-      nodeSale.buyNFTs{value: 10 ether}(10, new bytes32[](0)); // Assuming no whitelist
+      nodeSale.buyNFTs{ value: 10 ether }(10, new bytes32[](0)); // Assuming no whitelist
       assertEq(buyer.balance, 0);
       vm.stopPrank();
     }
@@ -110,7 +110,7 @@ contract NodeSaleTest is Base {
 
     vm.startPrank(user1);
     vm.deal(user1, 1 ether);
-    nodeSale.buyNFTs{value: 1 ether}(1, user1Proof);
+    nodeSale.buyNFTs{ value: 1 ether }(1, user1Proof);
     vm.stopPrank();
   }
 
@@ -141,7 +141,8 @@ contract NodeSaleTest is Base {
     uint256 cents = gasCostInCents % 100;
 
     // Format with proper decimal places
-    string memory centsStr = cents < 10 ? string.concat("0", vm.toString(cents)) : vm.toString(cents);
+    string memory centsStr =
+      cents < 10 ? string.concat("0", vm.toString(cents)) : vm.toString(cents);
 
     console.log(string.concat(action, " Gas Cost: $", vm.toString(dollars), ".", centsStr));
   }

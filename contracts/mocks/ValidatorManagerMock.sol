@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {PChainOwner} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
 contract ValidatorManagerMock {
   mapping(bytes32 nodeIDHash => bool created) public created;

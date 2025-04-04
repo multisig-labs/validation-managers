@@ -8,9 +8,9 @@ test = 'tests'
 bytecode_hash = "none"
 
 [fmt]
-line_length = 150
+line_length = 100
 tab_width = 2
-bracket_spacing = false
+bracket_spacing = true
 single_line_statement_blocks = 'preserve'
 sort_imports = true
 int_types = 'long'
