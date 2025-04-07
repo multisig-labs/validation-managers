@@ -187,9 +187,13 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     (bytes32 validationID, ) = $.manager.completeValidatorWeightUpdate(messageIndex);
 
-    DelegationInfo storage delegation = $.validators[validationID].delegationInfo[delegationID];
+    ValidatorInfo storage validatorInfo = $.validators[validationID];
+    validatorInfo.licenseCount += uint32(tokenIds.length);
+
+    DelegationInfo storage delegation = validatorInfo.delegationInfo[delegationID];
     delegation.startEpoch = getCurrentEpoch();
   }
+  
   
   function completeDelegatorRemoval(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
@@ -207,13 +211,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   }
 
     
-  function initiateDelegationRoundRobin(
-    uint256[] calldata tokenIds
-  ) public returns (bytes32) {
-    // how can I get a validator that has some weight to spare
-    // take tokenIds and stake them to a round robin validator
-  }
-  
   function initiateValidatorRegistration(
     bytes memory nodeID,
     bytes memory blsPublicKey,
@@ -245,11 +242,11 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function completeValidatorRegistration(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    bytes32 stakeId = $.manager.completeValidatorRegistration(messageIndex);
-    DelegationInfo storage stake = $.stakeInfo[stakeId];
-    $.currentTotalStakedLicenses += uint32(stake.tokenIds.length);
-    stake.startEpoch = getCurrentEpoch();
-    return stakeId;
+    bytes32 validationID = $.manager.completeValidatorRegistration(messageIndex);
+
+    ValidatorInfo storage validatorInfo = $.validators[validationID];
+    validatorInfo.startEpoch = getCurrentEpoch();
+    return validationID;
   }
 
   function initiateValidatorRemoval(bytes32 stakeId) external {
@@ -259,6 +256,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     stake.endEpoch = getCurrentEpoch();
     $.currentTotalStakedLicenses -= uint32(stake.tokenIds.length);
     $.manager.initiateValidatorRemoval(stakeId);
+    // TODO: remove delegators
   }
 
   function completeValidatorRemoval(uint32 messageIndex) external returns (bytes32) {
@@ -269,6 +267,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     return stakeId;
   }
   
+  // TODO: rework this to prepay for tokenIds
   function recordPrepayment(address owner, uint40 endTimestamp) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     // Check if end timestamp is in the future
