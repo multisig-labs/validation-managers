@@ -52,6 +52,16 @@ interface INFTStakingManager {
  *     }
  * } 
  */
+ 
+ struct NodeLicenseSettings {
+  address admin;
+  address minter;
+  address nftStakingManager;
+  string name;
+  string symbol;
+  string baseTokenURI;
+  uint32 unlockTime;
+ }
 
 contract NodeLicense is
   Initializable,
@@ -77,26 +87,21 @@ contract NodeLicense is
   constructor() {
     _disableInitializers();
   }
+  
 
   function initialize(
-    address defaultAdmin,
-    address minter,
-    address nftStakingManager,
-    string calldata name,
-    string calldata symbol,
-    string calldata baseTokenURI,
-    uint32 unlockTime
+    NodeLicenseSettings memory settings
   ) public initializer {
-    __ERC721_init(name, symbol);
+    __ERC721_init(settings.name, settings.symbol);
     __AccessControl_init();
     __UUPSUpgradeable_init();
 
     _nextTokenId = 1;
-    _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-    _grantRole(MINTER_ROLE, minter);
-    _baseTokenURI = baseTokenURI;
-    _lockedUntil = unlockTime;
-    _nftStakingManager = nftStakingManager;
+    _grantRole(DEFAULT_ADMIN_ROLE, settings.admin);
+    _grantRole(MINTER_ROLE, settings.minter);
+    _baseTokenURI = settings.baseTokenURI;
+    _lockedUntil = settings.unlockTime;
+    _nftStakingManager = settings.nftStakingManager;
   }
 
   function mint(address to) public onlyRole(MINTER_ROLE) returns (uint256) {

@@ -6,9 +6,11 @@ import { Base } from "./utils/Base.sol";
 import {
   NFTStakingManager,
   NFTStakingManagerSettings,
-  StakeInfo
+  ValidationInfo,
+  DelegationInfo
 } from "../contracts/NFTStakingManagerV2.sol";
 import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
+import { MockValidatorManager } from "../contracts/mocks/ValidatorManagerMock.sol";
 import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
 import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
@@ -16,50 +18,6 @@ import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC196
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
 import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 
-contract MockValidatorManager {
-  mapping(bytes32 nodeIDHash => bool created) public created;
-  mapping(bytes32 nodeIDHash => bool validating) public validating;
-  mapping(bytes32 nodeIDHash => bool pendingRemoval) public pendingRemoval;
-
-  bytes32 public lastNodeID;
-
-  uint256 private randNonce = 0;
-
-  function initiateValidatorRegistration(
-    bytes memory, // nodeID
-    bytes memory, //bls public key
-    uint64, // registration expiry
-    PChainOwner memory, // remaining balance owner
-    PChainOwner memory, // disable owner
-    uint64 // weight
-  ) external returns (bytes32) {
-    lastNodeID = _getValidationID();
-    created[lastNodeID] = true;
-    return lastNodeID;
-  }
-
-  function completeValidatorRegistration(uint32) external returns (bytes32) {
-    validating[lastNodeID] = true;
-    created[lastNodeID] = false;
-    return lastNodeID;
-  }
-
-  function initiateValidatorRemoval(bytes32 stakeID) external {
-    lastNodeID = stakeID;
-    pendingRemoval[stakeID] = true;
-    validating[stakeID] = false;
-  }
-
-  function completeValidatorRemoval(uint32) external returns (bytes32) {
-    pendingRemoval[lastNodeID] = false;
-    return lastNodeID;
-  }
-
-  function _getValidationID() internal returns (bytes32) {
-    randNonce++;
-    return keccak256(abi.encodePacked(block.timestamp, randNonce, address(this)));
-  }
-}
 
 contract NFTStakingManagerTest is Base {
   ERC721Mock public nft;
@@ -118,37 +76,41 @@ contract NFTStakingManagerTest is Base {
       initialEpochTimestamp: uint32(block.timestamp),
       epochDuration: 1 days,
       licenseWeight: 1000,
-      hardwareLicenseWeight: 1000000, // 1 million
+      hardwareLicenseWeight: 0, // 1 million
       epochRewards: epochRewards,
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
       requireHardwareTokenId: true
     });
   }
 
+  // okay this creates a validator that can take delegation
+  // it should have available license slots
+  // and a stake weight of 0
   function testv2_initiateValidatorRegistration() public {
     address validator = getActor("Validator");
-    nft.mint(validator, 1);
     hardwareNft.mint(validator, 1);
-
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
 
     uint256 hardwareTokenId = 1;
 
     vm.startPrank(validator);
-    bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(
+    bytes32 validationId = nftStakingManager.initiateValidatorRegistration(
       DEFAULT_NODE_ID,
       DEFAULT_BLS_PUBLIC_KEY,
       DEFAULT_P_CHAIN_OWNER,
       DEFAULT_P_CHAIN_OWNER,
-      hardwareTokenId,
-      tokenIds
+      hardwareTokenId
     );
     vm.stopPrank();
 
-    assertEq(nft.balanceOf(validator), 1);
     assertEq(hardwareNft.balanceOf(validator), 1);
-    assertEq(validatorManager.created(stakeID), true);
+    assertEq(validatorManager.created(validationId), true);
+    assertEq(validatorManager.weights(validationId), 0);
+    
+    assertEq(nftStakingManager.getValidationIds().length, 1);
+    assertEq(nftStakingManager.getValidationIds()[0], validationId);
+
+    nftStakingManager.completeValidatorRegistration(0);
+    assertEq(validatorManager.validating(validationId), true);
   }
 
   //   function test_initiateValidatorRegistration() public {
