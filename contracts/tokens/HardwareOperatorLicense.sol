@@ -8,11 +8,44 @@ import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-
-import { IERC20 } from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
 import { ERC721Upgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
 
+/* 
+ * @title HardwareOperatorLicense
+ * @notice An ERC721 Soulbound NFT that represents a license that can be staked to create a Validator node
+ * whos staking is managed by the NFTStakingManager contract.
+ * 
+ * @param defaultAdmin The address of the default admin role.
+ * @param minter The address of the minter role.
+ * @param name The name of the token.
+ * @param symbol The symbol of the token.
+ * @param baseTokenURI The base URI of the token.
+ *
+ * Transfers are never allowed.
+ * 
+ * Implements ERC721Metadata such that `tokenURI(uint256 _tokenId)` returns the baseTokenURI + _tokenId,
+ * and can point to a metadata JSON file with the following structure:
+ *
+ * {
+ *     "title": "Asset Metadata",
+ *     "type": "object",
+ *     "properties": {
+ *         "name": {
+ *             "type": "string",
+ *             "description": "Identifies the asset to which this NFT represents"
+ *         },
+ *         "description": {
+ *             "type": "string",
+ *             "description": "Describes the asset to which this NFT represents"
+ *         },
+ *         "image": {
+ *             "type": "string",
+ *             "description": "A URI pointing to a resource with mime type image/* representing the asset to which this NFT represents. Consider making any images at a width between 320 and 1080 pixels and aspect ratio between 1.91:1 and 4:5 inclusive."
+ *         }
+ *     }
+ * } 
+ */
 contract HardwareOperatorLicense is
   Initializable,
   ERC721Upgradeable,
@@ -78,20 +111,6 @@ contract HardwareOperatorLicense is
   function _baseURI() internal view override returns (string memory) {
     return _baseTokenURI;
   }
-
-  // These functions allow the admin to rescue any tokens that were accidentally sent to this contract.
-
-  function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    IERC20(token).transferFrom(address(this), msg.sender, IERC20(token).balanceOf(address(this)));
-  }
-
-  function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (amount > address(this).balance) revert("Insufficient balance");
-    (bool success,) = payable(msg.sender).call{ value: amount }("");
-    require(success, "ETH transfer failed");
-  }
-
-  // The following functions are overrides required by Solidity.
 
   function _authorizeUpgrade(address newImplementation)
     internal

@@ -8,10 +8,50 @@ import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-
-import { IERC20 } from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
 import { ERC721Upgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
+
+interface INFTStakingManager {
+  function isTokenDelegated(uint256 tokenId) external view returns (bool);
+}
+
+/* 
+ * @title NodeLicense
+ * @notice An ERC721 NFT that represents a license that can be delegated to a Validator node
+ * whos staking is managed by the NFT Staking Manager contract.
+ * 
+ * @param defaultAdmin The address of the default admin role.
+ * @param minter The address of the minter role.
+ * @param nftStakingManager The address of the NFTStakingManager contract.
+ * @param name The name of the token.
+ * @param symbol The symbol of the token.
+ * @param baseTokenURI The base URI of the token.
+ * @param unlockTime (optional) The timestamp when the license will be unlocked.
+ *
+ * Transfers are blocked until the unlockTime and also if the token is staked to an NFTStakingManager.
+ * 
+ * Implements ERC721Metadata such that `tokenURI(uint256 _tokenId)` returns the baseTokenURI + _tokenId,
+ * and can point to a metadata JSON file with the following structure:
+ *
+ * {
+ *     "title": "Asset Metadata",
+ *     "type": "object",
+ *     "properties": {
+ *         "name": {
+ *             "type": "string",
+ *             "description": "Identifies the asset to which this NFT represents"
+ *         },
+ *         "description": {
+ *             "type": "string",
+ *             "description": "Describes the asset to which this NFT represents"
+ *         },
+ *         "image": {
+ *             "type": "string",
+ *             "description": "A URI pointing to a resource with mime type image/* representing the asset to which this NFT represents. Consider making any images at a width between 320 and 1080 pixels and aspect ratio between 1.91:1 and 4:5 inclusive."
+ *         }
+ *     }
+ * } 
+ */
 
 contract NodeLicense is
   Initializable,
@@ -24,10 +64,12 @@ contract NodeLicense is
   string private _baseTokenURI;
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
+  address private _nftStakingManager;
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
   error LicenseLockedError(uint32 unlockTime);
+  error LicenseStakedError();
   error NoTokensToMint();
   error ZeroAddress();
 
@@ -39,10 +81,11 @@ contract NodeLicense is
   function initialize(
     address defaultAdmin,
     address minter,
-    uint32 unlockTime,
+    address nftStakingManager,
     string calldata name,
     string calldata symbol,
-    string calldata baseTokenURI
+    string calldata baseTokenURI,
+    uint32 unlockTime
   ) public initializer {
     __ERC721_init(name, symbol);
     __AccessControl_init();
@@ -53,6 +96,7 @@ contract NodeLicense is
     _grantRole(MINTER_ROLE, minter);
     _baseTokenURI = baseTokenURI;
     _lockedUntil = unlockTime;
+    _nftStakingManager = nftStakingManager;
   }
 
   function mint(address to) public onlyRole(MINTER_ROLE) returns (uint256) {
@@ -91,8 +135,6 @@ contract NodeLicense is
     }
   }
 
-  // TODO disallow xfer if staked to NFT Staking Manager.
-
   function batchTransferFrom(address from, address to, uint256[] memory tokenIds) public {
     for (uint256 i = 0; i < tokenIds.length; i++) {
       transferFrom(from, to, tokenIds[i]);
@@ -114,10 +156,21 @@ contract NodeLicense is
     returns (address)
   {
     // If both addresses are non-zero, it's a transfer (not a mint or burn)
-    if (auth != address(0) && to != address(0) && block.timestamp < _lockedUntil) {
+    if (
+      auth != address(0) && to != address(0) && _lockedUntil > 0 && block.timestamp < _lockedUntil
+    ) {
       // Only check timelock for transfers
       revert LicenseLockedError(_lockedUntil);
     }
+
+    // If token is staked to NFT Staking Manager, disallow transfer
+    if (
+      _nftStakingManager != address(0)
+        && INFTStakingManager(_nftStakingManager).isTokenDelegated(tokenId)
+    ) {
+      revert LicenseStakedError();
+    }
+
     return super._update(to, tokenId, auth);
   }
 
@@ -130,18 +183,6 @@ contract NodeLicense is
   function _baseURI() internal view override returns (string memory) {
     return _baseTokenURI;
   }
-
-  function rescueERC20(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    IERC20(token).transferFrom(address(this), msg.sender, IERC20(token).balanceOf(address(this)));
-  }
-
-  function rescueETH(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (amount > address(this).balance) revert("Insufficient balance");
-    (bool success,) = payable(msg.sender).call{ value: amount }("");
-    require(success, "ETH transfer failed");
-  }
-
-  // The following functions are overrides required by Solidity.
 
   function supportsInterface(bytes4 interfaceId)
     public
