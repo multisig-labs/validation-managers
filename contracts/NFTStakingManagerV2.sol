@@ -38,6 +38,14 @@ struct ValidationInfo {
   EnumerableSet.Bytes32Set delegationIds;
 }
 
+struct ValidationInfoView {
+  address owner;
+  uint256 hardwareTokenId;
+  uint32 startEpoch;
+  uint32 endEpoch;
+  uint32 licenseCount;
+}
+
 struct DelegationInfo {
   address owner;
   bytes32 validationId;
@@ -51,6 +59,7 @@ struct DelegationInfo {
 // Without nested mappings, for view functions
 struct DelegationInfoView {
   address owner;
+  bytes32 validationId;
   uint32 startEpoch;
   uint32 endEpoch;
   uint256[] tokenIds;
@@ -121,6 +130,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function initialize(NFTStakingManagerSettings memory settings) public initializer {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
     $.manager = ValidatorManager(settings.validatorManager);
     $.licenseContract = IERC721(settings.license);
@@ -487,7 +498,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function getEpochByTimestamp(uint32 timestamp) public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return (timestamp - $.initialEpochTimestamp) / $.epochDuration;
+    uint32 something = (timestamp - $.initialEpochTimestamp) / $.epochDuration;
+    return something + 1;
   }
 
   function getCurrentEpoch() public view returns (uint32) {
@@ -522,9 +534,22 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     DelegationInfo storage delegation = $.delegations[delegationId];
     return DelegationInfoView({
       owner: delegation.owner,
+      validationId: delegation.validationId,
       startEpoch: delegation.startEpoch,
       endEpoch: delegation.endEpoch,
       tokenIds: delegation.tokenIds
+    });
+  }
+  
+  function getValidationInfoView(bytes32 validationId) external view returns (ValidationInfoView memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationId];
+    return ValidationInfoView({
+      owner: validation.owner,
+      hardwareTokenId: validation.hardwareTokenId,
+      startEpoch: validation.startEpoch,
+      endEpoch: validation.endEpoch,
+      licenseCount: validation.licenseCount
     });
   }
 
