@@ -61,6 +61,7 @@ struct NodeLicenseSettings {
   string symbol;
   string baseTokenURI;
   uint32 unlockTime;
+  uint256 maxBatchSize;
 }
 
 contract NodeLicense is
@@ -75,7 +76,7 @@ contract NodeLicense is
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
   address private _nftStakingManager;
-  uint256 public constant MAX_BATCH_SIZE = 100;
+  uint256 public _maxBatchSize;
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
@@ -105,6 +106,7 @@ contract NodeLicense is
     _baseTokenURI = settings.baseTokenURI;
     _lockedUntil = settings.unlockTime;
     _nftStakingManager = settings.nftStakingManager;
+    _maxBatchSize = settings.maxBatchSize;
   }
 
   function mint(address to) public onlyRole(MINTER_ROLE) returns (uint256) {
@@ -120,7 +122,7 @@ contract NodeLicense is
   {
     if (recipients.length == 0) revert ArrayLengthZero();
     if (recipients.length != amounts.length) revert ArrayLengthMismatch();
-    if (recipients.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge();
+    if (recipients.length > _maxBatchSize) revert BatchSizeTooLarge();
 
     uint256 totalAmount;
     for (uint256 i = 0; i < amounts.length; i++) {
