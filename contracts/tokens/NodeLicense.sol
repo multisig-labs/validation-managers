@@ -12,7 +12,7 @@ import { ERC721Upgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
 
 interface INFTStakingManager {
-  function isTokenDelegated(uint256 tokenId) external view returns (bool);
+  function getTokenLockedBy(uint256 tokenId) external view returns (bytes32);
 }
 
 /* 
@@ -171,7 +171,7 @@ contract NodeLicense is
     // If token is staked to NFT Staking Manager, disallow transfer
     if (
       _nftStakingManager != address(0)
-        && INFTStakingManager(_nftStakingManager).isTokenDelegated(tokenId)
+        && INFTStakingManager(_nftStakingManager).getTokenLockedBy(tokenId) != bytes32(0)
     ) {
       revert LicenseStakedError();
     }
