@@ -161,7 +161,7 @@ contract NodeLicense is
     emit NFTStakingManagerUpdated(_nftStakingManager, nftStakingManager);
     _nftStakingManager = nftStakingManager;
   }
-  
+
   function setUnlockTime(uint32 newUnlockTime) public onlyRole(DEFAULT_ADMIN_ROLE) {
     emit UnlockTimeUpdated(newUnlockTime);
     _lockedUntil = newUnlockTime;
@@ -175,20 +175,20 @@ contract NodeLicense is
   {
     // Early return for mint/burn operations
     if (auth == address(0) || to == address(0)) {
-        return super._update(to, tokenId, auth);
+      return super._update(to, tokenId, auth);
     }
 
     // Check timelock for transfers
     if (_lockedUntil > 0 && block.timestamp < _lockedUntil) {
-        revert LicenseLockedError(_lockedUntil);
+      revert LicenseLockedError(_lockedUntil);
     }
 
     // Check staking lock
     if (_nftStakingManager != address(0)) {
-        bytes32 lockId = INFTStakingManager(_nftStakingManager).getTokenLockedBy(tokenId);
-        if (lockId != bytes32(0)) {
-            revert LicenseStakedError();
-        }
+      bytes32 lockId = INFTStakingManager(_nftStakingManager).getTokenLockedBy(tokenId);
+      if (lockId != bytes32(0)) {
+        revert LicenseStakedError();
+      }
     }
 
     return super._update(to, tokenId, auth);

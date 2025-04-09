@@ -22,7 +22,7 @@ import { ERC721Upgradeable } from
  * @param symbol The symbol of the token.
  * @param baseTokenURI The base URI of the token.
  *
- * Transfers are never allowed.
+ * Transfers and approvals are never allowed.
  * 
  * Implements ERC721Metadata such that `tokenURI(uint256 _tokenId)` returns the baseTokenURI + _tokenId,
  * and can point to a metadata JSON file with the following structure:
@@ -58,6 +58,8 @@ contract HardwareOperatorLicense is
   uint256 private _nextTokenId;
 
   error ZeroAddress();
+  error EmptyURI();
+  error SoulboundToken();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -71,6 +73,9 @@ contract HardwareOperatorLicense is
     string calldata symbol,
     string calldata baseTokenURI
   ) public initializer {
+    if (bytes(baseTokenURI).length == 0) revert EmptyURI();
+    if (defaultAdmin == address(0) || minter == address(0)) revert ZeroAddress();
+
     __ERC721_init(name, symbol);
     __AccessControl_init();
     __UUPSUpgradeable_init();
@@ -93,7 +98,16 @@ contract HardwareOperatorLicense is
   }
 
   function setBaseURI(string memory baseTokenURI) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (bytes(baseTokenURI).length == 0) revert EmptyURI();
     _baseTokenURI = baseTokenURI;
+  }
+
+  function approve(address, uint256) public virtual override {
+    revert SoulboundToken();
+  }
+
+  function setApprovalForAll(address, bool) public virtual override {
+    revert SoulboundToken();
   }
 
   function _update(address to, uint256 tokenId, address auth)
@@ -102,9 +116,7 @@ contract HardwareOperatorLicense is
     override
     returns (address)
   {
-    require(
-      auth == address(0) || to == address(0), "This a Soulbound token. It cannot be transferred."
-    );
+    if (auth != address(0) && to != address(0)) revert SoulboundToken();
     return super._update(to, tokenId, auth);
   }
 
