@@ -52,8 +52,8 @@ interface INFTStakingManager {
  *     }
  * } 
  */
- 
- struct NodeLicenseSettings {
+
+struct NodeLicenseSettings {
   address admin;
   address minter;
   address nftStakingManager;
@@ -61,7 +61,7 @@ interface INFTStakingManager {
   string symbol;
   string baseTokenURI;
   uint32 unlockTime;
- }
+}
 
 contract NodeLicense is
   Initializable,
@@ -87,11 +87,8 @@ contract NodeLicense is
   constructor() {
     _disableInitializers();
   }
-  
 
-  function initialize(
-    NodeLicenseSettings memory settings
-  ) public initializer {
+  function initialize(NodeLicenseSettings memory settings) public initializer {
     __ERC721_init(settings.name, settings.symbol);
     __AccessControl_init();
     __UUPSUpgradeable_init();

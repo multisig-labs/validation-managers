@@ -4,22 +4,22 @@ pragma solidity 0.8.25;
 import { Base } from "./utils/Base.sol";
 
 import {
+  DelegationInfo,
+  DelegationInfoView,
   NFTStakingManager,
   NFTStakingManagerSettings,
   ValidationInfo,
-  DelegationInfo,
-  DelegationInfoView,
   ValidationInfoView
 } from "../contracts/NFTStakingManagerV2.sol";
 import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
-import { MockValidatorManager } from "../contracts/mocks/ValidatorManagerMock.sol";
+
 import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
+import { MockValidatorManager } from "../contracts/mocks/ValidatorManagerMock.sol";
 import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
 import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
 import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
-
 
 contract NFTStakingManagerTest is Base {
   ERC721Mock public nft;
@@ -62,7 +62,7 @@ contract NFTStakingManagerTest is Base {
       )
     );
     nftStakingManager = NFTStakingManager(address(stakingManagerProxy));
-    
+
     nftStakingManager.grantRole(nftStakingManager.PREPAYMENT_ROLE(), admin);
 
     NativeMinterMock nativeMinter = new NativeMinterMock();
@@ -85,7 +85,8 @@ contract NFTStakingManagerTest is Base {
       hardwareLicenseWeight: HARDWARE_LICENSE_WEIGHT,
       epochRewards: epochRewards,
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
-      requireHardwareTokenId: true
+      requireHardwareTokenId: true,
+      gracePeriod: 12 hours
     });
   }
 
@@ -111,22 +112,22 @@ contract NFTStakingManagerTest is Base {
     assertEq(hardwareNft.balanceOf(validator), 1);
     assertEq(validatorManager.created(validationId), true);
     assertEq(validatorManager.weights(validationId), HARDWARE_LICENSE_WEIGHT);
-    
+
     assertEq(nftStakingManager.getValidationIds().length, 1);
     assertEq(nftStakingManager.getValidationIds()[0], validationId);
 
     nftStakingManager.completeValidatorRegistration(0);
     assertEq(validatorManager.validating(validationId), true);
   }
-  
+
   function testv2_initiateDelegatorRegistration() public {
     bytes32 validationId = _createValidator();
-    
+
     address delegator = getActor("Delegator");
     nft.mint(delegator, 1);
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = 1;
-    
+
     // we need to prepay for these too
     vm.prank(admin);
     nftStakingManager.recordPrepayment(1, uint40(block.timestamp + 1 days));
@@ -134,34 +135,43 @@ contract NFTStakingManagerTest is Base {
     vm.startPrank(delegator);
     bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
     vm.stopPrank();
-    
+
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIds.length, 1);
     assertEq(delegation.tokenIds[0], 1);
     assertEq(delegation.validationId, validationId);
-    
-    
+
     nftStakingManager.completeDelegatorRegistration(delegationId, 0);
-    
 
     delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.startEpoch, nftStakingManager.getCurrentEpoch());
-    
+
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationId);
     assertEq(validation.licenseCount, 1);
-    
-    
+
     assertEq(validatorManager.weights(validationId), LICENSE_WEIGHT);
-    
   }
-  
+
+  function testv2_rewards() public {
+    // create a validator
+    // create a delegator
+    //  check that they are going to receive rewards properly
+
+    bytes32 validationId = _createValidator();
+    bytes32 delegationId = _createDelegator(validationId);
+
+    // move time forward
+    vm.warp(block.timestamp + 1 days);
+    nftStakingManager.rewardsSnapshot();
+  }
+
   function _createValidator() internal returns (bytes32) {
     address validator = getActor("Validator");
     hardwareNft.mint(validator, 1);
 
     uint256 hardwareTokenId = 1;
-    
+
     vm.startPrank(validator);
     bytes32 validationId = nftStakingManager.initiateValidatorRegistration(
       DEFAULT_NODE_ID,
@@ -172,9 +182,25 @@ contract NFTStakingManagerTest is Base {
     );
     nftStakingManager.completeValidatorRegistration(0);
     vm.stopPrank();
-    
 
     return validationId;
+  }
+
+  function _createDelegator(bytes32 validationId) internal returns (bytes32) {
+    address delegator = getActor("Delegator");
+    nft.mint(delegator, 1);
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.prank(admin);
+    nftStakingManager.recordPrepayment(1, uint40(block.timestamp + 10 days));
+
+    vm.startPrank(delegator);
+    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
+    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
+    vm.stopPrank();
+
+    return delegationId;
   }
 
   //   function test_initiateValidatorRegistration() public {

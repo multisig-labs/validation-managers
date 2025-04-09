@@ -33,7 +33,7 @@ contract MockValidatorManager {
     weights[lastNodeID] = weight;
     return lastNodeID;
   }
-  
+
   function getValidator(bytes32 validationId) external view returns (Validator memory) {
     return Validator({
       status: ValidatorStatus.Active,
@@ -46,7 +46,6 @@ contract MockValidatorManager {
       endTime: 0
     });
   }
-    
 
   function completeValidatorRegistration(uint32) external returns (bytes32) {
     validating[lastNodeID] = true;
@@ -69,8 +68,11 @@ contract MockValidatorManager {
     randNonce++;
     return keccak256(abi.encodePacked(block.timestamp, randNonce, address(this)));
   }
-  
-  function initiateValidatorWeightUpdate(bytes32 validationId, uint64 weight) external returns(uint64, bytes32) {
+
+  function initiateValidatorWeightUpdate(bytes32 validationId, uint64 weight)
+    external
+    returns (uint64, bytes32)
+  {
     console2.log("doing something");
     pendingWeights[validationId] = weight;
     lastNodeID = validationId;
@@ -82,15 +84,14 @@ contract MockValidatorManager {
     pendingWeights[lastNodeID] = 0;
     return (lastNodeID, getNextNonce());
   }
-  
+
   function getNextNonce() internal returns (uint64) {
     randNonce++;
     return uint64(randNonce);
   }
-  
+
   function randomBytes32() internal returns (bytes32) {
     randNonce++;
     return keccak256(abi.encodePacked(block.timestamp, randNonce, address(this)));
   }
-  
 }
