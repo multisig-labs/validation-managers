@@ -75,6 +75,7 @@ contract NodeLicense is
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
   address private _nftStakingManager;
+  uint256 public constant MAX_BATCH_SIZE = 100;
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
@@ -82,6 +83,11 @@ contract NodeLicense is
   error LicenseStakedError();
   error NoTokensToMint();
   error ZeroAddress();
+  error BatchSizeTooLarge();
+
+  event NFTStakingManagerUpdated(address indexed oldManager, address indexed newManager);
+  event BaseURIUpdated(string newBaseURI);
+  event UnlockTimeUpdated(uint32 newUnlockTime);
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -114,6 +120,7 @@ contract NodeLicense is
   {
     if (recipients.length == 0) revert ArrayLengthZero();
     if (recipients.length != amounts.length) revert ArrayLengthMismatch();
+    if (recipients.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge();
 
     uint256 totalAmount;
     for (uint256 i = 0; i < amounts.length; i++) {
@@ -122,17 +129,14 @@ contract NodeLicense is
 
     if (totalAmount == 0) revert NoTokensToMint();
 
-    uint256[] memory tokenIds = new uint256[](totalAmount);
-    uint256 startingTokenId = _nextTokenId;
+    uint256 currentTokenId = _nextTokenId;
     _nextTokenId += totalAmount;
 
-    uint256 currentIndex;
     for (uint256 i = 0; i < recipients.length; i++) {
+      if (recipients[i] == address(0)) revert ZeroAddress();
       for (uint256 j = 0; j < amounts[i]; j++) {
-        uint256 tokenId = startingTokenId + currentIndex;
-        tokenIds[currentIndex] = tokenId;
-        _safeMint(recipients[i], tokenId);
-        currentIndex++;
+        _safeMint(recipients[i], currentTokenId);
+        currentTokenId++;
       }
     }
   }
@@ -148,11 +152,19 @@ contract NodeLicense is
   }
 
   function setBaseURI(string memory baseTokenURI) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    emit BaseURIUpdated(baseTokenURI);
     _baseTokenURI = baseTokenURI;
   }
 
   function setNFTStakingManager(address nftStakingManager) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (nftStakingManager == address(0)) revert ZeroAddress();
+    emit NFTStakingManagerUpdated(_nftStakingManager, nftStakingManager);
     _nftStakingManager = nftStakingManager;
+  }
+  
+  function setUnlockTime(uint32 newUnlockTime) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    emit UnlockTimeUpdated(newUnlockTime);
+    _lockedUntil = newUnlockTime;
   }
 
   function _update(address to, uint256 tokenId, address auth)
@@ -161,20 +173,22 @@ contract NodeLicense is
     override
     returns (address)
   {
-    // If both addresses are non-zero, it's a transfer (not a mint or burn)
-    if (
-      auth != address(0) && to != address(0) && _lockedUntil > 0 && block.timestamp < _lockedUntil
-    ) {
-      // Only check timelock for transfers
-      revert LicenseLockedError(_lockedUntil);
+    // Early return for mint/burn operations
+    if (auth == address(0) || to == address(0)) {
+        return super._update(to, tokenId, auth);
     }
 
-    // If token is staked to NFT Staking Manager, disallow transfer
-    if (
-      _nftStakingManager != address(0)
-        && INFTStakingManager(_nftStakingManager).getTokenLockedBy(tokenId) != bytes32(0)
-    ) {
-      revert LicenseStakedError();
+    // Check timelock for transfers
+    if (_lockedUntil > 0 && block.timestamp < _lockedUntil) {
+        revert LicenseLockedError(_lockedUntil);
+    }
+
+    // Check staking lock
+    if (_nftStakingManager != address(0)) {
+        bytes32 lockId = INFTStakingManager(_nftStakingManager).getTokenLockedBy(tokenId);
+        if (lockId != bytes32(0)) {
+            revert LicenseStakedError();
+        }
     }
 
     return super._update(to, tokenId, auth);
@@ -197,5 +211,13 @@ contract NodeLicense is
     returns (bool)
   {
     return super.supportsInterface(interfaceId);
+  }
+
+  function getNFTStakingManager() external view returns (address) {
+    return _nftStakingManager;
+  }
+
+  function getUnlockTime() external view returns (uint32) {
+    return _lockedUntil;
   }
 }
