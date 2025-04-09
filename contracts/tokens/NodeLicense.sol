@@ -151,6 +151,10 @@ contract NodeLicense is
     _baseTokenURI = baseTokenURI;
   }
 
+  function setNFTStakingManager(address nftStakingManager) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    _nftStakingManager = nftStakingManager;
+  }
+
   function _update(address to, uint256 tokenId, address auth)
     internal
     virtual
