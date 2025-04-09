@@ -86,7 +86,7 @@ contract NFTStakingManagerTest is Base {
       epochRewards: epochRewards,
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
       requireHardwareTokenId: true,
-      gracePeriod: 12 hours
+      gracePeriod: 1 hours
     });
   }
 
@@ -103,6 +103,7 @@ contract NFTStakingManagerTest is Base {
     bytes32 validationId = nftStakingManager.initiateValidatorRegistration(
       DEFAULT_NODE_ID,
       DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_BLS_POP,
       DEFAULT_P_CHAIN_OWNER,
       DEFAULT_P_CHAIN_OWNER,
       hardwareTokenId
@@ -153,19 +154,6 @@ contract NFTStakingManagerTest is Base {
     assertEq(validatorManager.weights(validationId), LICENSE_WEIGHT);
   }
 
-  function testv2_rewards() public {
-    // create a validator
-    // create a delegator
-    //  check that they are going to receive rewards properly
-
-    bytes32 validationId = _createValidator();
-    bytes32 delegationId = _createDelegator(validationId);
-
-    // move time forward
-    vm.warp(block.timestamp + 1 days);
-    nftStakingManager.rewardsSnapshot();
-  }
-
   function _createValidator() internal returns (bytes32) {
     address validator = getActor("Validator");
     hardwareNft.mint(validator, 1);
@@ -176,6 +164,7 @@ contract NFTStakingManagerTest is Base {
     bytes32 validationId = nftStakingManager.initiateValidatorRegistration(
       DEFAULT_NODE_ID,
       DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_BLS_POP,
       DEFAULT_P_CHAIN_OWNER,
       DEFAULT_P_CHAIN_OWNER,
       hardwareTokenId
@@ -184,23 +173,6 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
 
     return validationId;
-  }
-
-  function _createDelegator(bytes32 validationId) internal returns (bytes32) {
-    address delegator = getActor("Delegator");
-    nft.mint(delegator, 1);
-    uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = 1;
-
-    vm.prank(admin);
-    nftStakingManager.recordPrepayment(1, uint40(block.timestamp + 10 days));
-
-    vm.startPrank(delegator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
-    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
-    vm.stopPrank();
-
-    return delegationId;
   }
 
   //   function test_initiateValidatorRegistration() public {

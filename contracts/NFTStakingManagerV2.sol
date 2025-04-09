@@ -20,6 +20,8 @@ import {
 } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
 import { ValidatorManager } from
   "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+import { ValidatorMessages } from
+  "icm-contracts-8817f47/contracts/validator-manager/ValidatorMessages.sol";
 
 interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
@@ -29,12 +31,19 @@ struct EpochInfo {
   uint256 totalStakedLicenses;
 }
 
+struct NodeInfo {
+  address owner;
+  bytes blsPublicKey;
+  bytes blsPoP;
+}
+
 struct ValidationInfo {
   address owner;
   uint256 hardwareTokenId;
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
+  bytes registrationMessage;
   EnumerableSet.Bytes32Set delegationIds;
 }
 
@@ -44,6 +53,7 @@ struct ValidationInfoView {
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
+  bytes registrationMessage;
 }
 
 struct DelegationInfo {
@@ -123,6 +133,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     mapping(uint256 tokenId => uint40 endTimestamp) prepayments;
     mapping(bytes32 validationId => ValidationInfo) validations;
     mapping(bytes32 delegationId => DelegationInfo) delegations;
+    mapping(bytes20 nodeID => NodeInfo) nodes;
   }
 
   NFTStakingManagerStorage private _storage;
@@ -250,25 +261,46 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function initiateValidatorRegistration(
     bytes memory nodeID,
     bytes memory blsPublicKey,
+    bytes memory blsPoP,
     PChainOwner memory remainingBalanceOwner,
     PChainOwner memory disableOwner,
     uint256 hardwareTokenId
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    uint64 registrationExpiry = uint64(block.timestamp + 1 days);
     uint64 weight = $.hardwareLicenseWeight;
     bytes32 validationId = $.manager.initiateValidatorRegistration(
-      nodeID,
-      blsPublicKey,
-      uint64(block.timestamp + 1 days),
-      remainingBalanceOwner,
-      disableOwner,
-      weight
+      nodeID, blsPublicKey, registrationExpiry, remainingBalanceOwner, disableOwner, weight
     );
+
     _lockHardwareToken(validationId, hardwareTokenId);
-    ValidationInfo storage validation = $.validations[validationId];
+
     $.validationIds.add(validationId);
+
+    // The bytes of this message are required to end the validation period, and ValidatorManager
+    // does not expose it or keep it around, so we store it here.
+    (, bytes memory registerL1ValidatorMessage) = ValidatorMessages.packRegisterL1ValidatorMessage(
+      ValidatorMessages.ValidationPeriod({
+        subnetID: $.manager.subnetID(),
+        nodeID: nodeID,
+        blsPublicKey: blsPublicKey,
+        remainingBalanceOwner: remainingBalanceOwner,
+        disableOwner: disableOwner,
+        registrationExpiry: registrationExpiry,
+        weight: weight
+      })
+    );
+
+    ValidationInfo storage validation = $.validations[validationId];
     validation.owner = msg.sender;
     validation.hardwareTokenId = hardwareTokenId;
+    validation.registrationMessage = registerL1ValidatorMessage;
+
+    // The blsPoP is required to complete the validator registration on the P-Chain, so store it here
+    // for an off-chain service to use to complete the registration.
+    bytes20 fixedNodeID = _fixedNodeID(nodeID);
+    $.nodes[fixedNodeID] =
+      NodeInfo({ owner: msg.sender, blsPublicKey: blsPublicKey, blsPoP: blsPoP });
 
     return validationId;
   }
@@ -587,13 +619,33 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       hardwareTokenId: validation.hardwareTokenId,
       startEpoch: validation.startEpoch,
       endEpoch: validation.endEpoch,
-      licenseCount: validation.licenseCount
+      licenseCount: validation.licenseCount,
+      registrationMessage: validation.registrationMessage
     });
+  }
+
+  function getNodeInfo(bytes20 nodeID) external view returns (NodeInfo memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.nodes[nodeID];
   }
 
   function getRewardsForEpoch(bytes32 delegationId, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationId].claimableRewardsPerEpoch[epoch];
+  }
+
+  /**
+   * @notice Converts a nodeID to a fixed length of 20 bytes.
+   * @param nodeID The nodeID to convert.
+   * @return The fixed length nodeID.
+   */
+  function _fixedNodeID(bytes memory nodeID) private pure returns (bytes20) {
+    bytes20 fixedID;
+    // solhint-disable-next-line no-inline-assembly
+    assembly {
+      fixedID := mload(add(nodeID, 32))
+    }
+    return fixedID;
   }
 
   function _authorizeUpgrade(address newImplementation)
