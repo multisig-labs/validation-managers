@@ -199,11 +199,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     return delegationId;
   }
 
-  function _getWeight(uint256 tokenCount) internal view returns (uint64) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return uint64(tokenCount * $.licenseWeight);
-  }
-
   function completeDelegatorRegistration(bytes32 delegationId, uint32 messageIndex) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     (bytes32 validationId,) = $.manager.completeValidatorWeightUpdate(messageIndex);
@@ -408,15 +403,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
   }
 
-  function _hasGracePeriodPassed(uint32 epoch) internal view returns (bool) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    uint40 epochEndTime = getEpochEndTime(epoch);
-    console2.log("block.timestamp", block.timestamp);
-    console2.log("epoch end time", epochEndTime);
-    console2.log("grace period", $.gracePeriod);
-    return block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod;
-  }
-
   function mintRewards(bytes32 validationId) public {
     uint32 epoch = getCurrentEpoch();
     epoch--;
@@ -512,49 +498,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     payable(delegation.owner).sendValue(totalRewards);
     return (totalRewards, claimedEpochNumbers);
-  }
-
-  function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
-    }
-  }
-
-  function _lockTokens(bytes32 stakeId, uint256[] memory tokenIds) internal {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    address owner;
-    for (uint256 i = 0; i < tokenIds.length; i++) {
-      uint256 tokenId = tokenIds[i];
-      owner = $.licenseContract.ownerOf(tokenId);
-      if (owner != msg.sender) revert UnauthorizedOwner(owner);
-      if ($.tokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
-      $.tokenLockedBy[tokenId] = stakeId;
-    }
-    emit TokensLocked(owner, stakeId, tokenIds);
-  }
-
-  function _lockHardwareToken(bytes32 stakeId, uint256 tokenId) internal {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    address owner = $.hardwareLicenseContract.ownerOf(tokenId);
-    if (owner != msg.sender) revert UnauthorizedOwner(owner);
-    if ($.hardwareTokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
-    $.hardwareTokenLockedBy[tokenId] = stakeId;
-  }
-
-  function _unlockTokens(bytes32 stakeId, uint256[] memory tokenIds) internal {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage stake = $.delegations[stakeId];
-    address owner = stake.owner;
-    for (uint256 i = 0; i < tokenIds.length; i++) {
-      $.tokenLockedBy[tokenIds[i]] = bytes32(0);
-    }
-    emit TokensUnlocked(owner, stakeId, tokenIds);
-  }
-
-  function _unlockHardwareToken(uint256 tokenId) internal {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    $.hardwareTokenLockedBy[tokenId] = bytes32(0);
   }
 
   function calculateRewardsPerLicense(uint32 epochNumber) public view returns (uint256) {
@@ -672,6 +615,59 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function getRewardsForEpoch(bytes32 delegationId, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationId].claimableRewardsPerEpoch[epoch];
+  }
+
+  function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
+    // solhint-disable-next-line no-inline-assembly
+    assembly {
+      $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
+    }
+  }
+
+  function _lockTokens(bytes32 stakeId, uint256[] memory tokenIds) internal {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    address owner;
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      uint256 tokenId = tokenIds[i];
+      owner = $.licenseContract.ownerOf(tokenId);
+      if (owner != msg.sender) revert UnauthorizedOwner(owner);
+      if ($.tokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
+      $.tokenLockedBy[tokenId] = stakeId;
+    }
+    emit TokensLocked(owner, stakeId, tokenIds);
+  }
+
+  function _lockHardwareToken(bytes32 stakeId, uint256 tokenId) internal {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    address owner = $.hardwareLicenseContract.ownerOf(tokenId);
+    if (owner != msg.sender) revert UnauthorizedOwner(owner);
+    if ($.hardwareTokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
+    $.hardwareTokenLockedBy[tokenId] = stakeId;
+  }
+
+  function _unlockTokens(bytes32 stakeId, uint256[] memory tokenIds) internal {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    DelegationInfo storage stake = $.delegations[stakeId];
+    address owner = stake.owner;
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      $.tokenLockedBy[tokenIds[i]] = bytes32(0);
+    }
+    emit TokensUnlocked(owner, stakeId, tokenIds);
+  }
+
+  function _unlockHardwareToken(uint256 tokenId) internal {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    $.hardwareTokenLockedBy[tokenId] = bytes32(0);
+  }
+
+  function _getWeight(uint256 tokenCount) internal view returns (uint64) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return uint64(tokenCount * $.licenseWeight);
+  }
+
+  function _hasGracePeriodPassed(uint32 epoch) internal view returns (bool) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod;
   }
 
   /**
