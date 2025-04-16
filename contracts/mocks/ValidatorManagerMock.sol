@@ -83,7 +83,7 @@ contract MockValidatorManager {
     pendingWeights[lastNodeID] = 0;
     return (lastNodeID, getNextNonce());
   }
-  
+
   function subnetID() external pure returns (bytes32) {
     return bytes32(keccak256(abi.encodePacked("mockvalidatormanager")));
   }

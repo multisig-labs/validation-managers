@@ -183,8 +183,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     Validator memory validator = $.manager.getValidator(validationId);
     uint64 newWeight = validator.weight + _getWeight(tokenIds.length);
-    (uint64 nonce, ) =
-      $.manager.initiateValidatorWeightUpdate(validationId, newWeight);
+    (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(validationId, newWeight);
 
     bytes32 delegationId = keccak256(abi.encodePacked(validationId, nonce));
 
@@ -417,13 +416,13 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     console2.log("grace period", $.gracePeriod);
     return block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod;
   }
-  
+
   function mintRewards(bytes32 validationId) public {
     uint32 epoch = getCurrentEpoch();
     epoch--;
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-    
+
     if (!_hasGracePeriodPassed(epoch)) {
       revert("Grace period has not passed");
     }
@@ -448,7 +447,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       revert("Stake does not exist");
     }
 
-    if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0)) {
+    if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0))
+    {
       revert EpochOutOfRange(epoch, delegation.startEpoch, delegation.endEpoch);
     }
 
@@ -504,7 +504,9 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     // Events (after all state changes)
     for (uint32 i = 0; i < maxEpochs; i++) {
       emit RewardsClaimed(
-        claimedEpochNumbers[i], delegationId, delegation.claimableRewardsPerEpoch[claimedEpochNumbers[i]]
+        claimedEpochNumbers[i],
+        delegationId,
+        delegation.claimableRewardsPerEpoch[claimedEpochNumbers[i]]
       );
     }
 
@@ -579,13 +581,13 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function getExpectedUptime(bytes32 validationId, uint32 epoch) public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    
+
     // Get the validator's start epoch from the validation info
     ValidationInfo storage validation = $.validations[validationId];
     if (validation.startEpoch == 0) {
       revert("Validator not registered");
     }
-    
+
     // Calculate number of epochs since validator started
     console2.log("epoch", epoch);
     console2.log("validation start epoch", validation.startEpoch);
@@ -598,10 +600,10 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       // If validator just started this epoch, expect 80% of current epoch
       return $.epochDuration * 80 / 100;
     }
-    
+
     // Calculate total time active in seconds
     uint32 totalTimeActive = epochsActive * $.epochDuration;
-    
+
     // Return 80% of total time active
     return totalTimeActive * 80 / 100;
   }
