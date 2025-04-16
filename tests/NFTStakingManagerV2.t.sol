@@ -153,6 +153,28 @@ contract NFTStakingManagerTest is Base {
 
     assertEq(validatorManager.weights(validationId), LICENSE_WEIGHT);
   }
+  
+  function testv2_delegatorRewards() public {
+    bytes32 validationId = _createValidator();
+    (bytes32 delegationId, address delegator) = _createDelegation(validationId);
+    
+    vm.warp(block.timestamp + 1 days);
+    nftStakingManager.processProof(validationId, 0);
+  
+    vm.warp(block.timestamp + 1 hours);
+    nftStakingManager.mintRewards(validationId);
+    
+    assertEq(address(nftStakingManager).balance, epochRewards);
+    
+    vm.prank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) = nftStakingManager.claimRewards(delegationId, 1);
+    assertEq(totalRewards, epochRewards);
+  }
+  
+  function testv2_multipleDelegatorRewards() public {
+
+  }
+  
 
   function _createValidator() internal returns (bytes32) {
     address validator = getActor("Validator");
@@ -173,6 +195,20 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
 
     return validationId;
+  }
+  
+  function _createDelegation(bytes32 validationId) internal returns (bytes32, address) {
+    address delegator = getActor("Delegator");
+    nft.mint(delegator, 1);
+    uint256[] memory tokenIds = new uint256[](1);
+    tokenIds[0] = 1;
+
+    vm.startPrank(delegator);
+    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
+    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
+    vm.stopPrank();
+
+    return (delegationId, delegator);
   }
 
   //   function test_initiateValidatorRegistration() public {

@@ -121,7 +121,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint64 licenseWeight; // 1000
     uint64 hardwareLicenseWeight; // 1 million
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
-    uint32 gracePeriod; // starting at 12 hours
+    uint32 gracePeriod; // starting at 1 hours
     EnumerableSet.Bytes32Set validationIds;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 delegationId) tokenLockedBy;
@@ -183,7 +183,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     Validator memory validator = $.manager.getValidator(validationId);
     uint64 newWeight = validator.weight + _getWeight(tokenIds.length);
-    (uint64 nonce, bytes32 messageId) =
+    (uint64 nonce, ) =
       $.manager.initiateValidatorWeightUpdate(validationId, newWeight);
 
     bytes32 delegationId = keccak256(abi.encodePacked(validationId, nonce));
@@ -332,7 +332,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     $.manager.completeValidatorRemoval(messageIndex);
 
-    _unlockHardwareToken(validationId, validation.hardwareTokenId);
+    _unlockHardwareToken(validation.hardwareTokenId);
 
     for (uint256 i = 0; i < validation.delegationIds.length(); i++) {
       bytes32 delegationId = validation.delegationIds.at(i);
@@ -358,29 +358,16 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     $.prepayments[tokenId] = endTimestamp;
   }
 
-  // Anyone can call. Must be called after the epoch grace period, and we will
-  // snapshot the total staked licenses for the prev epoch
-  function rewardsSnapshot() external {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    // what to do if this is the first epoch? then I guess it can't be called
-    if (getCurrentEpoch() == 0) revert("second epoch has not started yet");
-    uint32 lastEpoch = getCurrentEpoch() - 1;
-    if ($.epochs[lastEpoch].totalStakedLicenses != 0) {
-      revert("Rewards already snapped for this epoch");
-    }
-    $.epochs[lastEpoch].totalStakedLicenses = $.currentTotalStakedLicenses;
-  }
-
   // Anyone can call mintRewards functions to mint rewards (prob backend cron process)
   // No special permissions necessary. In future this could accept uptime proof as well.
   // after verifiying the total amount
-  function mintRewards(uint32 epochNumber, bytes32[] calldata stakeIds) external {
-    for (uint256 i = 0; i < stakeIds.length; i++) {
-      _mintRewards(epochNumber, stakeIds[i]);
+  function mintRewards(bytes32[] calldata validationIds) external {
+    for (uint256 i = 0; i < validationIds.length; i++) {
+      mintRewards(validationIds[i]);
     }
   }
 
-  function processProof(bytes32 validationId, uint256 warpMessageId) public {
+  function processProof(bytes32 validationId, uint256) public {
     // for now i'm just going to say that the uptime proof is good no matter what
     // (bytes32 validationID, uint64 uptime) = ValidatorMessages.unpackValidationUptimeMessage(
     //   _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
@@ -389,13 +376,19 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     // this has to be called within a grace period window
     uint32 epoch = getCurrentEpoch();
     epoch--;
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+
+    console2.log("epoch", epoch);
+    console2.log("grace period", $.gracePeriod);
+    console2.log("has grace period passed", _hasGracePeriodPassed(epoch));
     if (_hasGracePeriodPassed(epoch)) {
       revert("Grace period has passed");
     }
 
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    uint32 uptime = getExpectedUptime();
-    if ($.epochDuration < uptime) {
+    uint32 expectedUptime = getExpectedUptime(validationId, epoch);
+    console2.log("expected uptime", expectedUptime);
+    // TODO: actually check the uptime
+    if (false) {
       revert("uptime not passed for validation");
     }
 
@@ -418,83 +411,104 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function _hasGracePeriodPassed(uint32 epoch) internal view returns (bool) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    uint40 epochEndTime = getEpochEndTime(epoch);
+    console2.log("block.timestamp", block.timestamp);
+    console2.log("epoch end time", epochEndTime);
+    console2.log("grace period", $.gracePeriod);
     return block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod;
+  }
+  
+  function mintRewards(bytes32 validationId) public {
+    uint32 epoch = getCurrentEpoch();
+    epoch--;
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationId];
+    
+    if (!_hasGracePeriodPassed(epoch)) {
+      revert("Grace period has not passed");
+    }
+
+    uint256 totalDelegations = validation.delegationIds.length();
+
+    for (uint256 i = 0; i < totalDelegations; i++) {
+      bytes32 delegationId = validation.delegationIds.at(i);
+      DelegationInfo storage delegation = $.delegations[delegationId];
+      if (delegation.uptimeCheck[epoch]) {
+        mintDelegatorRewards(epoch, delegationId);
+      }
+    }
   }
 
   // verify that the user had a valid uptime for the given epcoh
-  function _mintRewards(uint32 epochNumber, bytes32 delegationId) internal {
+  function mintDelegatorRewards(uint32 epoch, bytes32 delegationId) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage stake = $.delegations[delegationId];
+    DelegationInfo storage delegation = $.delegations[delegationId];
 
-    if (stake.owner == address(0)) {
+    if (delegation.owner == address(0)) {
       revert("Stake does not exist");
     }
 
-    // TODO: Handle the case where there are no licenses staked
-    if ($.epochs[epochNumber].totalStakedLicenses == 0) {
-      revert("Rewards not snapped for this epoch");
+    if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0)) {
+      revert EpochOutOfRange(epoch, delegation.startEpoch, delegation.endEpoch);
     }
 
-    if (epochNumber < stake.startEpoch || (epochNumber > stake.endEpoch && stake.endEpoch != 0)) {
-      revert EpochOutOfRange(epochNumber, stake.startEpoch, stake.endEpoch);
-    }
-
-    for (uint256 i = 0; i < stake.tokenIds.length; i++) {
+    for (uint256 i = 0; i < delegation.tokenIds.length; i++) {
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
-      if ($.tokenLockedBy[stake.tokenIds[i]] != delegationId) {
+      if ($.tokenLockedBy[delegation.tokenIds[i]] != delegationId) {
         revert("Token not locked by this stakeId");
       }
-      if ($.isRewardsMinted[epochNumber][stake.tokenIds[i]]) {
+      if ($.isRewardsMinted[epoch][delegation.tokenIds[i]]) {
         revert("Rewards already minted for this tokenId");
       }
 
-      $.isRewardsMinted[epochNumber][stake.tokenIds[i]] = true;
+      $.isRewardsMinted[epoch][delegation.tokenIds[i]] = true;
     }
 
-    uint256 rewards = calculateRewardsPerLicense(epochNumber) * stake.tokenIds.length;
-    stake.claimableRewardsPerEpoch[epochNumber] = rewards;
-    stake.claimableEpochNumbers.add(uint256(epochNumber));
+    uint256 rewards = calculateRewardsPerLicense(epoch) * delegation.tokenIds.length;
+    delegation.claimableRewardsPerEpoch[epoch] = rewards;
+    delegation.claimableEpochNumbers.add(uint256(epoch));
     INativeMinter(0x0200000000000000000000000000000000000001).mintNativeCoin(address(this), rewards);
-    emit RewardsMinted(epochNumber, delegationId, rewards);
+    emit RewardsMinted(epoch, delegationId, rewards);
   }
 
   function claimRewards(address owner) external { }
 
-  function claimRewards(bytes32 stakeId, uint32 maxEpochs)
+  function claimRewards(bytes32 delegationId, uint32 maxEpochs)
     external
     returns (uint256, uint32[] memory)
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage stake = $.delegations[stakeId];
+    DelegationInfo storage delegation = $.delegations[delegationId];
 
-    if (stake.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
-    if (maxEpochs > stake.claimableEpochNumbers.length()) {
-      maxEpochs = uint32(stake.claimableEpochNumbers.length());
+    console2.log("delegation.owner", delegation.owner);
+    if (delegation.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
+    if (maxEpochs > delegation.claimableEpochNumbers.length()) {
+      maxEpochs = uint32(delegation.claimableEpochNumbers.length());
     }
 
     uint256 totalRewards = 0;
     uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
 
     for (uint32 i = 0; i < maxEpochs; i++) {
-      uint32 epochNumber = uint32(stake.claimableEpochNumbers.at(i));
-      uint256 rewards = stake.claimableRewardsPerEpoch[epochNumber];
+      uint32 epochNumber = uint32(delegation.claimableEpochNumbers.at(i));
+      uint256 rewards = delegation.claimableRewardsPerEpoch[epochNumber];
 
       // State changes
       claimedEpochNumbers[i] = epochNumber;
       totalRewards += rewards;
-      stake.claimableEpochNumbers.remove(uint256(epochNumber));
-      stake.claimableRewardsPerEpoch[epochNumber] = 0;
+      delegation.claimableEpochNumbers.remove(uint256(epochNumber));
+      delegation.claimableRewardsPerEpoch[epochNumber] = 0;
     }
 
     // Events (after all state changes)
     for (uint32 i = 0; i < maxEpochs; i++) {
       emit RewardsClaimed(
-        claimedEpochNumbers[i], stakeId, stake.claimableRewardsPerEpoch[claimedEpochNumbers[i]]
+        claimedEpochNumbers[i], delegationId, delegation.claimableRewardsPerEpoch[claimedEpochNumbers[i]]
       );
     }
 
-    payable(stake.owner).sendValue(totalRewards);
+    payable(delegation.owner).sendValue(totalRewards);
     return (totalRewards, claimedEpochNumbers);
   }
 
@@ -536,7 +550,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     emit TokensUnlocked(owner, stakeId, tokenIds);
   }
 
-  function _unlockHardwareToken(bytes32 stakeId, uint256 tokenId) internal {
+  function _unlockHardwareToken(uint256 tokenId) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     $.hardwareTokenLockedBy[tokenId] = bytes32(0);
   }
@@ -560,12 +574,36 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
   function getEpochEndTime(uint32 epoch) public view returns (uint40) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.initialEpochTimestamp + (epoch + 1) * $.epochDuration;
+    return $.initialEpochTimestamp + (epoch) * $.epochDuration;
   }
 
-  function getExpectedUptime() public view returns (uint32) {
+  function getExpectedUptime(bytes32 validationId, uint32 epoch) public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochDuration * 70 / 100;
+    
+    // Get the validator's start epoch from the validation info
+    ValidationInfo storage validation = $.validations[validationId];
+    if (validation.startEpoch == 0) {
+      revert("Validator not registered");
+    }
+    
+    // Calculate number of epochs since validator started
+    console2.log("epoch", epoch);
+    console2.log("validation start epoch", validation.startEpoch);
+    if (epoch < validation.startEpoch) {
+      revert("Epoch is before validator started");
+    }
+
+    uint32 epochsActive = epoch - validation.startEpoch;
+    if (epochsActive == 0) {
+      // If validator just started this epoch, expect 80% of current epoch
+      return $.epochDuration * 80 / 100;
+    }
+    
+    // Calculate total time active in seconds
+    uint32 totalTimeActive = epochsActive * $.epochDuration;
+    
+    // Return 80% of total time active
+    return totalTimeActive * 80 / 100;
   }
 
   function getCurrentTotalStakedLicenses() external view returns (uint32) {

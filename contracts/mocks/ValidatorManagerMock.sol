@@ -73,7 +73,6 @@ contract MockValidatorManager {
     external
     returns (uint64, bytes32)
   {
-    console2.log("doing something");
     pendingWeights[validationId] = weight;
     lastNodeID = validationId;
     return (getNextNonce(), randomBytes32());
@@ -83,6 +82,10 @@ contract MockValidatorManager {
     weights[lastNodeID] = pendingWeights[lastNodeID];
     pendingWeights[lastNodeID] = 0;
     return (lastNodeID, getNextNonce());
+  }
+  
+  function subnetID() external pure returns (bytes32) {
+    return bytes32(keccak256(abi.encodePacked("mockvalidatormanager")));
   }
 
   function getNextNonce() internal returns (uint64) {
