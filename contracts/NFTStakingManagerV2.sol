@@ -418,9 +418,9 @@ contract NFTStakingManager is
   // Anyone can call mintRewards functions to mint rewards (prob backend cron process)
   // No special permissions necessary. In future this could accept uptime proof as well.
   // after verifiying the total amount
-  function mintRewards(bytes32[] calldata validationIds) external {
+  function mintRewards(bytes32[] calldata validationIds, uint32 epoch) external {
     for (uint256 i = 0; i < validationIds.length; i++) {
-      mintRewards(validationIds[i]);
+      mintRewards(validationIds[i], epoch);
     }
   }
 
@@ -453,6 +453,7 @@ contract NFTStakingManager is
     console2.log("SUBMISSION TIME DELTA", submissionTimeDelta);
     uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
+    console2.log("epoch", epoch);
     console2.log("EFFECTIVE UPTIME", effectiveUptime);
     console2.log("EXPECTED UPTIME", _expectedUptime());
     if (effectiveUptime < _expectedUptime()) {
@@ -474,9 +475,7 @@ contract NFTStakingManager is
     }
   }
 
-  function mintRewards(bytes32 validationId) public {
-    uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
-    epoch--;
+  function mintRewards(bytes32 validationId, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
 
