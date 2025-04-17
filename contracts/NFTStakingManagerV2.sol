@@ -105,6 +105,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   error TokenAlreadyLocked(uint256 tokenId);
   error UnauthorizedOwner(address owner);
   error EpochOutOfRange(uint32 currentEpoch, uint32 startEpoch, uint32 endEpoch);
+  error InsufficientUptime();
 
   event TokensLocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
   event TokensUnlocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
@@ -407,24 +408,23 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     console2.log("EFFECTIVE UPTIME", effectiveUptime);
     console2.log("EXPECTED UPTIME", _expectedUptime());
     if (effectiveUptime < _expectedUptime()) {
-      revert("uptime not passed for validation");
+      revert InsufficientUptime();
     }
+
+    // Only update state if uptime check passes
+    validation.lastUptimeSeconds = uint40(uptimeSeconds);
+    validation.lastEpochRecorded = epoch;
+    validation.lastSubmissionTime = uint40(block.timestamp);
 
     EpochInfo storage epochInfo = $.epochs[epoch];
 
-    uint256 totalDelegations = validation.delegationIds.length();
-
     // then for each delegation that was on the active validator, record that they can get rewards
-    for (uint256 i = 0; i < totalDelegations; i++) {
+    for (uint256 i = 0; i < validation.delegationIds.length(); i++) {
       bytes32 delegationId = validation.delegationIds.at(i);
       DelegationInfo storage delegation = $.delegations[delegationId];
       delegation.uptimeCheck[epoch] = true;
       epochInfo.totalStakedLicenses += delegation.tokenIds.length;
     }
-
-    validation.lastUptimeSeconds = uint40(uptimeSeconds);
-    validation.lastEpochRecorded = epoch;
-    validation.lastSubmissionTime = uint40(block.timestamp);
   }
 
   function mintRewards(bytes32 validationId) public {

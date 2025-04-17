@@ -245,6 +245,22 @@ contract NFTStakingManagerTest is Base {
     vm.prank(delegator);
   }
 
+  function test_processProof_insufficientUptime() public {
+    uint256 startTime = block.timestamp;
+    uint256 epochDuration = 1 days;
+
+    bytes32 validationId = _createValidator();
+    (bytes32 delegationId, address delegator) = _createDelegation(validationId);
+
+    // Move to the grace period of the first epoch
+    vm.warp(startTime + epochDuration + GRACE_PERIOD / 2);
+
+    uint256 insufficientUptime = epochDuration * 70 / 100;
+
+    vm.expectRevert(NFTStakingManager.InsufficientUptime.selector);
+    nftStakingManager.processProof(validationId, insufficientUptime);
+  }
+
   function _createValidator() internal returns (bytes32) {
     address validator = getActor("Validator");
     hardwareNft.mint(validator, 1);
