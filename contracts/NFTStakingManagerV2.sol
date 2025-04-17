@@ -45,7 +45,6 @@ struct ValidationInfo {
   uint32 licenseCount;
   uint40 lastUptimeSeconds;
   uint40 lastSubmissionTime;
-  uint32 lastEpochRecorded; // TODO: what if a validator misses an epoch?
   bytes registrationMessage;
   EnumerableSet.Bytes32Set delegationIds;
 }
@@ -59,7 +58,6 @@ struct ValidationInfoView {
   bytes registrationMessage;
   uint40 lastUptimeSeconds;
   uint40 lastSubmissionTime;
-  uint32 lastEpochRecorded;
 }
 
 struct DelegationInfo {
@@ -365,9 +363,9 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   // Anyone can call mintRewards functions to mint rewards (prob backend cron process)
   // No special permissions necessary. In future this could accept uptime proof as well.
   // after verifiying the total amount
-  function mintRewards(bytes32[] calldata validationIds) external {
+  function mintRewards(bytes32[] calldata validationIds, uint32 epoch) external {
     for (uint256 i = 0; i < validationIds.length; i++) {
-      mintRewards(validationIds[i]);
+      mintRewards(validationIds[i], epoch);
     }
   }
 
@@ -405,6 +403,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
+    console2.log("epoch", epoch);
     console2.log("EFFECTIVE UPTIME", effectiveUptime);
     console2.log("EXPECTED UPTIME", _expectedUptime());
     if (effectiveUptime < _expectedUptime()) {
@@ -413,7 +412,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     // Only update state if uptime check passes
     validation.lastUptimeSeconds = uint40(uptimeSeconds);
-    validation.lastEpochRecorded = epoch;
     validation.lastSubmissionTime = uint40(block.timestamp);
 
     EpochInfo storage epochInfo = $.epochs[epoch];
@@ -427,9 +425,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
   }
 
-  function mintRewards(bytes32 validationId) public {
-    uint32 epoch = getCurrentEpoch();
-    epoch--;
+  function mintRewards(bytes32 validationId, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
 
@@ -616,8 +612,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       licenseCount: validation.licenseCount,
       registrationMessage: validation.registrationMessage,
       lastUptimeSeconds: validation.lastUptimeSeconds,
-      lastSubmissionTime: validation.lastSubmissionTime,
-      lastEpochRecorded: validation.lastEpochRecorded
+      lastSubmissionTime: validation.lastSubmissionTime
     });
   }
 
