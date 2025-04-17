@@ -43,6 +43,9 @@ struct ValidationInfo {
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
+  uint40 lastUptimeSeconds;
+  uint40 lastSubmissionTime;
+  uint32 lastEpochRecorded; // TODO: what if a validator misses an epoch?
   bytes registrationMessage;
   EnumerableSet.Bytes32Set delegationIds;
 }
@@ -54,6 +57,9 @@ struct ValidationInfoView {
   uint32 endEpoch;
   uint32 licenseCount;
   bytes registrationMessage;
+  uint40 lastUptimeSeconds;
+  uint40 lastSubmissionTime;
+  uint32 lastEpochRecorded;
 }
 
 struct DelegationInfo {
@@ -88,6 +94,7 @@ struct NFTStakingManagerSettings {
   uint16 maxLicensesPerValidator;
   bool requireHardwareTokenId;
   uint32 gracePeriod;
+  uint256 uptimePercentage; // 100 = 100%
 }
 
 contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
@@ -121,6 +128,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     uint64 licenseWeight; // 1000
     uint64 hardwareLicenseWeight; // 1 million
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
+    uint256 uptimePercentage; // 100 = 100%
     uint32 gracePeriod; // starting at 1 hours
     EnumerableSet.Bytes32Set validationIds;
     // We dont xfer nft to this contract, we just mark it as locked
@@ -157,6 +165,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     $.epochRewards = settings.epochRewards;
     $.gracePeriod = settings.gracePeriod;
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
+    $.uptimePercentage = settings.uptimePercentage;
   }
 
   function initiateDelegatorRegistration(bytes32 validationId, uint256[] calldata tokenIds)
@@ -361,37 +370,48 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
   }
 
-  function processProof(bytes32 validationId, uint256) public {
-    // for now i'm just going to say that the uptime proof is good no matter what
+  function processProof(bytes32 validationId, uint256 uptimeSeconds) public {
+    // TODO: retrieve the uptime proof
     // (bytes32 validationID, uint64 uptime) = ValidatorMessages.unpackValidationUptimeMessage(
     //   _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
     // );
 
-    // this has to be called within a grace period window
     uint32 epoch = getCurrentEpoch();
     epoch--;
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-
-    console2.log("epoch", epoch);
-    console2.log("grace period", $.gracePeriod);
-    console2.log("has grace period passed", _hasGracePeriodPassed(epoch));
+    if (epoch == 0) {
+      revert("Epoch has not ended");
+    }
+    
     if (_hasGracePeriodPassed(epoch)) {
       revert("Grace period has passed");
     }
+    
+    ValidationInfo storage validation = $.validations[validationId];
+    
+    uint40 lastSubmissionTime = validation.lastSubmissionTime;
+    if (lastSubmissionTime == 0) {
+      lastSubmissionTime = getEpochStartTime(epoch);
+    }
+    
+    uint40 lastUptimeSeconds = validation.lastUptimeSeconds;
+    if (lastUptimeSeconds == 0) {
+      lastUptimeSeconds = getEpochStartTime(epoch);
+    }
+    
+    uint40 uptimeDelta = uint40(uptimeSeconds) - lastUptimeSeconds;
+    uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
+    
+    uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
-    uint32 expectedUptime = getExpectedUptime(validationId, epoch);
-    console2.log("expected uptime", expectedUptime);
-    // TODO: actually check the uptime
-    if (false) {
+    console2.log("EFFECTIVE UPTIME", effectiveUptime);
+    console2.log("EXPECTED UPTIME", _expectedUptime());
+    if (effectiveUptime < _expectedUptime()) {
       revert("uptime not passed for validation");
     }
 
-    // then if it passes, record total validators for the epoch
-    // and say that the tokenIds passed uptime
-
     EpochInfo storage epochInfo = $.epochs[epoch];
 
-    ValidationInfo storage validation = $.validations[validationId];
     uint256 totalDelegations = validation.delegationIds.length();
 
     // then for each delegation that was on the active validator, record that they can get rewards
@@ -401,6 +421,10 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       delegation.uptimeCheck[epoch] = true;
       epochInfo.totalStakedLicenses += delegation.tokenIds.length;
     }
+    
+    validation.lastUptimeSeconds = uint40(uptimeSeconds);
+    validation.lastEpochRecorded = epoch;
+    validation.lastSubmissionTime = uint40(block.timestamp);
   }
 
   function mintRewards(bytes32 validationId) public {
@@ -418,7 +442,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     for (uint256 i = 0; i < totalDelegations; i++) {
       bytes32 delegationId = validation.delegationIds.at(i);
       DelegationInfo storage delegation = $.delegations[delegationId];
-      if (delegation.uptimeCheck[epoch]) {
+      // TODO: revist this epoch check
+      if (delegation.uptimeCheck[epoch] && epoch >= delegation.startEpoch) {
         mintDelegatorRewards(epoch, delegationId);
       }
     }
@@ -467,7 +492,6 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationId];
 
-    console2.log("delegation.owner", delegation.owner);
     if (delegation.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
     if (maxEpochs > delegation.claimableEpochNumbers.length()) {
       maxEpochs = uint32(delegation.claimableEpochNumbers.length());
@@ -475,18 +499,19 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     uint256 totalRewards = 0;
     uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
-
+    
     for (uint32 i = 0; i < maxEpochs; i++) {
-      uint32 epochNumber = uint32(delegation.claimableEpochNumbers.at(i));
+      uint32 epochNumber = uint32(delegation.claimableEpochNumbers.at(0));
       uint256 rewards = delegation.claimableRewardsPerEpoch[epochNumber];
 
       // State changes
       claimedEpochNumbers[i] = epochNumber;
       totalRewards += rewards;
+      // this remove updates the array indicies. so always remove item 0
       delegation.claimableEpochNumbers.remove(uint256(epochNumber));
       delegation.claimableRewardsPerEpoch[epochNumber] = 0;
     }
-
+    
     // Events (after all state changes)
     for (uint32 i = 0; i < maxEpochs; i++) {
       emit RewardsClaimed(
@@ -521,34 +546,20 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.initialEpochTimestamp + (epoch) * $.epochDuration;
   }
-
-  function getExpectedUptime(bytes32 validationId, uint32 epoch) public view returns (uint32) {
+  
+  function getEpochStartTime(uint32 epoch) public view returns (uint40) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-
-    // Get the validator's start epoch from the validation info
-    ValidationInfo storage validation = $.validations[validationId];
-    if (validation.startEpoch == 0) {
-      revert("Validator not registered");
-    }
-
-    // Calculate number of epochs since validator started
-    console2.log("epoch", epoch);
-    console2.log("validation start epoch", validation.startEpoch);
-    if (epoch < validation.startEpoch) {
-      revert("Epoch is before validator started");
-    }
-
-    uint32 epochsActive = epoch - validation.startEpoch;
-    if (epochsActive == 0) {
-      // If validator just started this epoch, expect 80% of current epoch
-      return $.epochDuration * 80 / 100;
-    }
-
-    // Calculate total time active in seconds
-    uint32 totalTimeActive = epochsActive * $.epochDuration;
-
-    // Return 80% of total time active
-    return totalTimeActive * 80 / 100;
+    return $.initialEpochTimestamp + (epoch - 1) * $.epochDuration;
+  }
+  
+  function getEpochInfo(uint32 epoch) external view returns (EpochInfo memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.epochs[epoch];
+  }
+  
+  function _expectedUptime() public view returns (uint256) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.epochDuration * $.uptimePercentage / 100;
   }
 
   function getCurrentTotalStakedLicenses() external view returns (uint32) {
@@ -603,7 +614,10 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       startEpoch: validation.startEpoch,
       endEpoch: validation.endEpoch,
       licenseCount: validation.licenseCount,
-      registrationMessage: validation.registrationMessage
+      registrationMessage: validation.registrationMessage,
+      lastUptimeSeconds: validation.lastUptimeSeconds,
+      lastSubmissionTime: validation.lastSubmissionTime,
+      lastEpochRecorded: validation.lastEpochRecorded
     });
   }
 
