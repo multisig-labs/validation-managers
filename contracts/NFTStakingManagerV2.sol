@@ -382,26 +382,26 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     if (epoch == 0) {
       revert("Epoch has not ended");
     }
-    
+
     if (_hasGracePeriodPassed(epoch)) {
       revert("Grace period has passed");
     }
-    
+
     ValidationInfo storage validation = $.validations[validationId];
-    
+
     uint40 lastSubmissionTime = validation.lastSubmissionTime;
     if (lastSubmissionTime == 0) {
       lastSubmissionTime = getEpochStartTime(epoch);
     }
-    
+
     uint40 lastUptimeSeconds = validation.lastUptimeSeconds;
     if (lastUptimeSeconds == 0) {
       lastUptimeSeconds = getEpochStartTime(epoch);
     }
-    
+
     uint40 uptimeDelta = uint40(uptimeSeconds) - lastUptimeSeconds;
     uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
-    
+
     uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
     console2.log("EFFECTIVE UPTIME", effectiveUptime);
@@ -421,7 +421,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       delegation.uptimeCheck[epoch] = true;
       epochInfo.totalStakedLicenses += delegation.tokenIds.length;
     }
-    
+
     validation.lastUptimeSeconds = uint40(uptimeSeconds);
     validation.lastEpochRecorded = epoch;
     validation.lastSubmissionTime = uint40(block.timestamp);
@@ -499,7 +499,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     uint256 totalRewards = 0;
     uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
-    
+
     for (uint32 i = 0; i < maxEpochs; i++) {
       uint32 epochNumber = uint32(delegation.claimableEpochNumbers.at(0));
       uint256 rewards = delegation.claimableRewardsPerEpoch[epochNumber];
@@ -511,7 +511,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       delegation.claimableEpochNumbers.remove(uint256(epochNumber));
       delegation.claimableRewardsPerEpoch[epochNumber] = 0;
     }
-    
+
     // Events (after all state changes)
     for (uint32 i = 0; i < maxEpochs; i++) {
       emit RewardsClaimed(
@@ -546,17 +546,17 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.initialEpochTimestamp + (epoch) * $.epochDuration;
   }
-  
+
   function getEpochStartTime(uint32 epoch) public view returns (uint40) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.initialEpochTimestamp + (epoch - 1) * $.epochDuration;
   }
-  
+
   function getEpochInfo(uint32 epoch) external view returns (EpochInfo memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochs[epoch];
   }
-  
+
   function _expectedUptime() public view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochDuration * $.uptimePercentage / 100;
