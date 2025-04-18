@@ -7,6 +7,12 @@ evm_version = 'shanghai'
 test = 'tests'
 bytecode_hash = "none"
 
+# optimizations
+# optimizer = true
+# optimizer_runs = 100000
+# cbor_metadata = false
+# via_ir = true
+
 [fmt]
 line_length = 100
 tab_width = 2

@@ -36,15 +36,12 @@ contract NFTStakingManagerTest is Base {
   uint64 public LICENSE_WEIGHT = 1000;
   uint64 public HARDWARE_LICENSE_WEIGHT = 0;
   uint32 public GRACE_PERIOD = 1 hours;
+  uint32 public DELEGATION_FEE_BIPS = 1000;
 
   function setUp() public override {
     super.setUp();
     admin = getActor("Admin");
     deployer = getActor("Deployer");
-
-    address[] memory addresses = new address[](1);
-    addresses[0] = 0x1234567812345678123456781234567812345678;
-    DEFAULT_P_CHAIN_OWNER = PChainOwner({ threshold: 1, addresses: addresses });
 
     vm.startPrank(deployer);
 
@@ -109,7 +106,8 @@ contract NFTStakingManagerTest is Base {
       DEFAULT_BLS_POP,
       DEFAULT_P_CHAIN_OWNER,
       DEFAULT_P_CHAIN_OWNER,
-      hardwareTokenId
+      hardwareTokenId,
+      DELEGATION_FEE_BIPS
     );
     vm.stopPrank();
 
@@ -134,7 +132,7 @@ contract NFTStakingManagerTest is Base {
 
     // we need to prepay for these too
     vm.prank(admin);
-    nftStakingManager.recordPrepayment(1, uint40(block.timestamp + 1 days));
+    nftStakingManager.addPrepaidCredits(delegator, 1 days);
 
     vm.startPrank(delegator);
     bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
@@ -245,6 +243,18 @@ contract NFTStakingManagerTest is Base {
     vm.prank(delegator);
   }
 
+  function test_delegationFee() public {
+    bytes32 validationId = _createValidator();
+    (bytes32 delegationId, address delegator) = _createDelegation(validationId);
+
+    vm.warp(block.timestamp + 1 days + 1 seconds);
+    nftStakingManager.processProof(validationId, 1 days);
+    vm.warp(block.timestamp + 1 hours);
+    nftStakingManager.mintRewards(validationId);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
+    assertEq(rewards, 900 ether);
+  }
+
   function test_processProof_insufficientUptime() public {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
@@ -274,7 +284,8 @@ contract NFTStakingManagerTest is Base {
       DEFAULT_BLS_POP,
       DEFAULT_P_CHAIN_OWNER,
       DEFAULT_P_CHAIN_OWNER,
-      hardwareTokenId
+      hardwareTokenId,
+      DELEGATION_FEE_BIPS
     );
     nftStakingManager.completeValidatorRegistration(0);
     vm.stopPrank();
