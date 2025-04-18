@@ -369,6 +369,13 @@ contract NFTStakingManager is
     return validationId;
   }
 
+  // TODO How to handle the original 5 PoA validators?
+  // Ava lets anyone remove the original 5
+  // https://github.com/ava-labs/icm-contracts/blob/main/contracts/validator-manager/StakingManager.sol#L377
+  // we would check if validations[validaionId].owner == address(0) then its a PoA validator
+  // maybe we have a seperate func onlyAdmin that can remove the PoA validators.
+  // AND DO NOT let people delegate to them.
+
   function initiateValidatorRemoval(bytes32 validationId) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
