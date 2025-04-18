@@ -93,6 +93,7 @@ struct NFTStakingManagerSettings {
   bool requireHardwareTokenId;
   uint32 gracePeriod;
   uint256 uptimePercentage; // 100 = 100%
+  bool bypassUptimeCheck; // New flag to bypass uptime checks
 }
 
 contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
@@ -141,6 +142,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     mapping(bytes32 validationId => ValidationInfo) validations;
     mapping(bytes32 delegationId => DelegationInfo) delegations;
     mapping(bytes20 nodeID => NodeInfo) nodes;
+    bool bypassUptimeCheck;
   }
 
   NFTStakingManagerStorage private _storage;
@@ -165,6 +167,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     $.gracePeriod = settings.gracePeriod;
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
     $.uptimePercentage = settings.uptimePercentage;
+    $.bypassUptimeCheck = settings.bypassUptimeCheck;
   }
 
   function initiateDelegatorRegistration(bytes32 validationId, uint256[] calldata tokenIds)
@@ -379,23 +382,26 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
 
     ValidationInfo storage validation = $.validations[validationId];
 
-    uint40 lastSubmissionTime = validation.lastSubmissionTime;
-    if (lastSubmissionTime == 0) {
-      lastSubmissionTime = getEpochEndTime(epoch - 1);
+    // Skip uptime check if bypass is enabled
+    if (!$.bypassUptimeCheck) {
+      uint40 lastSubmissionTime = validation.lastSubmissionTime;
+      if (lastSubmissionTime == 0) {
+        lastSubmissionTime = getEpochEndTime(epoch - 1);
+      }
+
+      uint40 uptimeDelta = uint40(uptimeSeconds) - validation.lastUptimeSeconds;
+      uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
+
+      uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
+
+      if (effectiveUptime < _expectedUptime()) {
+        revert InsufficientUptime();
+      }
+
+      // Only update state if uptime check passes
+      validation.lastUptimeSeconds = uint40(uptimeSeconds);
+      validation.lastSubmissionTime = uint40(block.timestamp);
     }
-
-    uint40 uptimeDelta = uint40(uptimeSeconds) - validation.lastUptimeSeconds;
-    uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
-
-    uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
-
-    if (effectiveUptime < _expectedUptime()) {
-      revert InsufficientUptime();
-    }
-
-    // Only update state if uptime check passes
-    validation.lastUptimeSeconds = uint40(uptimeSeconds);
-    validation.lastSubmissionTime = uint40(block.timestamp);
 
     EpochInfo storage epochInfo = $.epochs[epoch];
 
@@ -406,6 +412,11 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
       delegation.uptimeCheck[epoch] = true;
       epochInfo.totalStakedLicenses += delegation.tokenIds.length;
     }
+  }
+
+  function setBypassUptimeCheck(bool bypass) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    $.bypassUptimeCheck = bypass;
   }
 
   function mintRewards(bytes32[] calldata validationIds, uint32 epoch) external {
