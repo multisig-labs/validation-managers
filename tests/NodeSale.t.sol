@@ -47,8 +47,8 @@ contract NodeSaleTest is Base {
     nodeSale.grantRole(nodeSale.MANAGER_ROLE(), manager);
 
     // Mint NFTs
-    for (uint256 i = 1; i <= BATCHES * MAX_TOKENS_PER_BATCH; i++) {
-      nft.mint(address(nodeSale), i);
+    for (uint256 i = 0; i < BATCHES * MAX_TOKENS_PER_BATCH; i++) {
+      nft.mint(address(nodeSale));
     }
 
     vm.stopPrank();
@@ -56,7 +56,7 @@ contract NodeSaleTest is Base {
     vm.startPrank(manager);
     // Make all NFTs available for sale
     for (uint256 i = 0; i < BATCHES; i++) {
-      uint256 startIndex = 1 + i * MAX_TOKENS_PER_BATCH;
+      uint256 startIndex = i * MAX_TOKENS_PER_BATCH;
       uint256[] memory batchTokenIds = new uint256[](MAX_TOKENS_PER_BATCH);
       for (uint256 j = startIndex; j < startIndex + MAX_TOKENS_PER_BATCH; j++) {
         batchTokenIds[j - startIndex] = j;
@@ -72,7 +72,7 @@ contract NodeSaleTest is Base {
   function testMassNFTPurchase() public {
     // Create multiple buyers and have them purchase
     for (uint256 i = 1; i <= (BATCHES * MAX_TOKENS_PER_BATCH) / 10; i++) {
-      address buyer = address(uint160(i));
+      address buyer = getActor("Buyer");
       vm.deal(buyer, 10 ether);
 
       vm.startPrank(buyer);

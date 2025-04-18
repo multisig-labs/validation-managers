@@ -8,8 +8,8 @@ import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import { ERC721Upgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
+import { ERC721EnumerableUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
 interface INFTStakingManager {
   function getTokenLockedBy(uint256 tokenId) external view returns (bytes32);
@@ -66,7 +66,7 @@ struct NodeLicenseSettings {
 
 contract NodeLicense is
   Initializable,
-  ERC721Upgradeable,
+  ERC721EnumerableUpgradeable,
   AccessControlDefaultAdminRulesUpgradeable,
   UUPSUpgradeable
 {
@@ -209,7 +209,7 @@ contract NodeLicense is
   function supportsInterface(bytes4 interfaceId)
     public
     view
-    override (ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable)
+    override (ERC721EnumerableUpgradeable, AccessControlDefaultAdminRulesUpgradeable)
     returns (bool)
   {
     return super.supportsInterface(interfaceId);

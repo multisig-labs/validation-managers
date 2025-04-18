@@ -279,13 +279,12 @@ contract NFTStakingManagerTest is Base {
 
   function test_completeValidatorRemoval() public {
     address validator = getActor("Validator");
-    uint256 tokenId = 1;
-    bytes32 stakeID = _initiateValidatorRegistration(validator, tokenId);
+    bytes32 stakeID = _initiateValidatorRegistration(validator);
     _completeValidatorRegistration(validator);
 
     // Verify initial state
     assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 1);
-    assertEq(nftStakingManager.getTokenLockedBy(tokenId), stakeID);
+    assertEq(nftStakingManager.getTokenLockedBy(1), stakeID);
     assertEq(validatorManager.validating(stakeID), true);
 
     // Initiate removal
@@ -310,13 +309,9 @@ contract NFTStakingManagerTest is Base {
     assertEq(nft.ownerOf(tokenId), validator, "Validator should still own the token");
   }
 
-  function _initiateValidatorRegistration(address validator, uint256 tokenId)
-    internal
-    returns (bytes32)
-  {
-    nft.mint(validator, tokenId);
+  function _initiateValidatorRegistration(address validator) internal returns (bytes32) {
     uint256[] memory tokenIds = new uint256[](1);
-    tokenIds[0] = tokenId;
+    tokenIds[0] = nft.mint(validator);
 
     vm.startPrank(validator);
     bytes32 stakeID = nftStakingManager.initiateValidatorRegistration(

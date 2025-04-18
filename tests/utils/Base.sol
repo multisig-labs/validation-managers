@@ -24,6 +24,14 @@ abstract contract Base is Test {
     return addr;
   }
 
+  // The same name will always return the same address
+  function getNamedActor(string memory name) public returns (address) {
+    bytes32 hash = keccak256(abi.encodePacked(name));
+    address addr = address(uint160(uint256(hash)));
+    vm.label(addr, name);
+    return addr;
+  }
+
   function setUp() public virtual {
     address[] memory addresses = new address[](1);
     addresses[0] = 0x1234567812345678123456781234567812345678;

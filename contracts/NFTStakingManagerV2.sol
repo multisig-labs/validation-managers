@@ -10,10 +10,16 @@ import { EnumerableMap } from "@openzeppelin-contracts-5.2.0/utils/structs/Enume
 import { EnumerableSet } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
 import { AccessControlUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+
 import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+
+import { ContextUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ContextUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
 import {
   PChainOwner,
   Validator,
@@ -85,6 +91,7 @@ struct DelegationInfoView {
 }
 
 struct NFTStakingManagerSettings {
+  address admin;
   address validatorManager;
   address license;
   address hardwareLicense;
@@ -99,7 +106,13 @@ struct NFTStakingManagerSettings {
   uint256 uptimePercentage; // 100 = 100%
 }
 
-contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
+contract NFTStakingManager is
+  Initializable,
+  UUPSUpgradeable,
+  ContextUpgradeable,
+  AccessControlUpgradeable,
+  ReentrancyGuardUpgradeable
+{
   using Address for address payable;
   using EnumerableSet for EnumerableSet.UintSet;
   using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -112,6 +125,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   error UnauthorizedOwner(address owner);
   error EpochOutOfRange(uint32 currentEpoch, uint32 startEpoch, uint32 endEpoch);
   error InsufficientUptime();
+  error ZeroAddress();
 
   event DelegationRegistrationInitiated(
     bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
@@ -166,10 +180,23 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     _disableInitializers();
   }
 
-  function initialize(NFTStakingManagerSettings memory settings) public initializer {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+  function initialize(NFTStakingManagerSettings calldata settings) external initializer {
+    UUPSUpgradeable.__UUPSUpgradeable_init();
+    ContextUpgradeable.__Context_init();
+    AccessControlUpgradeable.__AccessControl_init();
+    ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
 
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    __NFTStakingManager_init(settings);
+  }
+
+  function __NFTStakingManager_init(NFTStakingManagerSettings calldata settings)
+    internal
+    onlyInitializing
+  {
+    if (settings.admin == address(0)) revert ZeroAddress();
+    _grantRole(DEFAULT_ADMIN_ROLE, settings.admin);
+
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     $.manager = ValidatorManager(settings.validatorManager);
     $.licenseContract = IERC721(settings.license);
@@ -242,7 +269,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     ValidationInfo storage validation = $.validations[delegation.validationId];
     Validator memory validator = $.manager.getValidator(delegation.validationId);
 
-    if (delegation.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
+    if (delegation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
 
     // TODO figure out which vars to update now and which after the weight update
 
@@ -317,7 +344,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     );
 
     ValidationInfo storage validation = $.validations[validationId];
-    validation.owner = msg.sender;
+    validation.owner = _msgSender();
     validation.startEpoch = getCurrentEpoch();
     validation.hardwareTokenId = hardwareTokenId;
     validation.registrationMessage = registerL1ValidatorMessage;
@@ -328,7 +355,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     // for an off-chain service to use to complete the registration.
     bytes20 fixedNodeID = _fixedNodeID(nodeID);
     $.nodes[fixedNodeID] =
-      NodeInfo({ owner: msg.sender, blsPublicKey: blsPublicKey, blsPoP: blsPoP });
+      NodeInfo({ owner: _msgSender(), blsPublicKey: blsPublicKey, blsPoP: blsPoP });
 
     return validationId;
   }
@@ -345,7 +372,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function initiateValidatorRemoval(bytes32 validationId) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-    if (validation.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
+    if (validation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
     validation.endEpoch = getCurrentEpoch();
     $.manager.initiateValidatorRemoval(validationId);
     // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
@@ -382,9 +409,8 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   {
     address hardwareOperator = _msgSender();
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    $.prepaidCredits[hardwareOperator].set(
-      licenseHolder, $.prepaidCredits[hardwareOperator].get(licenseHolder) + creditSeconds
-    );
+    (, uint256 currentCredits) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
+    $.prepaidCredits[hardwareOperator].set(licenseHolder, currentCredits + creditSeconds);
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
   }
 
@@ -541,7 +567,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationId];
 
-    if (delegation.owner != msg.sender) revert UnauthorizedOwner(msg.sender);
+    if (delegation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
     if (maxEpochs > delegation.claimableEpochNumbers.length()) {
       maxEpochs = uint32(delegation.claimableEpochNumbers.length());
     }
@@ -693,7 +719,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
       owner = $.licenseContract.ownerOf(tokenId);
-      if (owner != msg.sender) revert UnauthorizedOwner(owner);
+      if (owner != _msgSender()) revert UnauthorizedOwner(owner);
       if ($.tokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
       $.tokenLockedBy[tokenId] = stakeId;
     }
@@ -703,7 +729,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
   function _lockHardwareToken(bytes32 stakeId, uint256 tokenId) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     address owner = $.hardwareLicenseContract.ownerOf(tokenId);
-    if (owner != msg.sender) revert UnauthorizedOwner(owner);
+    if (owner != _msgSender()) revert UnauthorizedOwner(owner);
     if ($.hardwareTokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
     $.hardwareTokenLockedBy[tokenId] = stakeId;
   }
