@@ -5,6 +5,8 @@ export PRIVATE_KEY := env_var_or_default("PRIVATE_KEY", "0xac0974bec39a17e36ba4a
 
 # Autoload a .env if one exists
 set dotenv-load
+# export all variables to ENV vars
+set export
 
 # Print out some help
 default:
@@ -25,3 +27,11 @@ test contract="." test="." *flags="":
 test-fork contract="." test="." *flags="":
 	forge test --fork-url=${ETH_RPC_URL} --allow-failure --match-contract {{contract}} --match-test {{test}} {{flags}}
 
+anvil fork_url="":
+	anvil --auto-impersonate --port 8545 ${fork_url:+--fork-url=${fork_url}}
+
+# Execute a Forge script
+forge-script cmd *FLAGS:
+	#!/usr/bin/env bash
+	fn={{cmd}}
+	forge script {{FLAGS}} --slow  --broadcast --ffi --fork-url=${ETH_RPC_URL} ${PRIVATE_KEY:+--private-key=$PRIVATE_KEY}  script/${fn%.*.*}.s.sol
