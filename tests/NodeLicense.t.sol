@@ -5,7 +5,7 @@ import { MockStakingManager } from "../contracts/mocks/MockStakingManager.sol";
 import { NodeLicense, NodeLicenseSettings } from "../contracts/tokens/NodeLicense.sol";
 
 import { ERC1967Proxy } from
-  "../dependencies/@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+  "../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { Base } from "./utils/Base.sol";
 
 contract NodeLicenseTest is Base {

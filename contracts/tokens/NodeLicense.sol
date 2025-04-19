@@ -3,13 +3,13 @@
 pragma solidity ^0.8.25;
 
 import { AccessControlDefaultAdminRulesUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import { Initializable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
 interface INFTStakingManager {
   function getTokenLockedBy(uint256 tokenId) external view returns (bytes32);

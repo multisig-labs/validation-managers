@@ -3,23 +3,23 @@ pragma solidity ^0.8.25;
 
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
 
-import { IERC721 } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
-import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { IERC721 } from "@openzeppelin-contracts-5.3.0/token/ERC721/IERC721.sol";
+import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 
-import { EnumerableSet } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
+import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
 import { AccessControlUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
 import { Initializable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 import { ValidatorManager } from
-  "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 
 interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
@@ -124,12 +124,7 @@ contract NFTStakingManager is Initializable, AccessControlUpgradeable, UUPSUpgra
     }
     uint64 weight = uint64(tokenIds.length * $.licenseWeight);
     bytes32 stakeId = $.manager.initiateValidatorRegistration(
-      nodeID,
-      blsPublicKey,
-      uint64(block.timestamp + 1 days),
-      remainingBalanceOwner,
-      disableOwner,
-      weight
+      nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, weight
     );
     _lockTokens(stakeId, tokenIds);
     StakeInfo storage newStake = $.stakeInfo[stakeId];

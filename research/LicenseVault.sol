@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { IERC721Receiver } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721Receiver.sol";
+import { IERC721Receiver } from "@openzeppelin-contracts-5.3.0/token/ERC721/IERC721Receiver.sol";
 
-import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 import { AccessControlDefaultAdminRulesUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import { UUPSUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { PausableUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/utils/PausableUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
-import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/utils/ReentrancyGuardUpgradeable.sol";
+import { PChainOwner } from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 
-import { EnumerableSet } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
+import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
 
 import { NFTStakingManager } from "./NFTStakingManager.sol";
 import { NodeLicense } from "./tokens/NodeLicense.sol";

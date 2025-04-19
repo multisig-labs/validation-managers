@@ -2,12 +2,21 @@
 
 pragma solidity ^0.8.25;
 
-import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
-import {Initializable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import {ERC721Upgradeable} from "@openzeppelin-contracts-upgradeable-5.2.0/token/ERC721/ERC721Upgradeable.sol";
+import { AccessControlUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
+import { Initializable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
+import { UUPSUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
+import { ERC721Upgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/ERC721Upgradeable.sol";
 
-contract ValidatorReceipt is Initializable, ERC721Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract ValidatorReceipt is
+  Initializable,
+  ERC721Upgradeable,
+  AccessControlUpgradeable,
+  UUPSUpgradeable
+{
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
@@ -19,7 +28,12 @@ contract ValidatorReceipt is Initializable, ERC721Upgradeable, AccessControlUpgr
     _disableInitializers();
   }
 
-  function initialize(address defaultAdmin, address minter, address upgrader, string memory baseTokenURI) public initializer {
+  function initialize(
+    address defaultAdmin,
+    address minter,
+    address upgrader,
+    string memory baseTokenURI
+  ) public initializer {
     __ERC721_init("ValidatorReceipt", "VRCT");
     __AccessControl_init();
     __UUPSUpgradeable_init();
@@ -41,8 +55,15 @@ contract ValidatorReceipt is Initializable, ERC721Upgradeable, AccessControlUpgr
     _burn(tokenId);
   }
 
-  function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
-    require(auth == address(0) || to == address(0), "This a Soulbound token. It cannot be transferred.");
+  function _update(address to, uint256 tokenId, address auth)
+    internal
+    virtual
+    override
+    returns (address)
+  {
+    require(
+      auth == address(0) || to == address(0), "This a Soulbound token. It cannot be transferred."
+    );
     return super._update(to, tokenId, auth);
   }
 
@@ -54,11 +75,16 @@ contract ValidatorReceipt is Initializable, ERC721Upgradeable, AccessControlUpgr
     return _baseTokenURI;
   }
 
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) { }
 
   // The following functions are overrides required by Solidity.
 
-  function supportsInterface(bytes4 interfaceId) public view override (ERC721Upgradeable, AccessControlUpgradeable) returns (bool) {
+  function supportsInterface(bytes4 interfaceId)
+    public
+    view
+    override (ERC721Upgradeable, AccessControlUpgradeable)
+    returns (bool)
+  {
     return super.supportsInterface(interfaceId);
   }
 }

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {INFTLicenseModule} from "../interfaces/INFTLicenseModule.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/access/OwnableUpgradeable.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
-import {IRewardCalculator} from "icm-contracts/contracts/validator-manager/interfaces/IRewardCalculator.sol";
+import { INFTLicenseModule } from "../interfaces/INFTLicenseModule.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/access/OwnableUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
+import { IRewardCalculator } from
+  "icm-contracts/contracts/validator-manager/interfaces/IRewardCalculator.sol";
 
 interface ICertificates {
   function tokenByCollection(address account, bytes32 collection) external view returns (uint256);
@@ -112,5 +113,5 @@ contract NFTLicenseModule is INFTLicenseModule, Initializable, UUPSUpgradeable, 
   }
 
   /// @dev UUPS upgrade authorization - restrict upgrades to the owner
-  function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 }

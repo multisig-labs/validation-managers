@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import { ProxyAdmin } from "@openzeppelin-contracts-5.2.0/proxy/transparent/ProxyAdmin.sol";
+import { ProxyAdmin } from "@openzeppelin-contracts-5.3.0/proxy/transparent/ProxyAdmin.sol";
 import { ITransparentUpgradeableProxy } from
-  "@openzeppelin-contracts-5.2.0/proxy/transparent/TransparentUpgradeableProxy.sol";
+  "@openzeppelin-contracts-5.3.0/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { Script } from "forge-std-1.9.6/src/Script.sol";
 import { console } from "forge-std-1.9.6/src/console.sol";
 
-import { ICMInitializable } from "icm-contracts-8817f47/contracts/utilities/ICMInitializable.sol";
+import { ICMInitializable } from "icm-contracts-d426c55/contracts/utilities/ICMInitializable.sol";
 import { ValidatorManager } from
-  "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 
 contract UpgradeValidatorManager is Script {
   address public proxyAddress = 0x0Feedc0de0000000000000000000000000000000;
@@ -28,7 +28,7 @@ contract UpgradeValidatorManager is Script {
     );
     console.log("Proxy upgraded at ", proxyAddress);
 
-    ValidationManager vmgr = ValidationManager(proxyAddress);
+    ValidatorManager vmgr = ValidatorManager(proxyAddress);
     // vmgr.mi
 
     vm.stopBroadcast();

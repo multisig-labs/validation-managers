@@ -13,6 +13,8 @@ default:
 	@just --list --unsorted
 	
 setup:
+	rm -rf dependencies
+	forge clean
 	forge soldeer install
 
 build:

@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import { HardwareOperatorLicense } from "../contracts/tokens/HardwareOperatorLicense.sol";
 import { ERC1967Proxy } from
-  "../dependencies/@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+  "../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { Base } from "./utils/Base.sol";
 
 contract HardwareOperatorLicenseTest is Base {

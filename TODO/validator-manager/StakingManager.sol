@@ -2,12 +2,17 @@
 
 pragma solidity 0.8.25;
 
-import {IACP99ValidatorManager} from "../interfaces/IACP99ValidatorManager.sol";
-import {INativeSendAndCallReceiver} from "@avalabs/icm-contracts/ictt/interfaces/INativeSendAndCallReceiver.sol";
-import {ConversionData, PChainOwner, ValidatorRegistrationInput} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/access/OwnableUpgradeable.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/metatx/ERC2771ContextUpgradeable.sol";
-import "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+import { IACP99ValidatorManager } from "../interfaces/IACP99ValidatorManager.sol";
+import { INativeSendAndCallReceiver } from
+  "@avalabs/icm-contracts/ictt/interfaces/INativeSendAndCallReceiver.sol";
+import {
+  ConversionData,
+  PChainOwner,
+  ValidatorRegistrationInput
+} from "@avalabs/icm-contracts/validator-manager/interfaces/IValidatorManager.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/access/OwnableUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/metatx/ERC2771ContextUpgradeable.sol";
+import "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 
 struct StakingInput {
   address staker;
@@ -21,7 +26,8 @@ contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCa
   }
 
   // keccak256(abi.encode(uint256(keccak256("avalanche-icm.storage.StakingManager")) - 1)) & ~bytes32(uint256(0xff));
-  bytes32 public constant STORAGE_LOCATION = 0x81773fca73a14ca21edf1cadc6ec0b26d6a44966f6e97607e90422658d423500;
+  bytes32 public constant STORAGE_LOCATION =
+    0x81773fca73a14ca21edf1cadc6ec0b26d6a44966f6e97607e90422658d423500;
 
   function _getStorage() private pure returns (Storage storage $) {
     // solhint-disable-next-line no-inline-assembly
@@ -50,10 +56,12 @@ contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCa
 
   // This would be called by the TeleporterMessenger on the L1
   // from INativeSendAndCallReceiver
-  function receiveTokens(bytes32 sourceBlockchainID, address originTokenTransferrerAddress, address originSenderAddress, bytes calldata payload)
-    external
-    payable
-  {
+  function receiveTokens(
+    bytes32 sourceBlockchainID,
+    address originTokenTransferrerAddress,
+    address originSenderAddress,
+    bytes calldata payload
+  ) external payable {
     StakingInput memory stakingInput = abi.decode(payload, (StakingInput));
     // TODO Verify blockchainID and originTokenTransferrerAddress
 
@@ -64,5 +72,5 @@ contract StakingManager is UUPSUpgradeable, OwnableUpgradeable, INativeSendAndCa
   }
 
   // Add authorization for upgrades
-  function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 }

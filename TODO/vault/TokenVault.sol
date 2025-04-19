@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.17;
 
-import {IWithdrawer} from "../interface/IWithdrawer.sol";
-import {Base} from "./Base.sol";
-import {Storage} from "./Storage.sol";
+import { IWithdrawer } from "../interface/IWithdrawer.sol";
+import { Base } from "./Base.sol";
+import { Storage } from "./Storage.sol";
 
-import {IERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin-contracts-5.2.0/token/ERC20/utils/SafeERC20.sol";
-import {Address} from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
-import {ReentrancyGuard} from "@openzeppelin-contracts-5.2.0/utils/ReentrancyGuard.sol";
+import { IERC20 } from "@openzeppelin-contracts-5.3.0/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin-contracts-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
+import { ReentrancyGuard } from "@openzeppelin-contracts-5.3.0/utils/ReentrancyGuard.sol";
 
 // !!!WARNING!!! The Vault contract must not be upgraded
 // Tokens are stored here to prevent contract upgrades from affecting balances
@@ -27,7 +27,9 @@ contract TokenVault is Base, ReentrancyGuard {
   error VaultTokenWithdrawalFailed();
 
   event TokenDeposited(bytes32 indexed by, address indexed tokenAddress, uint256 amount);
-  event TokenTransfer(bytes32 indexed by, bytes32 indexed to, address indexed tokenAddress, uint256 amount);
+  event TokenTransfer(
+    bytes32 indexed by, bytes32 indexed to, address indexed tokenAddress, uint256 amount
+  );
   event TokenWithdrawn(bytes32 indexed by, address indexed tokenAddress, uint256 amount);
 
   mapping(address => bool) private allowedTokens;
@@ -42,7 +44,10 @@ contract TokenVault is Base, ReentrancyGuard {
   /// @param networkContractName Name of the contract that the token will be assigned to
   /// @param tokenContract The contract of the token being deposited
   /// @param amount How many tokens being deposited
-  function depositToken(string memory networkContractName, ERC20 tokenContract, uint256 amount) external guardianOrRegisteredContract {
+  function depositToken(string memory networkContractName, ERC20 tokenContract, uint256 amount)
+    external
+    guardianOrRegisteredContract
+  {
     // Valid Amount?
     if (amount == 0) {
       revert InvalidAmount();
@@ -67,7 +72,11 @@ contract TokenVault is Base, ReentrancyGuard {
   /// @param withdrawalAddress Address that will receive the token
   /// @param tokenAddress ERC20 token
   /// @param amount Number of tokens to be withdrawn
-  function withdrawToken(address withdrawalAddress, ERC20 tokenAddress, uint256 amount) external nonReentrant onlyRegisteredNetworkContract {
+  function withdrawToken(address withdrawalAddress, ERC20 tokenAddress, uint256 amount)
+    external
+    nonReentrant
+    onlyRegisteredNetworkContract
+  {
     // Valid Amount?
     if (amount == 0) {
       revert InvalidAmount();
@@ -92,7 +101,10 @@ contract TokenVault is Base, ReentrancyGuard {
   /// @param networkContractName Name of the contract that the token will be transferred to
   /// @param tokenAddress ERC20 token
   /// @param amount Number of tokens to be withdrawn
-  function transferToken(string memory networkContractName, ERC20 tokenAddress, uint256 amount) external onlyRegisteredNetworkContract {
+  function transferToken(string memory networkContractName, ERC20 tokenAddress, uint256 amount)
+    external
+    onlyRegisteredNetworkContract
+  {
     // Valid Amount?
     if (amount == 0) {
       revert InvalidAmount();
@@ -117,7 +129,11 @@ contract TokenVault is Base, ReentrancyGuard {
   /// @param networkContractName Name of the contract who's token balance is being requested
   /// @param tokenAddress address of the ERC20 token
   /// @return The amount in given ERC20 token that the given contract is holding
-  function balanceOfToken(string memory networkContractName, ERC20 tokenAddress) external view returns (uint256) {
+  function balanceOfToken(string memory networkContractName, ERC20 tokenAddress)
+    external
+    view
+    returns (uint256)
+  {
     return tokenBalances[keccak256(abi.encodePacked(networkContractName, tokenAddress))];
   }
 

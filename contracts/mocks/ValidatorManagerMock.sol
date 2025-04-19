@@ -6,7 +6,7 @@ import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 
 contract MockValidatorManager {
   mapping(bytes32 nodeIDHash => bool created) public created;
@@ -16,6 +16,8 @@ contract MockValidatorManager {
   mapping(bytes32 nodeIDHash => uint64 weight) public weights;
   mapping(bytes32 nodeIDHash => uint64 pendingWeight) public pendingWeights;
 
+  uint64 public constant REGISTRATION_EXPIRY_LENGTH = 1 days;
+
   bytes32 public lastNodeID;
 
   uint256 private randNonce = 0;
@@ -23,7 +25,6 @@ contract MockValidatorManager {
   function initiateValidatorRegistration(
     bytes memory, // nodeID
     bytes memory, //bls public key
-    uint64, // registration expiry
     PChainOwner memory, // remaining balance owner
     PChainOwner memory, // disable owner
     uint64 weight // weight

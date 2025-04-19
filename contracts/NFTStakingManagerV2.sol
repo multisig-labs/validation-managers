@@ -3,32 +3,32 @@ pragma solidity ^0.8.25;
 
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
 
-import { IERC721 } from "@openzeppelin-contracts-5.2.0/token/ERC721/IERC721.sol";
-import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { IERC721 } from "@openzeppelin-contracts-5.3.0/token/ERC721/IERC721.sol";
+import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 
-import { EnumerableMap } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableMap.sol";
-import { EnumerableSet } from "@openzeppelin-contracts-5.2.0/utils/structs/EnumerableSet.sol";
+import { EnumerableMap } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableMap.sol";
+import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
 import { AccessControlUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
 
 import { Initializable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 
 import { ContextUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ContextUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/utils/ContextUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/utils/ReentrancyGuardUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/utils/ReentrancyGuardUpgradeable.sol";
 import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 import { ValidatorManager } from
-  "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 import { ValidatorMessages } from
-  "icm-contracts-8817f47/contracts/validator-manager/ValidatorMessages.sol";
+  "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
 interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
@@ -315,14 +315,8 @@ contract NFTStakingManager is
     uint32 delegationFeeBips
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    uint64 registrationExpiry = uint64(block.timestamp + 1 days);
     bytes32 validationId = $.manager.initiateValidatorRegistration(
-      nodeID,
-      blsPublicKey,
-      registrationExpiry,
-      remainingBalanceOwner,
-      disableOwner,
-      $.hardwareLicenseWeight
+      nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, $.hardwareLicenseWeight
     );
 
     _lockHardwareToken(validationId, hardwareTokenId);
@@ -338,7 +332,7 @@ contract NFTStakingManager is
         blsPublicKey: blsPublicKey,
         remainingBalanceOwner: remainingBalanceOwner,
         disableOwner: disableOwner,
-        registrationExpiry: registrationExpiry,
+        registrationExpiry: uint64(block.timestamp) + $.manager.REGISTRATION_EXPIRY_LENGTH(),
         weight: $.hardwareLicenseWeight
       })
     );

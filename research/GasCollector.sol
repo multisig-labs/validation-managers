@@ -2,13 +2,13 @@
 
 pragma solidity ^0.8.25;
 
-import { Address } from "@openzeppelin-contracts-5.2.0/utils/Address.sol";
+import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 import { AccessControlUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/access/AccessControlUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
 import { Initializable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/Initializable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.2.0/proxy/utils/UUPSUpgradeable.sol";
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 
 // GasCollector will recieve all gas fees collected on the L1
 

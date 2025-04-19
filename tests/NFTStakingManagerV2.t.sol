@@ -18,9 +18,9 @@ import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
 import { MockValidatorManager } from "../contracts/mocks/ValidatorManagerMock.sol";
 import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
-import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
-import { PChainOwner } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
+import { PChainOwner } from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 
 contract NFTStakingManagerTest is Base {
   ERC721Mock public nft;

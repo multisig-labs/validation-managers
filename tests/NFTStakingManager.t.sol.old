@@ -4,17 +4,17 @@ pragma solidity 0.8.25;
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
 
 import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
-import { ERC1967Proxy } from "@openzeppelin-contracts-5.2.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 
 import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManager.sol";
 import { Base } from "./utils/Base.sol";
 import { console } from "forge-std-1.9.6/src/console.sol";
 
-import { ICMInitializable } from "icm-contracts-8817f47/contracts/utilities/ICMInitializable.sol";
-import { ValidatorMessages } from "icm-contracts-8817f47/contracts/validator-manager/ValidatorMessages.sol";
+import { ICMInitializable } from "icm-contracts-d426c55/contracts/utilities/ICMInitializable.sol";
+import { ValidatorMessages } from "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
-import { PChainOwner, ConversionData, InitialValidator } from "icm-contracts-8817f47/contracts/validator-manager/ACP99Manager.sol";
-import { ValidatorManager, ValidatorManagerSettings } from "icm-contracts-8817f47/contracts/validator-manager/ValidatorManager.sol";
+import { PChainOwner, ConversionData, InitialValidator } from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+import { ValidatorManager, ValidatorManagerSettings } from "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
 contract NFTStakingManagerTest is Base {
