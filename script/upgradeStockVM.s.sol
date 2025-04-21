@@ -11,9 +11,17 @@ import { ICMInitializable } from "icm-contracts-d426c55/contracts/utilities/ICMI
 import { ValidatorManager } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 
+import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManagerV2.sol";
+
+import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
+import { UUPSUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
+
 contract UpgradeValidatorManager is Script {
   address public proxyAddress = 0x0Feedc0de0000000000000000000000000000000;
   address public proxyAdminAddress = 0xC0fFEE1234567890aBCdeF1234567890abcDef34;
+  address public licenseAddress = address(0x1); // Replace with actual license contract address
+  address public hardwareLicenseAddress = address(0x2); // Replace with actual hardware license contract address
 
   function run() external {
     vm.startBroadcast();
@@ -29,7 +37,12 @@ contract UpgradeValidatorManager is Script {
     console.log("Proxy upgraded at ", proxyAddress);
 
     ValidatorManager vmgr = ValidatorManager(proxyAddress);
-    // vmgr.mi
+    vmgr.migrateFromV1(
+      bytes32(0x2cef469655ac3e3f8c9c91ddb9547da12f83777159e79763f6f05c21738ac089), 1
+    );
+    vmgr.migrateFromV1(
+      bytes32(0xe7aa9240423c183c11f690cbed3b5a62dfed26af44bf85d67a8a58b675d4a40b), 1
+    );
 
     vm.stopBroadcast();
   }

@@ -61,7 +61,6 @@ struct NodeLicenseSettings {
   string symbol;
   string baseTokenURI;
   uint32 unlockTime;
-  uint256 maxBatchSize;
 }
 
 contract NodeLicense is
@@ -76,7 +75,10 @@ contract NodeLicense is
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
   address private _nftStakingManager;
-  uint256 public _maxBatchSize;
+
+  event BaseURIUpdated(string newBaseURI);
+  event NFTStakingManagerUpdated(address indexed oldManager, address indexed newManager);
+  event UnlockTimeUpdated(uint32 newUnlockTime);
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
@@ -84,11 +86,6 @@ contract NodeLicense is
   error LicenseStakedError();
   error NoTokensToMint();
   error ZeroAddress();
-  error BatchSizeTooLarge();
-
-  event NFTStakingManagerUpdated(address indexed oldManager, address indexed newManager);
-  event BaseURIUpdated(string newBaseURI);
-  event UnlockTimeUpdated(uint32 newUnlockTime);
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -106,7 +103,6 @@ contract NodeLicense is
     _baseTokenURI = settings.baseTokenURI;
     _lockedUntil = settings.unlockTime;
     _nftStakingManager = settings.nftStakingManager;
-    _maxBatchSize = settings.maxBatchSize;
   }
 
   function mint(address to) public onlyRole(MINTER_ROLE) returns (uint256) {
@@ -122,7 +118,6 @@ contract NodeLicense is
   {
     if (recipients.length == 0) revert ArrayLengthZero();
     if (recipients.length != amounts.length) revert ArrayLengthMismatch();
-    if (recipients.length > _maxBatchSize) revert BatchSizeTooLarge();
 
     uint256 totalAmount;
     for (uint256 i = 0; i < amounts.length; i++) {

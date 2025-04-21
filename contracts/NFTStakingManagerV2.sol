@@ -122,10 +122,20 @@ contract NFTStakingManager is
   /// @notice Basis points conversion factor used for percentage calculations (100% = 10000 bips)
   uint256 internal constant BIPS_CONVERSION_FACTOR = 10000;
 
-  error TokenAlreadyLocked(uint256 tokenId);
-  error UnauthorizedOwner(address owner);
-  error EpochOutOfRange(uint32 currentEpoch, uint32 startEpoch, uint32 endEpoch);
+  error EpochHasNotEnded();
+  error EpochOutOfRange();
+  error GracePeriodHasPassed();
+  error GracePeriodHasNotPassed();
   error InsufficientUptime();
+  error MaxLicensesPerValidatorReached();
+  error RewardsAlreadyMintedForTokenId();
+  error StakeDoesNotExist();
+  error TokenAlreadyLocked(uint256 tokenId);
+  error TokenNotLockedByStakeId();
+  error UnauthorizedOwner();
+  error ValidationIDMismatch();
+  error ValidatorHasEnded();
+  error ValidatorRegistrationNotComplete();
   error ZeroAddress();
 
   event DelegationRegistrationInitiated(
@@ -221,14 +231,14 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
     if (validation.endEpoch != 0) {
-      revert("Validator has ended");
+      revert ValidatorHasEnded();
     }
     if (validation.startEpoch == 0 || validation.startEpoch > getCurrentEpoch()) {
-      revert("Validator registration not complete");
+      revert ValidatorRegistrationNotComplete();
     }
     validation.licenseCount += uint32(tokenIds.length);
     if (validation.licenseCount > $.maxLicensesPerValidator) {
-      revert("Max licenses per validator reached");
+      revert MaxLicensesPerValidatorReached();
     }
 
     Validator memory validator = $.manager.getValidator(validationId);
@@ -255,10 +265,10 @@ contract NFTStakingManager is
     (bytes32 validationId,) = $.manager.completeValidatorWeightUpdate(messageIndex);
     DelegationInfo storage delegation = $.delegations[delegationId];
     if (validationId != delegation.validationId) {
-      revert("Validation ID mismatch");
+      revert ValidationIDMismatch();
     }
     ValidationInfo storage validation = $.validations[validationId];
-    // TODO: do we incrememnt here or in the initiate call? 
+    // TODO: do we incrememnt here or in the initiate call?
     // validation.licenseCount += uint32(delegation.tokenIds.length);
 
     delegation.startEpoch = getCurrentEpoch();
@@ -273,7 +283,7 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[delegation.validationId];
     Validator memory validator = $.manager.getValidator(delegation.validationId);
 
-    if (delegation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
+    if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
 
     // TODO figure out which vars to update now and which after the weight update
 
@@ -301,7 +311,7 @@ contract NFTStakingManager is
     // we set before, then check it here?
     (bytes32 validationId,) = $.manager.completeValidatorWeightUpdate(messageIndex);
     if (validationId != $.delegations[delegationId].validationId) {
-      revert("Validation ID mismatch");
+      revert ValidationIDMismatch();
     }
 
     _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
@@ -377,7 +387,7 @@ contract NFTStakingManager is
   function initiateValidatorRemoval(bytes32 validationId) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-    if (validation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
+    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
     validation.endEpoch = getCurrentEpoch();
     $.manager.initiateValidatorRemoval(validationId);
     // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
@@ -429,11 +439,11 @@ contract NFTStakingManager is
     epoch--;
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     if (epoch == 0) {
-      revert("Epoch has not ended");
+      revert EpochHasNotEnded();
     }
 
-    if (_hasGracePeriodPassed(epoch)) {
-      revert("Grace period has passed");
+    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+      revert GracePeriodHasPassed();
     }
 
     ValidationInfo storage validation = $.validations[validationId];
@@ -484,8 +494,8 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
 
-    if (!_hasGracePeriodPassed(epoch)) {
-      revert("Grace period has not passed");
+    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+      revert GracePeriodHasNotPassed();
     }
 
     uint256 totalDelegations = validation.delegationIds.length();
@@ -508,12 +518,12 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[delegation.validationId];
 
     if (delegation.owner == address(0)) {
-      revert("Stake does not exist");
+      revert StakeDoesNotExist();
     }
 
     if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0))
     {
-      revert EpochOutOfRange(epoch, delegation.startEpoch, delegation.endEpoch);
+      revert EpochOutOfRange();
     }
 
     if (delegation.endEpoch != 0) {
@@ -528,10 +538,10 @@ contract NFTStakingManager is
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
       if ($.tokenLockedBy[delegation.tokenIds[i]] != delegationId) {
-        revert("Token not locked by this stakeId");
+        revert TokenNotLockedByStakeId();
       }
       if ($.isRewardsMinted[epoch][delegation.tokenIds[i]]) {
-        revert("Rewards already minted for this tokenId");
+        revert RewardsAlreadyMintedForTokenId();
       }
 
       $.isRewardsMinted[epoch][delegation.tokenIds[i]] = true;
@@ -570,7 +580,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationId];
 
-    if (delegation.owner != _msgSender()) revert UnauthorizedOwner(_msgSender());
+    if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
     if (maxEpochs > delegation.claimableEpochNumbers.length()) {
       maxEpochs = uint32(delegation.claimableEpochNumbers.length());
     }
@@ -627,19 +637,6 @@ contract NFTStakingManager is
   function getEpochInfo(uint32 epoch) external view returns (EpochInfo memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochs[epoch];
-  }
-
-  function getCurrentTotalStakedLicenses() external view returns (uint32) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    uint32 totalStakedLicenses = 0;
-    for (uint256 i = 0; i < $.validationIds.length(); i++) {
-      bytes32 validationId = $.validationIds.at(i);
-      for (uint256 j = 0; j < $.validations[validationId].delegationIds.length(); j++) {
-        bytes32 delegationId = $.validations[validationId].delegationIds.at(j);
-        totalStakedLicenses += uint32($.delegations[delegationId].tokenIds.length);
-      }
-    }
-    return totalStakedLicenses;
   }
 
   function getTokenLockedBy(uint256 tokenId) external view returns (bytes32) {
@@ -716,7 +713,7 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
       owner = $.licenseContract.ownerOf(tokenId);
-      if (owner != _msgSender()) revert UnauthorizedOwner(owner);
+      if (owner != _msgSender()) revert UnauthorizedOwner();
       if ($.tokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
       $.tokenLockedBy[tokenId] = stakeId;
     }
@@ -726,7 +723,7 @@ contract NFTStakingManager is
   function _lockHardwareToken(bytes32 stakeId, uint256 tokenId) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     address owner = $.hardwareLicenseContract.ownerOf(tokenId);
-    if (owner != _msgSender()) revert UnauthorizedOwner(owner);
+    if (owner != _msgSender()) revert UnauthorizedOwner();
     if ($.hardwareTokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
     $.hardwareTokenLockedBy[tokenId] = stakeId;
   }
@@ -749,11 +746,6 @@ contract NFTStakingManager is
   function _getWeight(uint256 tokenCount) internal view returns (uint64) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return uint64(tokenCount * $.licenseWeight);
-  }
-
-  function _hasGracePeriodPassed(uint32 epoch) internal view returns (bool) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod;
   }
 
   /**

@@ -17,4 +17,8 @@ just anvil $L1_RPC
 
 cast rpc anvil_setBalance 0xe757fdf984e0e4f3b5cc2f049dc4a3b228a10421 0x56BC75E2D63100000
 cast rpc anvil_impersonateAccount 0xe757fdf984e0e4f3b5cc2f049dc4a3b228a10421
-just forge-script upgrade --froms 0xe757FdF984e0e4F3B5cC2F049Dc4A3b228A10421 --sender 0xe757FdF984e0e4F3B5cC2F049Dc4A3b228A10421
+just forge-script upgradeStockVM
+just forge-script deployNodeLicense
+just forge-script deployHardwareOperatorLicense
+
+just forge-script deployNFTStakingManager
