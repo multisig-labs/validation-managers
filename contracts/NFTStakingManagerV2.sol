@@ -258,7 +258,8 @@ contract NFTStakingManager is
       revert("Validation ID mismatch");
     }
     ValidationInfo storage validation = $.validations[validationId];
-    validation.licenseCount += uint32(delegation.tokenIds.length);
+    // TODO: do we incrememnt here or in the initiate call? 
+    // validation.licenseCount += uint32(delegation.tokenIds.length);
 
     delegation.startEpoch = getCurrentEpoch();
     emit DelegationRegistrationCompleted(validationId, delegationId, delegation.startEpoch);
@@ -345,7 +346,7 @@ contract NFTStakingManager is
     validation.startEpoch = getCurrentEpoch();
     validation.hardwareTokenId = hardwareTokenId;
     validation.registrationMessage = registerL1ValidatorMessage;
-    validation.lastSubmissionTime = getEpochStartTime(getCurrentEpoch());
+    validation.lastSubmissionTime = getEpochEndTime(getCurrentEpoch() - 1);
     validation.delegationFeeBips = delegationFeeBips;
 
     // The blsPoP is required to complete the validator registration on the P-Chain, so store it here
