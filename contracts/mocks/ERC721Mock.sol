@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import { ERC721 } from "@openzeppelin-contracts-5.3.0/token/ERC721/ERC721.sol";
 
 contract ERC721Mock is ERC721 {
-  uint256 private _nextTokenId;
+  uint256 private _nextTokenId = 0;
 
   constructor(string memory name, string memory symbol) ERC721(name, symbol) { }
 

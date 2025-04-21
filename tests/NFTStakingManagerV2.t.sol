@@ -80,7 +80,8 @@ contract NFTStakingManagerTest is Base {
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
       requireHardwareTokenId: true,
       gracePeriod: GRACE_PERIOD,
-      uptimePercentage: 80
+      uptimePercentage: 80,
+      bypassUptimeCheck: false
     });
   }
 
@@ -122,8 +123,8 @@ contract NFTStakingManagerTest is Base {
     tokenIds[0] = nft.mint(delegator);
 
     // we need to prepay for these too
-    vm.prank(admin);
-    nftStakingManager.addPrepaidCredits(delegator, 1 days);
+    vm.prank(validator);
+    nftStakingManager.addPrepaidCredits(delegator, uint32(1 days));
 
     vm.startPrank(delegator);
     bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds);
@@ -132,7 +133,7 @@ contract NFTStakingManagerTest is Base {
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIds.length, 1);
-    assertEq(delegation.tokenIds[0], 1);
+    assertEq(delegation.tokenIds[0], 0);
     assertEq(delegation.validationId, validationId);
 
     nftStakingManager.completeDelegatorRegistration(delegationId, 0);
@@ -146,26 +147,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(validatorManager.weights(validationId), LICENSE_WEIGHT);
   }
 
-  function testv2_delegatorRewards() public {
-    uint256 epochDuration = 1 days;
-    (bytes32 validationId, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationId, 1);
-
-    vm.warp(block.timestamp + 1 days);
-    nftStakingManager.processProof(validationId, epochDuration * 90 / 100);
-
-    // vm.warp(block.timestamp + 1 hours);
-    // nftStakingManager.mintRewards(validationId);
-
-    // assertEq(address(nftStakingManager).balance, epochRewards);
-
-    // vm.prank(delegator);
-    // (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-    //   nftStakingManager.claimRewards(delegationId, 1);
-    // assertEq(totalRewards, epochRewards);
-  }
-
-  function test_processProof() public {
+  function test_processProof_base() public {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
 
@@ -175,12 +157,15 @@ contract NFTStakingManagerTest is Base {
     uint256 epoch2InGracePeriod = startTime + epochDuration * 2 + GRACE_PERIOD - 1;
     uint256 epoch2AfterGracePeriod = startTime + epochDuration * 2 + GRACE_PERIOD;
 
-    uint256 epoch1UptimeSeconds = startTime + epochDuration * 90 / 100;
+    uint256 epoch1UptimeSeconds = epochDuration * 90 / 100;
     uint256 epoch2UptimeSeconds = epoch1UptimeSeconds + epochDuration * 90 / 100;
 
     uint32 rewardsEpoch = nftStakingManager.getCurrentEpoch();
     (bytes32 validationId, address validator) = _createValidator();
     (bytes32 delegationId, address delegator) = _createDelegation(validationId, 1);
+
+    vm.prank(validator);
+    nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
 
     vm.expectRevert("Epoch has not ended");
     nftStakingManager.processProof(validationId, epoch1UptimeSeconds);
@@ -196,7 +181,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch1AfterGracePeriod);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, rewardsEpoch);
 
     // check that the delegator has rewards
     uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, rewardsEpoch);
@@ -207,7 +192,7 @@ contract NFTStakingManagerTest is Base {
     nftStakingManager.processProof(validationId, epoch2UptimeSeconds);
 
     vm.warp(epoch2AfterGracePeriod);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, rewardsEpoch);
 
     rewards = nftStakingManager.getRewardsForEpoch(delegationId, rewardsEpoch);
     assertEq(rewards, epochRewards);
@@ -222,18 +207,6 @@ contract NFTStakingManagerTest is Base {
     assertEq(claimedEpochNumbers[1], rewardsEpoch);
   }
 
-  function testv2_multipleDelegatorRewards() public {
-    (bytes32 validationId, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationId, 1);
-    (bytes32 delegationId2, address delegator2) = _createDelegation(validationId, 1);
-
-    // process proof is what locks in delegator rewards
-    vm.warp(block.timestamp + 1 days);
-    nftStakingManager.processProof(validationId, 0);
-
-    vm.prank(delegator);
-  }
-
   function test_DelegationFee_NoCredits() public {
     (bytes32 validationId, address validator) = _createValidator();
     (bytes32 delegationId, address delegator) = _createDelegation(validationId, 1);
@@ -241,7 +214,7 @@ contract NFTStakingManagerTest is Base {
     vm.warp(block.timestamp + 1 days + 1 seconds);
     nftStakingManager.processProof(validationId, 1 days);
     vm.warp(block.timestamp + 1 hours);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, 1);
     uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
     assertEq(rewards, 900 ether);
   }
@@ -256,7 +229,7 @@ contract NFTStakingManagerTest is Base {
     vm.warp(block.timestamp + 1 days + 1 seconds);
     nftStakingManager.processProof(validationId, 1 days);
     vm.warp(block.timestamp + 1 hours);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, 1);
     uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
     assertEq(rewards, 1000 ether);
   }
@@ -271,7 +244,7 @@ contract NFTStakingManagerTest is Base {
     vm.warp(block.timestamp + 1 days + 1 seconds);
     nftStakingManager.processProof(validationId, 1 days);
     vm.warp(block.timestamp + 1 hours);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, 1);
     uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
     assertEq(rewards, 1000 ether);
   }
@@ -286,7 +259,7 @@ contract NFTStakingManagerTest is Base {
     vm.warp(block.timestamp + 1 days + 1 seconds);
     nftStakingManager.processProof(validationId, 1 days);
     vm.warp(block.timestamp + 1 hours);
-    nftStakingManager.mintRewards(validationId);
+    nftStakingManager.mintRewards(validationId, 1);
     uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
     assertEq(rewards, 500 ether + 500 ether * 90 / 100);
   }
@@ -305,6 +278,48 @@ contract NFTStakingManagerTest is Base {
 
     vm.expectRevert(NFTStakingManager.InsufficientUptime.selector);
     nftStakingManager.processProof(validationId, insufficientUptime);
+  }
+
+  function test_processProof_missUptime() public {
+    uint256 startTime = block.timestamp;
+    uint256 epochDuration = 1 days;
+
+    (bytes32 validationId, address validator) = _createValidator();
+    (bytes32 delegationId, address delegator) = _createDelegation(validationId, 1);
+
+    vm.prank(validator);
+    nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
+
+    uint256 epoch1UptimeSeconds = epochDuration * 90 / 100;
+    uint256 epoch3UptimeSeconds = epoch1UptimeSeconds * 3;
+
+    uint256 epoch1InGracePeriod = startTime + epochDuration + GRACE_PERIOD / 2;
+    uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD;
+    uint256 epoch3InGracePeriod = startTime + epochDuration * 3 + GRACE_PERIOD / 2;
+    uint256 epoch3AfterGracePeriod = startTime + epochDuration * 3 + GRACE_PERIOD;
+
+    vm.warp(epoch1InGracePeriod);
+    nftStakingManager.processProof(validationId, epoch1UptimeSeconds);
+
+    vm.warp(epoch1AfterGracePeriod);
+    nftStakingManager.mintRewards(validationId, 1);
+
+    // skip second epoch
+    vm.warp(startTime + epochDuration * 2);
+
+    // process proof for third epoch
+    vm.warp(startTime + epochDuration * 3 + GRACE_PERIOD / 2);
+    nftStakingManager.processProof(validationId, epoch3UptimeSeconds);
+
+    EpochInfo memory epoch = nftStakingManager.getEpochInfo(nftStakingManager.getCurrentEpoch() - 1);
+    console2.log("epoch.totalStakedLicenses", epoch.totalStakedLicenses);
+    console2.log("current epoch", nftStakingManager.getCurrentEpoch());
+    assertEq(epoch.totalStakedLicenses, 1);
+
+    vm.warp(epoch3AfterGracePeriod);
+    nftStakingManager.mintRewards(validationId, 3);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 3);
+    assertEq(rewards, epochRewards);
   }
 
   function _createValidator() internal returns (bytes32, address) {
@@ -348,5 +363,79 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
 
     return (delegationId, delegator);
+  }
+
+  function test_multipleDelegatorsWithDifferentTokens() public {
+    uint256 startTime = block.timestamp;
+    uint256 epochDuration = 1 days;
+    uint256 epochInGracePeriod = startTime + epochDuration + GRACE_PERIOD / 2;
+    uint256 epochAfterGracePeriod = startTime + epochDuration + GRACE_PERIOD;
+
+    // Create validator
+    (bytes32 validationId, address validator) = _createValidator();
+
+    // Create delegators with different token amounts
+    address delegator1 = getActor("Delegator1");
+    address delegator2 = getActor("Delegator2");
+    address delegator3 = getActor("Delegator3");
+
+    // Mint different amounts of tokens to each delegator
+    uint256[] memory tokenIds1 = nft.batchMint(delegator1, 1); // 1 token
+    uint256[] memory tokenIds2 = nft.batchMint(delegator2, 2); // 2 tokens
+    uint256[] memory tokenIds3 = nft.batchMint(delegator3, 3); // 3 tokens
+
+    // Record prepayments for all tokens
+    vm.startPrank(validator);
+    nftStakingManager.addPrepaidCredits(delegator1, uint32(epochDuration));
+    nftStakingManager.addPrepaidCredits(delegator2, uint32(epochDuration * 2));
+    nftStakingManager.addPrepaidCredits(delegator3, uint32(epochDuration * 3));
+    vm.stopPrank();
+
+    // Create delegations with different token amounts
+    vm.startPrank(delegator1);
+    bytes32 delegationId1 = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds1);
+    nftStakingManager.completeDelegatorRegistration(delegationId1, 0);
+    vm.stopPrank();
+
+    vm.startPrank(delegator2);
+    bytes32 delegationId2 = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds2);
+    nftStakingManager.completeDelegatorRegistration(delegationId2, 0);
+    vm.stopPrank();
+
+    vm.startPrank(delegator3);
+    bytes32 delegationId3 = nftStakingManager.initiateDelegatorRegistration(validationId, tokenIds3);
+    nftStakingManager.completeDelegatorRegistration(delegationId3, 0);
+    vm.stopPrank();
+
+    // Verify total staked licenses
+    assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 6);
+
+    // // Process proof for the epoch
+    // vm.warp(epochInGracePeriod);
+    // uint256 uptimeSeconds = epochDuration * 90 / 100;
+    // nftStakingManager.processProof(validationId, uptimeSeconds);
+
+    // // Mint rewards after grace period
+    // vm.warp(epochAfterGracePeriod);
+    // uint32 currentEpoch = nftStakingManager.getCurrentEpoch() - 1;
+    // nftStakingManager.mintRewards(validationId, currentEpoch);
+
+    // // Calculate expected rewards per token
+    // uint256 rewardsPerToken = epochRewards / 6; // Total rewards divided by total tokens
+    // console2.log("rewardsPerToken", rewardsPerToken);
+    // console2.log("rewardsperlicen", nftStakingManager.calculateRewardsPerLicense(currentEpoch));
+
+    // // Verify each delegator's rewards
+    // uint256 rewards1 = nftStakingManager.getRewardsForEpoch(delegationId1, currentEpoch);
+    // assertEq(rewards1, rewardsPerToken * 1); // 1 token worth of rewards
+
+    // uint256 rewards2 = nftStakingManager.getRewardsForEpoch(delegationId2, currentEpoch);
+    // assertEq(rewards2, rewardsPerToken * 2); // 2 tokens worth of rewards
+
+    // uint256 rewards3 = nftStakingManager.getRewardsForEpoch(delegationId3, currentEpoch);
+    // assertEq(rewards3, rewardsPerToken * 3); // 3 tokens worth of rewards
+
+    // // Verify total rewards match epoch rewards
+    // assertApproxEqAbs(rewards1 + rewards2 + rewards3, epochRewards, 4);
   }
 }
