@@ -238,7 +238,7 @@ contract NFTStakingManager is
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-    
+
     // Verify the hardware provider is the validator owner
     if (validation.owner != _msgSender()) {
       revert UnauthorizedOwner(_msgSender());
@@ -246,7 +246,7 @@ contract NFTStakingManager is
 
     // First check for blanket approval
     bool isApprovedForAll = $.licenseContract.isApprovedForAll(owner, _msgSender());
-    
+
     // If no blanket approval, check each token individually
     if (!isApprovedForAll) {
       for (uint256 i = 0; i < tokenIds.length; i++) {

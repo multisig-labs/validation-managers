@@ -442,40 +442,37 @@ contract NFTStakingManagerTest is Base {
   function test_initiateDelegatorRegistrationByOperator_default() public {
     // Create validator
     (bytes32 validationId, address validator) = _createValidator();
-    
+
     // Create delegator and mint tokens
     address delegator = getActor("Delegator");
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = nft.mint(delegator);
-    
+
     // Delegator approves validator as operator
     vm.startPrank(delegator);
     nft.setApprovalForAll(validator, true);
     vm.stopPrank();
-    
+
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(
-      validationId,
-      delegator,
-      tokenIds
-    );
+    bytes32 delegationId =
+      nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
-    
+
     // Verify the delegation was created correctly
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIds.length, 1);
     assertEq(delegation.tokenIds[0], tokenIds[0]);
     assertEq(delegation.validationId, validationId);
-    
+
     // Complete the registration
     nftStakingManager.completeDelegatorRegistration(delegationId, 0);
-    
+
     // Verify the delegation is active
     delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.startEpoch, nftStakingManager.getCurrentEpoch());
-    
+
     // Verify the validator's license count
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationId);
     assertEq(validation.licenseCount, 1);
@@ -484,64 +481,55 @@ contract NFTStakingManagerTest is Base {
   function test_initiateDelegatorRegistrationOnBehalfOf_unauthorized() public {
     // Create validator
     (bytes32 validationId, address validator) = _createValidator();
-    
+
     // Create delegator and mint tokens
     address delegator = getActor("Delegator");
     uint256[] memory tokenIds = new uint256[](1);
     tokenIds[0] = nft.mint(delegator);
-    
+
     // Try to call without operator approval
     vm.startPrank(validator);
     vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.UnauthorizedOwner.selector, validator));
-    nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(
-      validationId,
-      delegator,
-      tokenIds
-    );
+    nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
-    
+
     // Approve operator
     vm.startPrank(delegator);
     nft.setApprovalForAll(validator, true);
     vm.stopPrank();
-    
+
     // Try with wrong validator
     address otherValidator = getActor("OtherValidator");
     vm.startPrank(otherValidator);
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.UnauthorizedOwner.selector, otherValidator));
-    nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(
-      validationId,
-      delegator,
-      tokenIds
+    vm.expectRevert(
+      abi.encodeWithSelector(NFTStakingManager.UnauthorizedOwner.selector, otherValidator)
     );
+    nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
   }
 
   function test_initiateDelegatorRegistrationOnBehalfOf_individualApprovals() public {
     // Create validator
     (bytes32 validationId, address validator) = _createValidator();
-    
+
     // Create delegator and mint multiple tokens
     address delegator = getActor("Delegator");
     uint256[] memory tokenIds = new uint256[](2);
     tokenIds[0] = nft.mint(delegator);
     tokenIds[1] = nft.mint(delegator);
-    
+
     // Approve validator for specific tokens
     vm.startPrank(delegator);
     nft.approve(validator, tokenIds[0]);
     nft.approve(validator, tokenIds[1]);
     vm.stopPrank();
-    
+
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(
-      validationId,
-      delegator,
-      tokenIds
-    );
+    bytes32 delegationId =
+      nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
-    
+
     // Verify the delegation was created correctly
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.owner, delegator);
@@ -554,29 +542,26 @@ contract NFTStakingManagerTest is Base {
   function test_initiateDelegatorRegistrationOnBehalfOf_mixedApprovals() public {
     // Create validator
     (bytes32 validationId, address validator) = _createValidator();
-    
+
     // Create delegator and mint multiple tokens
     address delegator = getActor("Delegator");
     uint256[] memory tokenIds = new uint256[](3);
     tokenIds[0] = nft.mint(delegator);
     tokenIds[1] = nft.mint(delegator);
     tokenIds[2] = nft.mint(delegator);
-    
+
     // Mixed approval approach
     vm.startPrank(delegator);
     nft.approve(validator, tokenIds[0]); // Individual approval for first token
     nft.setApprovalForAll(validator, true); // Blanket approval for all tokens
     vm.stopPrank();
-    
+
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(
-      validationId,
-      delegator,
-      tokenIds
-    );
+    bytes32 delegationId =
+      nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
-    
+
     // Verify the delegation was created correctly
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
     assertEq(delegation.owner, delegator);
