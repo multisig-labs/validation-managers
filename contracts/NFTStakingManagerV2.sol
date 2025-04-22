@@ -30,6 +30,8 @@ import { ValidatorManager } from
 import { ValidatorMessages } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
+import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
+
 interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
 }
@@ -119,6 +121,9 @@ contract NFTStakingManager is
   using EnumerableSet for EnumerableSet.Bytes32Set;
   using EnumerableMap for EnumerableMap.AddressToUintMap;
 
+  IWarpMessenger public constant WARP_MESSENGER =
+    IWarpMessenger(0x0200000000000000000000000000000000000005);
+
   /// @notice Basis points conversion factor used for percentage calculations (100% = 10000 bips)
   uint256 internal constant BIPS_CONVERSION_FACTOR = 10000;
 
@@ -126,6 +131,7 @@ contract NFTStakingManager is
   error EpochOutOfRange();
   error GracePeriodHasPassed();
   error GracePeriodHasNotPassed();
+
   error InsufficientUptime();
   error MaxLicensesPerValidatorReached();
   error RewardsAlreadyMintedForTokenId();
@@ -137,6 +143,9 @@ contract NFTStakingManager is
   error ValidatorHasEnded();
   error ValidatorRegistrationNotComplete();
   error ZeroAddress();
+  error InvalidWarpMessage();
+  error InvalidWarpSourceChainID(bytes32 sourceChainID);
+  error InvalidWarpOriginSenderAddress(address originSenderAddress);
 
   event DelegationRegistrationInitiated(
     bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
@@ -488,11 +497,32 @@ contract NFTStakingManager is
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
   }
 
-  function processProof(bytes32 validationId, uint256 uptimeSeconds) public {
-    // TODO: retrieve the uptime proof
-    // (bytes32 validationID, uint64 uptime) = ValidatorMessages.unpackValidationUptimeMessage(
-    //   _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
-    // );
+  function _getPChainWarpMessage(uint32 messageIndex, bytes32 expectedSourceChainID)
+    internal
+    view
+    returns (WarpMessage memory)
+  {
+    (WarpMessage memory warpMessage, bool valid) =
+      WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);
+    if (!valid) {
+      revert InvalidWarpMessage();
+    }
+    // Must match to P-Chain blockchain id, which is 0.
+    if (warpMessage.sourceChainID != expectedSourceChainID) {
+      revert InvalidWarpSourceChainID(warpMessage.sourceChainID);
+    }
+    if (warpMessage.originSenderAddress != address(0)) {
+      revert InvalidWarpOriginSenderAddress(warpMessage.originSenderAddress);
+    }
+
+    return warpMessage;
+  }
+
+  function processProof(uint32 messageIndex) public {
+    bytes32 uptimeBlockchainID = 0x0000000000000000000000000000000000000000000000000000000000000000;
+    (bytes32 validationId, uint64 uptimeSeconds) = ValidatorMessages.unpackValidationUptimeMessage(
+      _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
+    );
 
     uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
     epoch--;
