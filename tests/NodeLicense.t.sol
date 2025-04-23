@@ -33,8 +33,7 @@ contract NodeLicenseTest is Base {
       name: "Node License",
       symbol: "NODE",
       baseTokenURI: "https://example.com/token/",
-      unlockTime: 0,
-      maxBatchSize: 100
+      unlockTime: 0
     });
 
     // Deploy the implementation contract
@@ -160,8 +159,7 @@ contract NodeLicenseTest is Base {
       name: "Node License",
       symbol: "NODE",
       baseTokenURI: "https://example.com/token/",
-      unlockTime: uint32(block.timestamp + 1 days),
-      maxBatchSize: 100
+      unlockTime: uint32(block.timestamp + 1 days)
     });
 
     // Deploy the implementation contract
