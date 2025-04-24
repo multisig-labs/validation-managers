@@ -8,18 +8,18 @@ import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 
 import { EnumerableMap } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableMap.sol";
 import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
+
 import { AccessControlUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
-
 import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
-
 import { ContextUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/utils/ContextUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/utils/ReentrancyGuardUpgradeable.sol";
+
 import {
   PChainOwner,
   Validator,
@@ -83,7 +83,6 @@ struct DelegationInfo {
   EnumerableSet.UintSet claimableEpochNumbers;
 }
 
-// Without nested mappings, for view functions
 struct DelegationInfoView {
   address owner;
   bytes32 validationId;
@@ -106,7 +105,7 @@ struct NFTStakingManagerSettings {
   bool requireHardwareTokenId;
   uint32 gracePeriod;
   uint256 uptimePercentage; // 100 = 100%
-  bool bypassUptimeCheck; // New flag to bypass uptime checks
+  bool bypassUptimeCheck; // flag to bypass uptime checks
 }
 
 contract NFTStakingManager is
@@ -116,57 +115,17 @@ contract NFTStakingManager is
   AccessControlUpgradeable,
   ReentrancyGuardUpgradeable
 {
+  ///
+  /// LIBRARIES
+  ///
   using Address for address payable;
   using EnumerableSet for EnumerableSet.UintSet;
   using EnumerableSet for EnumerableSet.Bytes32Set;
   using EnumerableMap for EnumerableMap.AddressToUintMap;
 
-  IWarpMessenger public constant WARP_MESSENGER =
-    IWarpMessenger(0x0200000000000000000000000000000000000005);
-
-  /// @notice Basis points conversion factor used for percentage calculations (100% = 10000 bips)
-  uint256 internal constant BIPS_CONVERSION_FACTOR = 10000;
-
-  error EpochHasNotEnded();
-  error EpochOutOfRange();
-  error GracePeriodHasPassed();
-  error GracePeriodHasNotPassed();
-
-  error InsufficientUptime();
-  error MaxLicensesPerValidatorReached();
-  error RewardsAlreadyMintedForTokenId();
-  error StakeDoesNotExist();
-  error TokenAlreadyLocked(uint256 tokenId);
-  error TokenNotLockedByStakeId();
-  error UnauthorizedOwner();
-  error ValidationIDMismatch();
-  error ValidatorHasEnded();
-  error ValidatorRegistrationNotComplete();
-  error ZeroAddress();
-  error InvalidWarpMessage();
-  error InvalidWarpSourceChainID(bytes32 sourceChainID);
-  error InvalidWarpOriginSenderAddress(address originSenderAddress);
-
-  event DelegationRegistrationInitiated(
-    bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
-  );
-  event DelegationRegistrationCompleted(
-    bytes32 indexed validationId, bytes32 indexed delegationId, uint32 startEpoch
-  );
-  event TokensLocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
-  event TokensUnlocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
-  event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
-  event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
-  event PrepaidCreditsAdded(
-    address indexed hardwareOperator, address indexed licenseHolder, uint32 creditSeconds
-  );
-
-  // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
-  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
-    0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
-
-  bytes32 public constant PREPAYMENT_ROLE = keccak256("PREPAYMENT_ROLE");
-
+  ///
+  /// STORAGE
+  ///
   struct NFTStakingManagerStorage {
     ValidatorManager manager;
     IERC721 licenseContract;
@@ -180,6 +139,7 @@ contract NFTStakingManager is
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
     uint256 uptimePercentage; // 100 = 100%
     uint32 gracePeriod; // starting at 1 hours
+    bool bypassUptimeCheck;
     EnumerableSet.Bytes32Set validationIds;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 delegationId) tokenLockedBy;
@@ -192,11 +152,62 @@ contract NFTStakingManager is
     mapping(bytes32 validationId => ValidationInfo) validations;
     mapping(bytes32 delegationId => DelegationInfo) delegations;
     mapping(bytes20 nodeID => NodeInfo) nodes;
-    bool bypassUptimeCheck;
   }
 
   NFTStakingManagerStorage private _storage;
 
+  ///
+  /// CONSTANTS
+  ///
+  IWarpMessenger public constant WARP_MESSENGER =
+    IWarpMessenger(0x0200000000000000000000000000000000000005);
+  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
+    0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
+  bytes32 public constant PREPAYMENT_ROLE = keccak256("PREPAYMENT_ROLE");
+
+  /// @notice Basis points conversion factor used for percentage calculations (100% = 10000 bips)
+  uint256 internal constant BIPS_CONVERSION_FACTOR = 10000;
+
+  ///
+  /// EVENTS
+  ///
+  event DelegationRegistrationInitiated(
+    bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
+  );
+  event DelegationRegistrationCompleted(
+    bytes32 indexed validationId, bytes32 indexed delegationId, uint32 startEpoch
+  );
+  event PrepaidCreditsAdded(
+    address indexed hardwareOperator, address indexed licenseHolder, uint32 creditSeconds
+  );
+  event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
+  event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
+  event TokensLocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
+  event TokensUnlocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
+
+  ///
+  /// ERRORS
+  ///
+  error EpochHasNotEnded();
+  error EpochOutOfRange();
+  error GracePeriodHasPassed();
+  error GracePeriodHasNotPassed();
+  error InvalidWarpMessage();
+  error InvalidWarpSourceChainID(bytes32 sourceChainID);
+  error InvalidWarpOriginSenderAddress(address originSenderAddress);
+  error InsufficientUptime();
+  error MaxLicensesPerValidatorReached();
+  error RewardsAlreadyMintedForTokenId();
+  error StakeDoesNotExist();
+  error TokenAlreadyLocked(uint256 tokenId);
+  error TokenNotLockedByStakeId();
+  error UnauthorizedOwner();
+  error ValidationIDMismatch();
+  error ValidatorHasEnded();
+  error ValidatorRegistrationNotComplete();
+  error ZeroAddress();
+
+  /// @notice disable initializers if constructed directly
   constructor() {
     _disableInitializers();
   }
@@ -231,6 +242,111 @@ contract NFTStakingManager is
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
     $.uptimePercentage = settings.uptimePercentage;
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
+  }
+
+  ///
+  /// VALIDATOR FUNCTIONS
+  ///
+  function initiateValidatorRegistration(
+    bytes memory nodeID,
+    bytes memory blsPublicKey,
+    bytes memory blsPoP,
+    PChainOwner memory remainingBalanceOwner,
+    PChainOwner memory disableOwner,
+    uint256 hardwareTokenId,
+    uint32 delegationFeeBips
+  ) public returns (bytes32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    bytes32 validationId = $.manager.initiateValidatorRegistration(
+      nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, $.hardwareLicenseWeight
+    );
+
+    _lockHardwareToken(validationId, hardwareTokenId);
+
+    $.validationIds.add(validationId);
+
+    // The bytes of this message are required to end the validation period, and ValidatorManager
+    // does not expose it or keep it around, so we store it here.
+    (, bytes memory registerL1ValidatorMessage) = ValidatorMessages.packRegisterL1ValidatorMessage(
+      ValidatorMessages.ValidationPeriod({
+        subnetID: $.manager.subnetID(),
+        nodeID: nodeID,
+        blsPublicKey: blsPublicKey,
+        remainingBalanceOwner: remainingBalanceOwner,
+        disableOwner: disableOwner,
+        registrationExpiry: uint64(block.timestamp) + $.manager.REGISTRATION_EXPIRY_LENGTH(),
+        weight: $.hardwareLicenseWeight
+      })
+    );
+
+    ValidationInfo storage validation = $.validations[validationId];
+    validation.owner = _msgSender();
+    validation.startEpoch = getCurrentEpoch();
+    validation.hardwareTokenId = hardwareTokenId;
+    validation.registrationMessage = registerL1ValidatorMessage;
+    validation.lastSubmissionTime = getEpochEndTime(getCurrentEpoch() - 1);
+    validation.delegationFeeBips = delegationFeeBips;
+
+    // The blsPoP is required to complete the validator registration on the P-Chain, so store it here
+    // for an off-chain service to use to complete the registration.
+    bytes20 fixedNodeID = _fixedNodeID(nodeID);
+    $.nodes[fixedNodeID] =
+      NodeInfo({ owner: _msgSender(), blsPublicKey: blsPublicKey, blsPoP: blsPoP });
+
+    return validationId;
+  }
+
+  /// @notice Complete validator registration
+  ///
+  /// @param messageIndex The index of the message to complete the validator registration
+  ///
+  /// @return validationId The unique identifier for this validator registration
+  function completeValidatorRegistration(uint32 messageIndex) external returns (bytes32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    bytes32 validationId = $.manager.completeValidatorRegistration(messageIndex);
+
+    ValidationInfo storage validation = $.validations[validationId];
+    validation.startEpoch = getCurrentEpoch();
+    return validationId;
+  }
+
+  // TODO How to handle the original 5 PoA validators?
+  // Ava lets anyone remove the original 5
+  // https://github.com/ava-labs/icm-contracts/blob/main/contracts/validator-manager/StakingManager.sol#L377
+  // we would check if validations[validaionId].owner == address(0) then its a PoA validator
+  // maybe we have a seperate func onlyAdmin that can remove the PoA validators.
+  // AND DO NOT let people delegate to them.
+
+  function initiateValidatorRemoval(bytes32 validationId) external {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationId];
+    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
+    validation.endEpoch = getCurrentEpoch();
+    $.manager.initiateValidatorRemoval(validationId);
+    // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
+    // remove an array of delegationIds. Once they remove those then they can end their validation period.
+  }
+
+  function completeValidatorRemoval(bytes32 validationId, uint32 messageIndex)
+    external
+    returns (bytes32)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationId];
+
+    $.manager.completeValidatorRemoval(messageIndex);
+
+    _unlockHardwareToken(validation.hardwareTokenId);
+
+    for (uint256 i = 0; i < validation.delegationIds.length(); i++) {
+      bytes32 delegationId = validation.delegationIds.at(i);
+      _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
+    }
+    // TODO Should we delete? What if validator leaves during grace period, if we delete then they are not included in the rewards
+    // maybe keep around and remove during rewards payouts.
+    delete $.validations[validationId];
+    $.validationIds.remove(validationId);
+    return validationId;
   }
 
   /// @notice callable by the delagtor to stake node licenses
@@ -386,103 +502,6 @@ contract NFTStakingManager is
     return delegationId;
   }
 
-  function initiateValidatorRegistration(
-    bytes memory nodeID,
-    bytes memory blsPublicKey,
-    bytes memory blsPoP,
-    PChainOwner memory remainingBalanceOwner,
-    PChainOwner memory disableOwner,
-    uint256 hardwareTokenId,
-    uint32 delegationFeeBips
-  ) public returns (bytes32) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    bytes32 validationId = $.manager.initiateValidatorRegistration(
-      nodeID, blsPublicKey, remainingBalanceOwner, disableOwner, $.hardwareLicenseWeight
-    );
-
-    _lockHardwareToken(validationId, hardwareTokenId);
-
-    $.validationIds.add(validationId);
-
-    // The bytes of this message are required to end the validation period, and ValidatorManager
-    // does not expose it or keep it around, so we store it here.
-    (, bytes memory registerL1ValidatorMessage) = ValidatorMessages.packRegisterL1ValidatorMessage(
-      ValidatorMessages.ValidationPeriod({
-        subnetID: $.manager.subnetID(),
-        nodeID: nodeID,
-        blsPublicKey: blsPublicKey,
-        remainingBalanceOwner: remainingBalanceOwner,
-        disableOwner: disableOwner,
-        registrationExpiry: uint64(block.timestamp) + $.manager.REGISTRATION_EXPIRY_LENGTH(),
-        weight: $.hardwareLicenseWeight
-      })
-    );
-
-    ValidationInfo storage validation = $.validations[validationId];
-    validation.owner = _msgSender();
-    validation.startEpoch = getCurrentEpoch();
-    validation.hardwareTokenId = hardwareTokenId;
-    validation.registrationMessage = registerL1ValidatorMessage;
-    validation.lastSubmissionTime = getEpochEndTime(getCurrentEpoch() - 1);
-    validation.delegationFeeBips = delegationFeeBips;
-
-    // The blsPoP is required to complete the validator registration on the P-Chain, so store it here
-    // for an off-chain service to use to complete the registration.
-    bytes20 fixedNodeID = _fixedNodeID(nodeID);
-    $.nodes[fixedNodeID] =
-      NodeInfo({ owner: _msgSender(), blsPublicKey: blsPublicKey, blsPoP: blsPoP });
-
-    return validationId;
-  }
-
-  function completeValidatorRegistration(uint32 messageIndex) external returns (bytes32) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    bytes32 validationId = $.manager.completeValidatorRegistration(messageIndex);
-
-    ValidationInfo storage validation = $.validations[validationId];
-    validation.startEpoch = getCurrentEpoch();
-    return validationId;
-  }
-
-  // TODO How to handle the original 5 PoA validators?
-  // Ava lets anyone remove the original 5
-  // https://github.com/ava-labs/icm-contracts/blob/main/contracts/validator-manager/StakingManager.sol#L377
-  // we would check if validations[validaionId].owner == address(0) then its a PoA validator
-  // maybe we have a seperate func onlyAdmin that can remove the PoA validators.
-  // AND DO NOT let people delegate to them.
-
-  function initiateValidatorRemoval(bytes32 validationId) external {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationId];
-    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
-    validation.endEpoch = getCurrentEpoch();
-    $.manager.initiateValidatorRemoval(validationId);
-    // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
-    // remove an array of delegationIds. Once they remove those then they can end their validation period.
-  }
-
-  function completeValidatorRemoval(bytes32 validationId, uint32 messageIndex)
-    external
-    returns (bytes32)
-  {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationId];
-
-    $.manager.completeValidatorRemoval(messageIndex);
-
-    _unlockHardwareToken(validation.hardwareTokenId);
-
-    for (uint256 i = 0; i < validation.delegationIds.length(); i++) {
-      bytes32 delegationId = validation.delegationIds.at(i);
-      _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
-    }
-    // TODO Should we delete? What if validator leaves during grace period, if we delete then they are not included in the rewards
-    // maybe keep around and remove during rewards payouts.
-    delete $.validations[validationId];
-    $.validationIds.remove(validationId);
-    return validationId;
-  }
-
   // Hardware Operators can accept payment for hardware service off-chain,
   // and record the user's credits here
   function addPrepaidCredits(address licenseHolder, uint32 creditSeconds)
@@ -494,27 +513,6 @@ contract NFTStakingManager is
     (, uint256 currentCredits) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
     $.prepaidCredits[hardwareOperator].set(licenseHolder, currentCredits + creditSeconds);
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
-  }
-
-  function _getPChainWarpMessage(uint32 messageIndex, bytes32 expectedSourceChainID)
-    internal
-    view
-    returns (WarpMessage memory)
-  {
-    (WarpMessage memory warpMessage, bool valid) =
-      WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);
-    if (!valid) {
-      revert InvalidWarpMessage();
-    }
-    // Must match to P-Chain blockchain id, which is 0.
-    if (warpMessage.sourceChainID != expectedSourceChainID) {
-      revert InvalidWarpSourceChainID(warpMessage.sourceChainID);
-    }
-    if (warpMessage.originSenderAddress != address(0)) {
-      revert InvalidWarpOriginSenderAddress(warpMessage.originSenderAddress);
-    }
-
-    return warpMessage;
   }
 
   function processProof(uint32 messageIndex) public {
@@ -563,11 +561,6 @@ contract NFTStakingManager is
       delegation.uptimeCheck[epoch] = true;
       epochInfo.totalStakedLicenses += delegation.tokenIds.length;
     }
-  }
-
-  function setBypassUptimeCheck(bool bypass) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    $.bypassUptimeCheck = bypass;
   }
 
   function mintRewards(bytes32[] calldata validationIds, uint32 epoch) external {
@@ -699,7 +692,15 @@ contract NFTStakingManager is
     return (totalRewards, claimedEpochNumbers);
   }
 
-  function calculateRewardsPerLicense(uint32 epochNumber) public view returns (uint256) {
+  ///
+  /// ADMIN FUNCTIONS
+  ///
+  function setBypassUptimeCheck(bool bypass) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    $.bypassUptimeCheck = bypass;
+  }
+
+  function calculateRewardsPerLicense(uint32 epochNumber) internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochRewards / $.epochs[epochNumber].totalStakedLicenses;
   }
@@ -781,7 +782,7 @@ contract NFTStakingManager is
     return $.delegations[delegationId].claimableRewardsPerEpoch[epoch];
   }
 
-  function _expectedUptime() public view returns (uint256) {
+  function _expectedUptime() internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochDuration * $.uptimePercentage / 100;
   }
@@ -836,11 +837,30 @@ contract NFTStakingManager is
     return uint64(tokenCount * $.licenseWeight);
   }
 
-  /**
-   * @notice Converts a nodeID to a fixed length of 20 bytes.
-   * @param nodeID The nodeID to convert.
-   * @return The fixed length nodeID.
-   */
+  function _getPChainWarpMessage(uint32 messageIndex, bytes32 expectedSourceChainID)
+    internal
+    view
+    returns (WarpMessage memory)
+  {
+    (WarpMessage memory warpMessage, bool valid) =
+      WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);
+    if (!valid) {
+      revert InvalidWarpMessage();
+    }
+    // Must match to P-Chain blockchain id, which is 0.
+    if (warpMessage.sourceChainID != expectedSourceChainID) {
+      revert InvalidWarpSourceChainID(warpMessage.sourceChainID);
+    }
+    if (warpMessage.originSenderAddress != address(0)) {
+      revert InvalidWarpOriginSenderAddress(warpMessage.originSenderAddress);
+    }
+
+    return warpMessage;
+  }
+
+  /// @notice Converts a nodeID to a fixed length of 20 bytes.
+  /// @param nodeID The nodeID to convert.
+  /// @return The fixed length nodeID.
   function _fixedNodeID(bytes memory nodeID) private pure returns (bytes20) {
     bytes20 fixedID;
     // solhint-disable-next-line no-inline-assembly
@@ -850,6 +870,7 @@ contract NFTStakingManager is
     return fixedID;
   }
 
+  /// @notice Authorizes upgrade to DEFAULT_ADMIN_ROLE
   function _authorizeUpgrade(address newImplementation)
     internal
     override
