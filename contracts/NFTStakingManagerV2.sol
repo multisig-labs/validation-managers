@@ -224,12 +224,71 @@ contract NFTStakingManager is
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
   }
 
+  /// @notice callable by the delagtor to stake node licenses
+  /// @param validationId the validation id of the validator
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
   function initiateDelegatorRegistration(bytes32 validationId, uint256[] calldata tokenIds)
     public
     returns (bytes32)
   {
+    // TODO: consider checking if the sender owns the tokensids here 
+    // or check in _lockTokens method
+    return _initiateDelegatorRegistration(validationId, _msgSender(), tokenIds);
+  }
+
+  
+  /// @notice callable by the validation owner to stake node licenses on behalf of the delagtor
+  /// @param validationId the validation id of the validator
+  /// @param owner the owner of the licenses
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
+  function initiateDelegatorRegistrationOnBehalfOf(
+    bytes32 validationId,
+    address owner,
+    uint256[] calldata tokenIds
+  ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
+
+    if (validation.owner != _msgSender()) {
+      revert UnauthorizedOwner();
+    }
+
+    bool isApprovedForAll = $.licenseContract.isApprovedForAll(owner, _msgSender());
+
+    // If no blanket approval, check each token individually
+    if (!isApprovedForAll) {
+      for (uint256 i = 0; i < tokenIds.length; i++) {
+        if ($.licenseContract.getApproved(tokenIds[i]) != _msgSender()) {
+          revert UnauthorizedOwner();
+        }
+      }
+    }
+
+    return _initiateDelegatorRegistration(validationId, owner, tokenIds);
+  }
+
+  /// @notice internal function to initiate a delegation
+  /// @param validationId the validation id of the validator
+  /// @param owner the owner of the licenses
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
+  function _initiateDelegatorRegistration(
+    bytes32 validationId,
+    address owner,
+    uint256[] calldata tokenIds
+  ) internal returns (bytes32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationId];
+
+    // TODO: is this check necessary? Verify ownership of all tokens
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      if ($.licenseContract.ownerOf(tokenIds[i]) != owner) {
+        revert UnauthorizedOwner();
+      }
+    }
+
     if (validation.endEpoch != 0) {
       revert ValidatorHasEnded();
     }
@@ -252,7 +311,7 @@ contract NFTStakingManager is
     _lockTokens(delegationId, tokenIds);
 
     DelegationInfo storage newDelegation = $.delegations[delegationId];
-    newDelegation.owner = _msgSender();
+    newDelegation.owner = owner;
     newDelegation.tokenIds = tokenIds;
     newDelegation.validationId = validationId;
 
@@ -455,8 +514,6 @@ contract NFTStakingManager is
       uint40 lastUptimeSeconds = validation.lastUptimeSeconds;
       uint40 uptimeDelta = uint40(uptimeSeconds) - lastUptimeSeconds;
       uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
-      console2.log("UPTIME DELTA", uptimeDelta);
-      console2.log("SUBMISSION TIME DELTA", submissionTimeDelta);
       uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
       if (effectiveUptime < _expectedUptime()) {
@@ -493,8 +550,8 @@ contract NFTStakingManager is
   function mintRewards(bytes32 validationId, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-
-    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+    
+    if (block.timestamp <= getEpochEndTime(epoch) + $.gracePeriod) {
       revert GracePeriodHasNotPassed();
     }
 
@@ -713,7 +770,9 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < tokenIds.length; i++) {
       uint256 tokenId = tokenIds[i];
       owner = $.licenseContract.ownerOf(tokenId);
-      if (owner != _msgSender()) revert UnauthorizedOwner();
+      // TODO: Do we need this chekc? or a different call that verifies the owner trying to lock the tokens owns the token
+      // we move the burden of chekcing the approval from this function to the caller
+      // if (owner != _msgSender()) revert UnauthorizedOwner(owner);
       if ($.tokenLockedBy[tokenId] != bytes32(0)) revert TokenAlreadyLocked(tokenId);
       $.tokenLockedBy[tokenId] = stakeId;
     }
