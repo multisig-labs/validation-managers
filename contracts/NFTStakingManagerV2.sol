@@ -241,12 +241,11 @@ contract NFTStakingManager is
     public
     returns (bytes32)
   {
-    // TODO: consider checking if the sender owns the tokensids here 
+    // TODO: consider checking if the sender owns the tokensids here
     // or check in _lockTokens method
     return _initiateDelegatorRegistration(validationId, _msgSender(), tokenIds);
   }
 
-  
   /// @notice callable by the validation owner to stake node licenses on behalf of the delagtor
   /// @param validationId the validation id of the validator
   /// @param owner the owner of the licenses
@@ -580,7 +579,7 @@ contract NFTStakingManager is
   function mintRewards(bytes32 validationId, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-    
+
     if (block.timestamp <= getEpochEndTime(epoch) + $.gracePeriod) {
       revert GracePeriodHasNotPassed();
     }
