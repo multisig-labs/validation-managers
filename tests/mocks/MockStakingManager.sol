@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import { INFTStakingManager } from "../tokens/NodeLicense.sol";
+import { INFTStakingManager } from "../../contracts/tokens/NodeLicense.sol";
 
 contract MockStakingManager is INFTStakingManager {
   mapping(uint256 => bytes32) private _lockedTokens;

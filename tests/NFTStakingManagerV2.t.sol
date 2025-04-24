@@ -12,10 +12,11 @@ import {
   ValidationInfo,
   ValidationInfoView
 } from "../contracts/NFTStakingManagerV2.sol";
-import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
 
-import { NativeMinterMock } from "../contracts/mocks/NativeMinterMock.sol";
-import { MockValidatorManager } from "../contracts/mocks/ValidatorManagerMock.sol";
+import { ERC721Mock } from "./mocks/ERC721Mock.sol";
+import { NativeMinterMock } from "./mocks/NativeMinterMock.sol";
+import { MockValidatorManager } from "./mocks/ValidatorManagerMock.sol";
+
 import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
 import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
