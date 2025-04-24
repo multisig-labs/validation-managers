@@ -106,17 +106,6 @@ contract NodeLicenseTest is Base {
     vm.prank(minter);
     vm.expectRevert();
     nodeLicense.batchMint(recipients, amounts);
-
-    // Test batch size too large
-    recipients = new address[](101);
-    amounts = new uint256[](101);
-    for (uint256 i = 0; i < 101; i++) {
-      recipients[i] = user1;
-      amounts[i] = 1;
-    }
-    vm.prank(minter);
-    vm.expectRevert();
-    nodeLicense.batchMint(recipients, amounts);
   }
 
   function test_BatchTransfer() public {

@@ -224,13 +224,25 @@ contract NFTStakingManager is
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
   }
 
+  /// @notice callable by the delagtor to stake node licenses
+  /// @param validationId the validation id of the validator
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
   function initiateDelegatorRegistration(bytes32 validationId, uint256[] calldata tokenIds)
     public
     returns (bytes32)
   {
+    // TODO: consider checking if the sender owns the tokensids here 
+    // or check in _lockTokens method
     return _initiateDelegatorRegistration(validationId, _msgSender(), tokenIds);
   }
 
+  
+  /// @notice callable by the validation owner to stake node licenses on behalf of the delagtor
+  /// @param validationId the validation id of the validator
+  /// @param owner the owner of the licenses
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
   function initiateDelegatorRegistrationOnBehalfOf(
     bytes32 validationId,
     address owner,
@@ -239,19 +251,17 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
 
-    // Verify the hardware provider is the validator owner
     if (validation.owner != _msgSender()) {
-      revert UnauthorizedOwner(_msgSender());
+      revert UnauthorizedOwner();
     }
 
-    // First check for blanket approval
     bool isApprovedForAll = $.licenseContract.isApprovedForAll(owner, _msgSender());
 
     // If no blanket approval, check each token individually
     if (!isApprovedForAll) {
       for (uint256 i = 0; i < tokenIds.length; i++) {
         if ($.licenseContract.getApproved(tokenIds[i]) != _msgSender()) {
-          revert UnauthorizedOwner(_msgSender());
+          revert UnauthorizedOwner();
         }
       }
     }
@@ -259,6 +269,11 @@ contract NFTStakingManager is
     return _initiateDelegatorRegistration(validationId, owner, tokenIds);
   }
 
+  /// @notice internal function to initiate a delegation
+  /// @param validationId the validation id of the validator
+  /// @param owner the owner of the licenses
+  /// @param tokenIds the token ids of the licenses to stake
+  /// @return the delegation id
   function _initiateDelegatorRegistration(
     bytes32 validationId,
     address owner,
@@ -267,14 +282,13 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
 
-    // Verify ownership of all tokens
+    // TODO: is this check necessary? Verify ownership of all tokens
     for (uint256 i = 0; i < tokenIds.length; i++) {
       if ($.licenseContract.ownerOf(tokenIds[i]) != owner) {
-        revert UnauthorizedOwner($.licenseContract.ownerOf(tokenIds[i]));
+        revert UnauthorizedOwner();
       }
     }
 
-    // Rest of the validation logic
     if (validation.endEpoch != 0) {
       revert ValidatorHasEnded();
     }
@@ -500,8 +514,6 @@ contract NFTStakingManager is
       uint40 lastUptimeSeconds = validation.lastUptimeSeconds;
       uint40 uptimeDelta = uint40(uptimeSeconds) - lastUptimeSeconds;
       uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
-      console2.log("UPTIME DELTA", uptimeDelta);
-      console2.log("SUBMISSION TIME DELTA", submissionTimeDelta);
       uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
 
       if (effectiveUptime < _expectedUptime()) {
@@ -538,8 +550,8 @@ contract NFTStakingManager is
   function mintRewards(bytes32 validationId, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationId];
-
-    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+    
+    if (block.timestamp <= getEpochEndTime(epoch) + $.gracePeriod) {
       revert GracePeriodHasNotPassed();
     }
 

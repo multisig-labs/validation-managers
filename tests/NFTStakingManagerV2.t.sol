@@ -152,10 +152,10 @@ contract NFTStakingManagerTest is Base {
     uint256 epochDuration = 1 days;
 
     uint256 epoch1InGracePeriod = startTime + epochDuration + GRACE_PERIOD / 2;
-    uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD;
+    uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD + 1;
 
     uint256 epoch2InGracePeriod = startTime + epochDuration * 2 + GRACE_PERIOD - 1;
-    uint256 epoch2AfterGracePeriod = startTime + epochDuration * 2 + GRACE_PERIOD;
+    uint256 epoch2AfterGracePeriod = startTime + epochDuration * 2 + GRACE_PERIOD + 1;
 
     uint256 epoch1UptimeSeconds = epochDuration * 90 / 100;
     uint256 epoch2UptimeSeconds = epoch1UptimeSeconds + epochDuration * 90 / 100;
@@ -167,11 +167,11 @@ contract NFTStakingManagerTest is Base {
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
 
-    vm.expectRevert("Epoch has not ended");
+    vm.expectRevert(NFTStakingManager.EpochHasNotEnded.selector);
     nftStakingManager.processProof(validationId, epoch1UptimeSeconds);
 
     vm.warp(epoch1AfterGracePeriod);
-    vm.expectRevert("Grace period has passed");
+    vm.expectRevert(NFTStakingManager.GracePeriodHasPassed.selector);
     nftStakingManager.processProof(validationId, epoch1UptimeSeconds);
 
     vm.warp(epoch1InGracePeriod);
@@ -281,7 +281,7 @@ contract NFTStakingManagerTest is Base {
   }
 
   function test_processProof_missUptime() public {
-    uint256 startTime = block.timestamp;
+    uint256 startTime = uint256(nftStakingManager.getEpochEndTime(nftStakingManager.getCurrentEpoch() - 1));
     uint256 epochDuration = 1 days;
 
     (bytes32 validationId, address validator) = _createValidator();
@@ -293,10 +293,13 @@ contract NFTStakingManagerTest is Base {
     uint256 epoch1UptimeSeconds = epochDuration * 90 / 100;
     uint256 epoch3UptimeSeconds = epoch1UptimeSeconds * 3;
 
+    // okay I can't really do this because the start time might not be at the 
+    // start of an epoch
+    // so what can I do instead? I want to get the start of an epohc. and use that for the start time
     uint256 epoch1InGracePeriod = startTime + epochDuration + GRACE_PERIOD / 2;
-    uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD;
+    uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD + 1;
     uint256 epoch3InGracePeriod = startTime + epochDuration * 3 + GRACE_PERIOD / 2;
-    uint256 epoch3AfterGracePeriod = startTime + epochDuration * 3 + GRACE_PERIOD;
+    uint256 epoch3AfterGracePeriod = startTime + epochDuration * 3 + GRACE_PERIOD + 1;
 
     vm.warp(epoch1InGracePeriod);
     nftStakingManager.processProof(validationId, epoch1UptimeSeconds);
@@ -308,12 +311,10 @@ contract NFTStakingManagerTest is Base {
     vm.warp(startTime + epochDuration * 2);
 
     // process proof for third epoch
-    vm.warp(startTime + epochDuration * 3 + GRACE_PERIOD / 2);
+    vm.warp(startTime + (epochDuration * 3) + (GRACE_PERIOD / 2));
     nftStakingManager.processProof(validationId, epoch3UptimeSeconds);
 
     EpochInfo memory epoch = nftStakingManager.getEpochInfo(nftStakingManager.getCurrentEpoch() - 1);
-    console2.log("epoch.totalStakedLicenses", epoch.totalStakedLicenses);
-    console2.log("current epoch", nftStakingManager.getCurrentEpoch());
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch3AfterGracePeriod);
@@ -422,8 +423,6 @@ contract NFTStakingManagerTest is Base {
 
     // // Calculate expected rewards per token
     // uint256 rewardsPerToken = epochRewards / 6; // Total rewards divided by total tokens
-    // console2.log("rewardsPerToken", rewardsPerToken);
-    // console2.log("rewardsperlicen", nftStakingManager.calculateRewardsPerLicense(currentEpoch));
 
     // // Verify each delegator's rewards
     // uint256 rewards1 = nftStakingManager.getRewardsForEpoch(delegationId1, currentEpoch);
@@ -489,7 +488,7 @@ contract NFTStakingManagerTest is Base {
 
     // Try to call without operator approval
     vm.startPrank(validator);
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.UnauthorizedOwner.selector, validator));
+    vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
     nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
 
@@ -502,7 +501,7 @@ contract NFTStakingManagerTest is Base {
     address otherValidator = getActor("OtherValidator");
     vm.startPrank(otherValidator);
     vm.expectRevert(
-      abi.encodeWithSelector(NFTStakingManager.UnauthorizedOwner.selector, otherValidator)
+      NFTStakingManager.UnauthorizedOwner.selector
     );
     nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationId, delegator, tokenIds);
     vm.stopPrank();
