@@ -11,7 +11,7 @@ import { ICMInitializable } from "icm-contracts-d426c55/contracts/utilities/ICMI
 import { ValidatorManager } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 
-import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManagerV2.sol";
+import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManager.sol";
 
 import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { UUPSUpgradeable } from

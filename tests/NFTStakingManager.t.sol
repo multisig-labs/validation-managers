@@ -11,7 +11,7 @@ import {
   NFTStakingManagerSettings,
   ValidationInfo,
   ValidationInfoView
-} from "../contracts/NFTStakingManagerV2.sol";
+} from "../contracts/NFTStakingManager.sol";
 
 import { ERC721Mock } from "./mocks/ERC721Mock.sol";
 import { NativeMinterMock } from "./mocks/NativeMinterMock.sol";
@@ -96,7 +96,7 @@ contract NFTStakingManagerTest is Base {
   // okay this creates a validator that can take delegation
   // it should have available license slots
   // and a stake weight of 0
-  function testv2_initiateValidatorRegistration() public {
+  function test_initiateValidatorRegistration() public {
     address validator = getActor("Validator");
     uint256 hardwareTokenId = hardwareNft.mint(validator);
 
@@ -123,7 +123,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(validatorManager.validating(validationId), true);
   }
 
-  function testv2_initiateDelegatorRegistration() public {
+  function test_initiateDelegatorRegistration() public {
     (bytes32 validationId, address validator) = _createValidator();
 
     address delegator = getActor("Delegator");

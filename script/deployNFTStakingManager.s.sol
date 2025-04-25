@@ -5,7 +5,7 @@ import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC196
 import { Script } from "forge-std-1.9.6/src/Script.sol";
 import { console } from "forge-std-1.9.6/src/console.sol";
 
-import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManagerV2.sol";
+import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManager.sol";
 import { ValidatorManager } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
 
