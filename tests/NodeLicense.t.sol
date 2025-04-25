@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import { MockStakingManager } from "../contracts/mocks/MockStakingManager.sol";
 import { NodeLicense, NodeLicenseSettings } from "../contracts/tokens/NodeLicense.sol";
+import { MockStakingManager } from "./mocks/MockStakingManager.sol";
 
 import { ERC1967Proxy } from
   "../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";

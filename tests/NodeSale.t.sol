@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import { ERC721Mock } from "../contracts/mocks/ERC721Mock.sol";
+import { ERC721Mock } from "./mocks/ERC721Mock.sol";
 import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 
 import { NodeSaleWithWhitelist } from "../contracts/node-sale/NodeSaleWithWhitelist.sol";
