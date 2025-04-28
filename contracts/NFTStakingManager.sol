@@ -52,8 +52,8 @@ struct ValidationInfo {
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
-  uint40 lastUptimeSeconds;
-  uint40 lastSubmissionTime;
+  uint32 lastUptimeSeconds;
+  uint32 lastSubmissionTime;
   uint32 delegationFeeBips;
   bytes registrationMessage;
   EnumerableSet.Bytes32Set delegationIds;
@@ -67,8 +67,8 @@ struct ValidationInfoView {
   uint32 endEpoch;
   uint32 licenseCount;
   bytes registrationMessage;
-  uint40 lastUptimeSeconds;
-  uint40 lastSubmissionTime;
+  uint32 lastUptimeSeconds;
+  uint32 lastSubmissionTime;
   uint32 delegationFeeBips;
 }
 
@@ -537,19 +537,19 @@ contract NFTStakingManager is
     // TODO just init these values when the validator is registered
 
     if (!$.bypassUptimeCheck) {
-      uint40 lastSubmissionTime = validation.lastSubmissionTime;
-      uint40 lastUptimeSeconds = validation.lastUptimeSeconds;
-      uint40 uptimeDelta = uint40(uptimeSeconds) - lastUptimeSeconds;
-      uint40 submissionTimeDelta = uint40(block.timestamp) - lastSubmissionTime;
-      uint256 effectiveUptime = uptimeDelta * $.epochDuration / submissionTimeDelta;
+      uint32 lastSubmissionTime = validation.lastSubmissionTime;
+      uint32 lastUptimeSeconds = validation.lastUptimeSeconds;
 
+      uint32 uptimeDelta = uint32(uptimeSeconds) - lastUptimeSeconds;
+      uint32 submissionTimeDelta = uint32(block.timestamp) - lastSubmissionTime;
+      uint256 effectiveUptime = uint256(uptimeDelta) * $.epochDuration / submissionTimeDelta;
       if (effectiveUptime < _expectedUptime()) {
         revert InsufficientUptime();
       }
 
       // Only update state if uptime check passes
-      validation.lastUptimeSeconds = uint40(uptimeSeconds);
-      validation.lastSubmissionTime = uint40(block.timestamp);
+      validation.lastUptimeSeconds = uint32(uptimeSeconds);
+      validation.lastSubmissionTime = uint32(block.timestamp);
     }
 
     EpochInfo storage epochInfo = $.epochs[epoch];
@@ -716,7 +716,7 @@ contract NFTStakingManager is
     return getEpochByTimestamp(uint32(block.timestamp));
   }
 
-  function getEpochEndTime(uint32 epoch) public view returns (uint40) {
+  function getEpochEndTime(uint32 epoch) public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.initialEpochTimestamp + (epoch * $.epochDuration);
   }
