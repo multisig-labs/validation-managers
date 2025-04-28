@@ -47,36 +47,36 @@ struct NodeInfo {
 }
 
 struct ValidationInfo {
-  address owner;
-  uint256 hardwareTokenId;
-  uint32 startEpoch;
-  uint32 endEpoch;
-  uint32 licenseCount;
-  uint32 lastUptimeSeconds;
-  uint32 lastSubmissionTime;
-  uint32 delegationFeeBips;
-  bytes registrationMessage;
+  uint32 startEpoch; // 4 bytes
+  uint32 endEpoch; // 4 bytes
+  uint32 licenseCount; // 4 bytes
+  uint32 lastUptimeSeconds; // 4 bytes
+  uint32 lastSubmissionTime; // 4 bytes
+  uint32 delegationFeeBips; // 4 bytes
+  address owner; // 20 bytes
+  uint256 hardwareTokenId; // 32 bytes
+  bytes registrationMessage; // 32 bytes
   EnumerableSet.Bytes32Set delegationIds;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
 }
 
 struct ValidationInfoView {
-  address owner;
-  uint256 hardwareTokenId;
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
-  bytes registrationMessage;
   uint32 lastUptimeSeconds;
   uint32 lastSubmissionTime;
   uint32 delegationFeeBips;
+  address owner;
+  uint256 hardwareTokenId;
+  bytes registrationMessage;
 }
 
 struct DelegationInfo {
-  address owner;
-  bytes32 validationId;
   uint32 startEpoch;
   uint32 endEpoch;
+  address owner;
+  bytes32 validationId;
   uint256[] tokenIds;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
   mapping(uint32 epochNumber => bool passedUptime) uptimeCheck; // will get set to zero when claimed
@@ -84,28 +84,32 @@ struct DelegationInfo {
 }
 
 struct DelegationInfoView {
-  address owner;
-  bytes32 validationId;
   uint32 startEpoch;
   uint32 endEpoch;
+  address owner;
+  bytes32 validationId;
   uint256[] tokenIds;
 }
 
 struct NFTStakingManagerSettings {
-  address admin;
-  address validatorManager;
-  address license;
-  address hardwareLicense;
-  uint32 initialEpochTimestamp;
-  uint32 epochDuration;
-  uint64 licenseWeight;
-  uint64 hardwareLicenseWeight;
-  uint256 epochRewards;
-  uint16 maxLicensesPerValidator;
-  bool requireHardwareTokenId;
-  uint32 gracePeriod;
-  uint256 uptimePercentage; // 100 = 100%
-  bool bypassUptimeCheck; // flag to bypass uptime checks
+  bool bypassUptimeCheck; // flag to bypass uptime checks 1 byte
+  bool requireHardwareTokenId; // 1 byte
+
+  uint16 uptimePercentage; // 100 = 100% 1 byte
+  uint16 maxLicensesPerValidator; // 2 bytes
+
+  uint32 initialEpochTimestamp; // 4 bytes 
+  uint32 epochDuration; // 4 bytes
+  uint32 gracePeriod; // 4 bytes
+  uint64 licenseWeight; // 8 bytes
+
+  uint64 hardwareLicenseWeight; // 8 bytes
+
+  address admin; // 20 bytes
+  address validatorManager; // 20 bytes
+  address license; // 20 bytes
+  address hardwareLicense; // 20 bytes
+  uint256 epochRewards; // 32 bytes
 }
 
 contract NFTStakingManager is
@@ -127,19 +131,24 @@ contract NFTStakingManager is
   /// STORAGE
   ///
   struct NFTStakingManagerStorage {
-    ValidatorManager manager;
-    IERC721 licenseContract;
-    IERC721 hardwareLicenseContract;
-    uint16 maxLicensesPerValidator; // 100
-    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC
-    uint32 currentTotalStakedLicenses;
-    uint32 epochDuration; // 1 days
-    uint64 licenseWeight; // 1000
-    uint64 hardwareLicenseWeight; // 1 million
-    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
-    uint256 uptimePercentage; // 100 = 100%
-    uint32 gracePeriod; // starting at 1 hours
-    bool bypassUptimeCheck;
+    bool bypassUptimeCheck; // 1 byte
+    uint16 maxLicensesPerValidator; // 100 // 2 bytes
+    uint16 uptimePercentage; // 100 = 100% // 2 bytes
+
+    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC  // 4 bytes
+    uint32 currentTotalStakedLicenses; // 4 bytes
+    uint32 epochDuration; // 1 days // 4 bytes
+    uint32 gracePeriod; // starting at 1 hours // 4 bytes
+
+    uint64 licenseWeight; // 1000 // 8 bytes
+    uint64 hardwareLicenseWeight; // 1 million // 8 bytes
+
+    ValidatorManager manager; // 20 bytes
+    IERC721 licenseContract; // 20 bytes
+    IERC721 hardwareLicenseContract; // 20 bytes
+
+    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether // 32 bytes
+
     EnumerableSet.Bytes32Set validationIds;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 delegationId) tokenLockedBy;
