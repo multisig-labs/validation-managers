@@ -450,7 +450,6 @@ contract NFTStakingManager is
     if (validationId != delegation.validationId) {
       revert ValidationIDMismatch();
     }
-    ValidationInfo storage validation = $.validations[validationId];
     // TODO: do we incrememnt here or in the initiate call?
     // validation.licenseCount += uint32(delegation.tokenIds.length);
 
@@ -479,7 +478,8 @@ contract NFTStakingManager is
     // during the grace period when proofs are being submitted
     // validation.delegationIds.remove(delegationId);
 
-    (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationId, newWeight);
+    // (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationId, newWeight);
+    $.manager.initiateValidatorWeightUpdate(delegation.validationId, newWeight);
     // TODO figure out nonces. each weight update for a validationid has a unique nonce.
   }
 
