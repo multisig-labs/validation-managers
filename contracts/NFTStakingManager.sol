@@ -40,12 +40,6 @@ struct EpochInfo {
   uint256 totalStakedLicenses;
 }
 
-struct NodeInfo {
-  address owner;
-  bytes blsPublicKey;
-  bytes blsPoP;
-}
-
 struct ValidationInfo {
   uint32 startEpoch; // 4 bytes
   uint32 endEpoch; // 4 bytes
@@ -94,17 +88,13 @@ struct DelegationInfoView {
 struct NFTStakingManagerSettings {
   bool bypassUptimeCheck; // flag to bypass uptime checks 1 byte
   bool requireHardwareTokenId; // 1 byte
-
   uint16 uptimePercentage; // 100 = 100% 1 byte
   uint16 maxLicensesPerValidator; // 2 bytes
-
-  uint32 initialEpochTimestamp; // 4 bytes 
+  uint32 initialEpochTimestamp; // 4 bytes
   uint32 epochDuration; // 4 bytes
   uint32 gracePeriod; // 4 bytes
   uint64 licenseWeight; // 8 bytes
-
   uint64 hardwareLicenseWeight; // 8 bytes
-
   address admin; // 20 bytes
   address validatorManager; // 20 bytes
   address license; // 20 bytes
@@ -134,21 +124,16 @@ contract NFTStakingManager is
     bool bypassUptimeCheck; // 1 byte
     uint16 maxLicensesPerValidator; // 100 // 2 bytes
     uint16 uptimePercentage; // 100 = 100% // 2 bytes
-
     uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC  // 4 bytes
     uint32 currentTotalStakedLicenses; // 4 bytes
     uint32 epochDuration; // 1 days // 4 bytes
     uint32 gracePeriod; // starting at 1 hours // 4 bytes
-
     uint64 licenseWeight; // 1000 // 8 bytes
     uint64 hardwareLicenseWeight; // 1 million // 8 bytes
-
     ValidatorManager manager; // 20 bytes
     IERC721 licenseContract; // 20 bytes
     IERC721 hardwareLicenseContract; // 20 bytes
-
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether // 32 bytes
-
     EnumerableSet.Bytes32Set validationIds;
     // We dont xfer nft to this contract, we just mark it as locked
     mapping(uint256 tokenId => bytes32 delegationId) tokenLockedBy;
@@ -160,7 +145,6 @@ contract NFTStakingManager is
     mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
     mapping(bytes32 validationId => ValidationInfo) validations;
     mapping(bytes32 delegationId => DelegationInfo) delegations;
-    mapping(bytes20 nodeID => NodeInfo) nodes;
   }
 
   NFTStakingManagerStorage private _storage;
@@ -180,17 +164,27 @@ contract NFTStakingManager is
   ///
   /// EVENTS
   ///
-  event DelegationRegistrationInitiated(
+  event InitiatedValidatorRegistration(
+    bytes32 indexed validationId, uint256 hardwareTokenId, bytes blsPoP
+  );
+  event CompletedValidatorRegistration(bytes32 indexed validationId, uint32 startEpoch);
+  event InitiatedValidatorRemoval(bytes32 validationId, uint256 hardwareTokenId, uint32 endEpoch);
+  event CompletedValidatorRemoval(bytes32 validationId);
+  event InitiatedDelegatorRegistration(
     bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
   );
-  event DelegationRegistrationCompleted(
+  event CompletedDelegatorRegistration(
     bytes32 indexed validationId, bytes32 indexed delegationId, uint32 startEpoch
   );
+  event InitiatedDelegatorRemoval(
+    bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds, uint32 endEpoch
+  );
+  event CompletedDelegatorRemoval(bytes32 indexed validationId, bytes32 indexed delegationId);
   event PrepaidCreditsAdded(
     address indexed hardwareOperator, address indexed licenseHolder, uint32 creditSeconds
   );
-  event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
   event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
+  event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed stakeId, uint256 rewards);
   event TokensLocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
   event TokensUnlocked(address indexed owner, bytes32 indexed stakeId, uint256[] tokenIds);
 
@@ -296,11 +290,8 @@ contract NFTStakingManager is
     validation.lastSubmissionTime = getEpochEndTime(getCurrentEpoch() - 1);
     validation.delegationFeeBips = delegationFeeBips;
 
-    // The blsPoP is required to complete the validator registration on the P-Chain, so store it here
-    // for an off-chain service to use to complete the registration.
-    bytes20 fixedNodeID = _fixedNodeID(nodeID);
-    $.nodes[fixedNodeID] =
-      NodeInfo({ owner: _msgSender(), blsPublicKey: blsPublicKey, blsPoP: blsPoP });
+    // The blsPoP is required to complete the validator registration on the P-Chain, so emit it here
+    emit InitiatedValidatorRegistration(validationId, validation.hardwareTokenId, blsPoP);
 
     return validationId;
   }
@@ -316,6 +307,7 @@ contract NFTStakingManager is
 
     ValidationInfo storage validation = $.validations[validationId];
     validation.startEpoch = getCurrentEpoch();
+    emit CompletedValidatorRegistration(validationId, validation.startEpoch);
     return validationId;
   }
 
@@ -334,6 +326,7 @@ contract NFTStakingManager is
     $.manager.initiateValidatorRemoval(validationId);
     // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
     // remove an array of delegationIds. Once they remove those then they can end their validation period.
+    emit InitiatedValidatorRemoval(validationId, validation.hardwareTokenId, validation.endEpoch);
   }
 
   function completeValidatorRemoval(bytes32 validationId, uint32 messageIndex)
@@ -351,6 +344,9 @@ contract NFTStakingManager is
       bytes32 delegationId = validation.delegationIds.at(i);
       _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
     }
+
+    emit CompletedValidatorRemoval(validationId);
+
     // TODO Should we delete? What if validator leaves during grace period, if we delete then they are not included in the rewards
     // maybe keep around and remove during rewards payouts.
     delete $.validations[validationId];
@@ -434,7 +430,7 @@ contract NFTStakingManager is
     }
 
     Validator memory validator = $.manager.getValidator(validationId);
-    uint64 newWeight = validator.weight + _getWeight(tokenIds.length);
+    uint64 newWeight = validator.weight + $.licenseWeight * uint64(tokenIds.length);
     (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(validationId, newWeight);
 
     bytes32 delegationId = keccak256(abi.encodePacked(validationId, nonce));
@@ -448,7 +444,7 @@ contract NFTStakingManager is
     newDelegation.tokenIds = tokenIds;
     newDelegation.validationId = validationId;
 
-    emit DelegationRegistrationInitiated(validationId, delegationId, tokenIds);
+    emit InitiatedDelegatorRegistration(validationId, delegationId, tokenIds);
     return delegationId;
   }
 
@@ -463,7 +459,7 @@ contract NFTStakingManager is
     // validation.licenseCount += uint32(delegation.tokenIds.length);
 
     delegation.startEpoch = getCurrentEpoch();
-    emit DelegationRegistrationCompleted(validationId, delegationId, delegation.startEpoch);
+    emit CompletedDelegatorRegistration(validationId, delegationId, delegation.startEpoch);
   }
 
   // TODO enforce a min duration?
@@ -482,7 +478,7 @@ contract NFTStakingManager is
     // as they were not present for the whole epoch duration
     delegation.endEpoch = getCurrentEpoch() - 1;
     validation.licenseCount -= uint32(delegation.tokenIds.length);
-    uint64 newWeight = validator.weight - _getWeight(delegation.tokenIds.length);
+    uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIds.length);
     // Do not delete delegation yet, we need it to pay out rewards in the case that a delegator leaves
     // during the grace period when proofs are being submitted
     // validation.delegationIds.remove(delegationId);
@@ -490,6 +486,9 @@ contract NFTStakingManager is
     // (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationId, newWeight);
     $.manager.initiateValidatorWeightUpdate(delegation.validationId, newWeight);
     // TODO figure out nonces. each weight update for a validationid has a unique nonce.
+    emit InitiatedDelegatorRemoval(
+      delegation.validationId, delegationId, delegation.tokenIds, delegation.endEpoch
+    );
   }
 
   function completeDelegatorRemoval(bytes32 delegationId, uint32 messageIndex)
@@ -507,7 +506,7 @@ contract NFTStakingManager is
     }
 
     _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
-
+    emit CompletedDelegatorRemoval(validationId, delegationId);
     return delegationId;
   }
 
@@ -781,11 +780,6 @@ contract NFTStakingManager is
     });
   }
 
-  function getNodeInfo(bytes20 nodeID) external view returns (NodeInfo memory) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.nodes[nodeID];
-  }
-
   function getRewardsForEpoch(bytes32 delegationId, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationId].claimableRewardsPerEpoch[epoch];
@@ -841,11 +835,6 @@ contract NFTStakingManager is
     $.hardwareTokenLockedBy[tokenId] = bytes32(0);
   }
 
-  function _getWeight(uint256 tokenCount) internal view returns (uint64) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return uint64(tokenCount * $.licenseWeight);
-  }
-
   function _getPChainWarpMessage(uint32 messageIndex, bytes32 expectedSourceChainID)
     internal
     view
@@ -865,18 +854,6 @@ contract NFTStakingManager is
     }
 
     return warpMessage;
-  }
-
-  /// @notice Converts a nodeID to a fixed length of 20 bytes.
-  /// @param nodeID The nodeID to convert.
-  /// @return The fixed length nodeID.
-  function _fixedNodeID(bytes memory nodeID) private pure returns (bytes20) {
-    bytes20 fixedID;
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      fixedID := mload(add(nodeID, 32))
-    }
-    return fixedID;
   }
 
   /// @notice Authorizes upgrade to DEFAULT_ADMIN_ROLE
