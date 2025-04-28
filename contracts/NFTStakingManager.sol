@@ -174,12 +174,14 @@ contract NFTStakingManager is
     bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds
   );
   event CompletedDelegatorRegistration(
-    bytes32 indexed validationId, bytes32 indexed delegationId, uint32 startEpoch
+    bytes32 indexed validationId, bytes32 indexed delegationId, uint64 nonce, uint32 startEpoch
   );
   event InitiatedDelegatorRemoval(
     bytes32 indexed validationId, bytes32 indexed delegationId, uint256[] tokenIds, uint32 endEpoch
   );
-  event CompletedDelegatorRemoval(bytes32 indexed validationId, bytes32 indexed delegationId);
+  event CompletedDelegatorRemoval(
+    bytes32 indexed validationId, bytes32 indexed delegationId, uint64 nonce
+  );
   event PrepaidCreditsAdded(
     address indexed hardwareOperator, address indexed licenseHolder, uint32 creditSeconds
   );
@@ -206,6 +208,7 @@ contract NFTStakingManager is
   error TokenNotLockedByStakeId();
   error UnauthorizedOwner();
   error ValidationIDMismatch();
+  error DelegationIDMismatch();
   error ValidatorHasEnded();
   error ValidatorRegistrationNotComplete();
   error ZeroAddress();
@@ -450,16 +453,23 @@ contract NFTStakingManager is
 
   function completeDelegatorRegistration(bytes32 delegationId, uint32 messageIndex) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bytes32 validationId,) = $.manager.completeValidatorWeightUpdate(messageIndex);
+    (bytes32 validationId, uint64 nonce) = $.manager.completeValidatorWeightUpdate(messageIndex);
     DelegationInfo storage delegation = $.delegations[delegationId];
     if (validationId != delegation.validationId) {
       revert ValidationIDMismatch();
     }
+
+    // TODO not sure we need this check, but it ensures the warp message is for the correct nonce
+    bytes32 derivedDelegationId = keccak256(abi.encodePacked(validationId, nonce));
+    if (delegationId != derivedDelegationId) {
+      revert DelegationIDMismatch();
+    }
+
     // TODO: do we incrememnt here or in the initiate call?
     // validation.licenseCount += uint32(delegation.tokenIds.length);
 
     delegation.startEpoch = getCurrentEpoch();
-    emit CompletedDelegatorRegistration(validationId, delegationId, delegation.startEpoch);
+    emit CompletedDelegatorRegistration(validationId, delegationId, nonce, delegation.startEpoch);
   }
 
   // TODO enforce a min duration?
@@ -500,13 +510,19 @@ contract NFTStakingManager is
     // Complete the weight update
     // TODO I think this allows anyone to use the "wrong" delegationId? Maybe need a "pending" state
     // we set before, then check it here?
-    (bytes32 validationId,) = $.manager.completeValidatorWeightUpdate(messageIndex);
+    (bytes32 validationId, uint64 nonce) = $.manager.completeValidatorWeightUpdate(messageIndex);
     if (validationId != $.delegations[delegationId].validationId) {
       revert ValidationIDMismatch();
     }
 
+    // TODO not sure we need this check, but it ensures the warp message is for the correct nonce
+    bytes32 derivedDelegationId = keccak256(abi.encodePacked(validationId, nonce));
+    if (delegationId != derivedDelegationId) {
+      revert DelegationIDMismatch();
+    }
+
     _unlockTokens(delegationId, $.delegations[delegationId].tokenIds);
-    emit CompletedDelegatorRemoval(validationId, delegationId);
+    emit CompletedDelegatorRemoval(validationId, delegationId, nonce);
     return delegationId;
   }
 
