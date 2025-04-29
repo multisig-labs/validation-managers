@@ -150,6 +150,7 @@ contract NFTStakingManager is
   ///
   IWarpMessenger public constant WARP_MESSENGER =
     IWarpMessenger(0x0200000000000000000000000000000000000005);
+  // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
   bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
     0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
   bytes32 public constant PREPAYMENT_ROLE = keccak256("PREPAYMENT_ROLE");
