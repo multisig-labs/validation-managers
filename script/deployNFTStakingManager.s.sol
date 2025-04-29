@@ -34,7 +34,7 @@ contract DeployNFTStakingManager is Script {
       hardwareLicenseWeight: 1, // Example value
       epochRewards: 1000 ether, // Example value
       maxLicensesPerValidator: 50, // Example value
-      requireHardwareTokenId: true, // Example value - Note: check if used in init
+      requireHardwareTokenID: true, // Example value - Note: check if used in init
       gracePeriod: 1 hours, // Example value
       uptimePercentage: 80, // Example value (95%)
       bypassUptimeCheck: true
