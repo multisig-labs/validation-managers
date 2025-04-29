@@ -270,35 +270,35 @@ contract NodeSaleWithWhitelist is
     return _storage().availableTokenIds;
   }
 
-  function getStorageAsJson() external view returns (string memory) {
-    Storage storage s = _storage();
-    return string(
-      abi.encodePacked(
-        "{",
-        '"nftContract": "',
-        addressToString(address(s.nftContract)),
-        '",',
-        '"treasury": "',
-        addressToString(s.treasury),
-        '",',
-        '"price": "',
-        uint256ToString(s.price),
-        '",',
-        '"totalSold": "',
-        uint256ToString(s.totalSold),
-        '",',
-        '"saleStartTime": "',
-        uint256ToString(s.saleStartTime),
-        '",',
-        '"maxPerWallet": "',
-        uint256ToString(s.maxPerWallet),
-        '",',
-        '"merkleRoot": "',
-        bytes32ToString(s.merkleRoot),
-        "}"
-      )
-    );
-  }
+  // function getStorageAsJson() external view returns (string memory) {
+  //   Storage storage s = _storage();
+  //   return string(
+  //     abi.encodePacked(
+  //       "{",
+  //       '"nftContract": "',
+  //       addressToString(address(s.nftContract)),
+  //       '",',
+  //       '"treasury": "',
+  //       addressToString(s.treasury),
+  //       '",',
+  //       '"price": "',
+  //       uint256ToString(s.price),
+  //       '",',
+  //       '"totalSold": "',
+  //       uint256ToString(s.totalSold),
+  //       '",',
+  //       '"saleStartTime": "',
+  //       uint256ToString(s.saleStartTime),
+  //       '",',
+  //       '"maxPerWallet": "',
+  //       uint256ToString(s.maxPerWallet),
+  //       '",',
+  //       '"merkleRoot": "',
+  //       bytes32ToString(s.merkleRoot),
+  //       "}"
+  //     )
+  //   );
+  // }
 
   function uint256ArrayToString(uint256[] memory array) internal pure returns (string memory) {
     if (array.length == 0) {
