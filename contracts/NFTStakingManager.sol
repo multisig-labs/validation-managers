@@ -459,12 +459,6 @@ contract NFTStakingManager is
       revert validationIDMismatch();
     }
 
-    // TODO not sure we need this check, but it ensures the warp message is for the correct nonce
-    bytes32 deriveddelegationID = keccak256(abi.encodePacked(validationID, nonce));
-    if (delegationID != deriveddelegationID) {
-      revert delegationIDMismatch();
-    }
-
     // TODO: do we incrememnt here or in the initiate call?
     // validation.licenseCount += uint32(delegation.tokenIDs.length);
 
@@ -513,12 +507,6 @@ contract NFTStakingManager is
     (bytes32 validationID, uint64 nonce) = $.manager.completeValidatorWeightUpdate(messageIndex);
     if (validationID != $.delegations[delegationID].validationID) {
       revert validationIDMismatch();
-    }
-
-    // TODO not sure we need this check, but it ensures the warp message is for the correct nonce
-    bytes32 deriveddelegationID = keccak256(abi.encodePacked(validationID, nonce));
-    if (delegationID != deriveddelegationID) {
-      revert delegationIDMismatch();
     }
 
     _unlockTokens(delegationID, $.delegations[delegationID].tokenIDs);
