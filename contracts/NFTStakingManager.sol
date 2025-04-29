@@ -39,15 +39,15 @@ struct EpochInfo {
 }
 
 struct ValidationInfo {
-  uint32 startEpoch; 
-  uint32 endEpoch; 
-  uint32 licenseCount; 
-  uint32 lastUptimeSeconds; 
-  uint32 lastSubmissionTime; 
-  uint32 delegationFeeBips; 
-  address owner; 
-  uint256 hardwareTokenID; 
-  bytes registrationMessage; 
+  uint32 startEpoch;
+  uint32 endEpoch;
+  uint32 licenseCount;
+  uint32 lastUptimeSeconds;
+  uint32 lastSubmissionTime;
+  uint32 delegationFeeBips;
+  address owner;
+  uint256 hardwareTokenID;
+  bytes registrationMessage;
   EnumerableSet.Bytes32Set delegationIDs;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
 }
@@ -130,21 +130,17 @@ contract NFTStakingManager is
     IERC721 licenseContract; // 20 bytes
     IERC721 hardwareLicenseContract; // 20 bytes
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether // 32 bytes
-
     // Validation state
     EnumerableSet.Bytes32Set validationIDs;
     mapping(bytes32 validationID => ValidationInfo) validations;
     mapping(uint256 hardwareTokenID => bytes32 validationID) hardwareTokenLockedBy;
-
     // Delegation state
     mapping(bytes32 delegationID => DelegationInfo) delegations;
     mapping(uint256 nodeLicenseTokenID => bytes32 delegationID) tokenLockedBy;
     mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
-
     // Epoch state
     mapping(uint32 epochNumber => EpochInfo) epochs;
     mapping(uint32 epochNumber => mapping(uint256 tokenID => bool isRewardsMinted)) isRewardsMinted; // ensure we just mint rewards once per epoch/ tokenID combo
-
   }
 
   NFTStakingManagerStorage private _storage;
@@ -320,6 +316,8 @@ contract NFTStakingManager is
   // maybe we have a seperate func onlyAdmin that can remove the PoA validators.
   // AND DO NOT let people delegate to them.
 
+  // TODO: we want to remove delegators here, and check that they're all removed before removing the validator
+  // question: how many delegators can I remove in one call?
   function initiateValidatorRemoval(bytes32 validationID) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
