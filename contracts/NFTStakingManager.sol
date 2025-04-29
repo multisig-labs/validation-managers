@@ -39,15 +39,15 @@ struct EpochInfo {
 }
 
 struct ValidationInfo {
-  uint32 startEpoch; // 4 bytes
-  uint32 endEpoch; // 4 bytes
-  uint32 licenseCount; // 4 bytes
-  uint32 lastUptimeSeconds; // 4 bytes
-  uint32 lastSubmissionTime; // 4 bytes
-  uint32 delegationFeeBips; // 4 bytes
-  address owner; // 20 bytes
-  uint256 hardwareTokenID; // 32 bytes
-  bytes registrationMessage; // 32 bytes
+  uint32 startEpoch; 
+  uint32 endEpoch; 
+  uint32 licenseCount; 
+  uint32 lastUptimeSeconds; 
+  uint32 lastSubmissionTime; 
+  uint32 delegationFeeBips; 
+  address owner; 
+  uint256 hardwareTokenID; 
+  bytes registrationMessage; 
   EnumerableSet.Bytes32Set delegationIDs;
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
 }
@@ -84,19 +84,19 @@ struct DelegationInfoView {
 }
 
 struct NFTStakingManagerSettings {
-  bool bypassUptimeCheck; // flag to bypass uptime checks 1 byte
-  uint16 uptimePercentage; // 100 = 100% 1 byte
-  uint16 maxLicensesPerValidator; // 2 bytes
-  uint32 initialEpochTimestamp; // 4 bytes
-  uint32 epochDuration; // 4 bytes
-  uint32 gracePeriod; // 4 bytes
-  uint64 licenseWeight; // 8 bytes
-  uint64 hardwareLicenseWeight; // 8 bytes
-  address admin; // 20 bytes
-  address validatorManager; // 20 bytes
-  address license; // 20 bytes
-  address hardwareLicense; // 20 bytes
-  uint256 epochRewards; // 32 bytes
+  bool bypassUptimeCheck; // flag to bypass uptime check
+  uint16 uptimePercentage; // 100 = 100%
+  uint16 maxLicensesPerValidator;
+  uint32 initialEpochTimestamp;
+  uint32 epochDuration;
+  uint32 gracePeriod;
+  uint64 licenseWeight;
+  uint64 hardwareLicenseWeight;
+  address admin;
+  address validatorManager;
+  address license;
+  address hardwareLicense;
+  uint256 epochRewards;
 }
 
 contract NFTStakingManager is
@@ -130,17 +130,21 @@ contract NFTStakingManager is
     IERC721 licenseContract; // 20 bytes
     IERC721 hardwareLicenseContract; // 20 bytes
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether // 32 bytes
+
+    // Validation state
     EnumerableSet.Bytes32Set validationIDs;
-    // We dont xfer nft to this contract, we just mark it as locked
-    mapping(uint256 tokenID => bytes32 delegationID) tokenLockedBy;
-    mapping(uint256 tokenID => bytes32 validationID) hardwareTokenLockedBy;
-    mapping(uint32 epochNumber => EpochInfo) epochs;
-    // Ensure that we only ever mint rewards once for a given epochNumber/tokenID combo
-    mapping(uint32 epochNumber => mapping(uint256 tokenID => bool isRewardsMinted)) isRewardsMinted;
-    // Track prepaid credits for validator hardware service
-    mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
     mapping(bytes32 validationID => ValidationInfo) validations;
+    mapping(uint256 hardwareTokenID => bytes32 validationID) hardwareTokenLockedBy;
+
+    // Delegation state
     mapping(bytes32 delegationID => DelegationInfo) delegations;
+    mapping(uint256 nodeLicenseTokenID => bytes32 delegationID) tokenLockedBy;
+    mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
+
+    // Epoch state
+    mapping(uint32 epochNumber => EpochInfo) epochs;
+    mapping(uint32 epochNumber => mapping(uint256 tokenID => bool isRewardsMinted)) isRewardsMinted; // ensure we just mint rewards once per epoch/ tokenID combo
+
   }
 
   NFTStakingManagerStorage private _storage;
@@ -455,9 +459,6 @@ contract NFTStakingManager is
       revert validationIDMismatch();
     }
 
-    // TODO: do we incrememnt here or in the initiate call?
-    // validation.licenseCount += uint32(delegation.tokenIDs.length);
-
     delegation.startEpoch = getEpochByTimestamp(block.timestamp);
     emit CompletedDelegatorRegistration(validationID, delegationID, nonce, delegation.startEpoch);
   }
@@ -587,7 +588,7 @@ contract NFTStakingManager is
         DelegationInfo storage delegation = $.delegations[delegationID];
         // TODO: revist this epoch check
         if (delegation.uptimeCheck[epoch] && epoch >= delegation.startEpoch) {
-          mintDelegatorRewards(epoch, delegationID);
+          _mintDelegatorRewards(epoch, delegationID);
         }
       }
     }
@@ -595,7 +596,7 @@ contract NFTStakingManager is
 
   // verify that the user had a valid uptime for the given epcoh
   // TODO epoch is always the prev epoch, so dont pass in.
-  function mintDelegatorRewards(uint32 epoch, bytes32 delegationID) public {
+  function _mintDelegatorRewards(uint32 epoch, bytes32 delegationID) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationID];
     ValidationInfo storage validation = $.validations[delegation.validationID];
