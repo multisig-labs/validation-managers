@@ -9,16 +9,14 @@ import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 import { EnumerableMap } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableMap.sol";
 import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
 
-import { AccessControlUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
+import { AccessControlDefaultAdminRulesUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
 import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ContextUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/utils/ContextUpgradeable.sol";
-import { ReentrancyGuardUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.3.0/utils/ReentrancyGuardUpgradeable.sol";
 
 import {
   PChainOwner,
@@ -87,7 +85,6 @@ struct DelegationInfoView {
 
 struct NFTStakingManagerSettings {
   bool bypassUptimeCheck; // flag to bypass uptime checks 1 byte
-  bool requireHardwareTokenID; // 1 byte
   uint16 uptimePercentage; // 100 = 100% 1 byte
   uint16 maxLicensesPerValidator; // 2 bytes
   uint32 initialEpochTimestamp; // 4 bytes
@@ -106,8 +103,7 @@ contract NFTStakingManager is
   Initializable,
   UUPSUpgradeable,
   ContextUpgradeable,
-  AccessControlUpgradeable,
-  ReentrancyGuardUpgradeable
+  AccessControlDefaultAdminRulesUpgradeable
 {
   ///
   /// LIBRARIES
@@ -221,8 +217,9 @@ contract NFTStakingManager is
   function initialize(NFTStakingManagerSettings calldata settings) external initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
     ContextUpgradeable.__Context_init();
-    AccessControlUpgradeable.__AccessControl_init();
-    ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
+    AccessControlDefaultAdminRulesUpgradeable.__AccessControlDefaultAdminRules_init(
+      0, settings.admin
+    );
 
     __NFTStakingManager_init(settings);
   }
@@ -231,9 +228,6 @@ contract NFTStakingManager is
     internal
     onlyInitializing
   {
-    if (settings.admin == address(0)) revert ZeroAddress();
-    _grantRole(DEFAULT_ADMIN_ROLE, settings.admin);
-
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     $.manager = ValidatorManager(settings.validatorManager);
@@ -287,10 +281,10 @@ contract NFTStakingManager is
 
     ValidationInfo storage validation = $.validations[validationID];
     validation.owner = _msgSender();
-    validation.startEpoch = getCurrentEpoch();
+    validation.startEpoch = getEpochByTimestamp(block.timestamp);
     validation.hardwareTokenID = hardwareTokenID;
     validation.registrationMessage = registerL1ValidatorMessage;
-    validation.lastSubmissionTime = getEpochEndTime(getCurrentEpoch() - 1);
+    validation.lastSubmissionTime = getEpochEndTime(getEpochByTimestamp(block.timestamp) - 1);
     validation.delegationFeeBips = delegationFeeBips;
 
     // The blsPoP is required to complete the validator registration on the P-Chain, so emit it here
@@ -309,7 +303,7 @@ contract NFTStakingManager is
     bytes32 validationID = $.manager.completeValidatorRegistration(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
-    validation.startEpoch = getCurrentEpoch();
+    validation.startEpoch = getEpochByTimestamp(block.timestamp);
     emit CompletedValidatorRegistration(validationID, validation.startEpoch);
     return validationID;
   }
@@ -325,7 +319,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
     if (validation.owner != _msgSender()) revert UnauthorizedOwner();
-    validation.endEpoch = getCurrentEpoch();
+    validation.endEpoch = getEpochByTimestamp(block.timestamp);
     $.manager.initiateValidatorRemoval(validationID);
     // TODO: remove delegators. This might be gas intensive, so also have a way for validators to
     // remove an array of delegationIDs. Once they remove those then they can end their validation period.
@@ -424,7 +418,8 @@ contract NFTStakingManager is
     if (validation.endEpoch != 0) {
       revert ValidatorHasEnded();
     }
-    if (validation.startEpoch == 0 || validation.startEpoch > getCurrentEpoch()) {
+    if (validation.startEpoch == 0 || validation.startEpoch > getEpochByTimestamp(block.timestamp))
+    {
       revert ValidatorRegistrationNotComplete();
     }
     validation.licenseCount += uint32(tokenIDs.length);
@@ -462,7 +457,7 @@ contract NFTStakingManager is
     // TODO: do we incrememnt here or in the initiate call?
     // validation.licenseCount += uint32(delegation.tokenIDs.length);
 
-    delegation.startEpoch = getCurrentEpoch();
+    delegation.startEpoch = getEpochByTimestamp(block.timestamp);
     emit CompletedDelegatorRegistration(validationID, delegationID, nonce, delegation.startEpoch);
   }
 
@@ -480,7 +475,7 @@ contract NFTStakingManager is
 
     // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
     // as they were not present for the whole epoch duration
-    delegation.endEpoch = getCurrentEpoch() - 1;
+    delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
     validation.licenseCount -= uint32(delegation.tokenIDs.length);
     uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIDs.length);
     // Do not delete delegation yet, we need it to pay out rewards in the case that a delegator leaves
@@ -576,27 +571,23 @@ contract NFTStakingManager is
   }
 
   function mintRewards(bytes32[] calldata validationIDs, uint32 epoch) external {
-    for (uint256 i = 0; i < validationIDs.length; i++) {
-      mintRewards(validationIDs[i], epoch);
-    }
-  }
-
-  function mintRewards(bytes32 validationID, uint32 epoch) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationID];
 
     if (block.timestamp <= getEpochEndTime(epoch) + $.gracePeriod) {
       revert GracePeriodHasNotPassed();
     }
 
-    uint256 totalDelegations = validation.delegationIDs.length();
+    for (uint256 i = 0; i < validationIDs.length; i++) {
+      ValidationInfo storage validation = $.validations[validationIDs[i]];
+      uint256 totalDelegations = validation.delegationIDs.length();
 
-    for (uint256 i = 0; i < totalDelegations; i++) {
-      bytes32 delegationID = validation.delegationIDs.at(i);
-      DelegationInfo storage delegation = $.delegations[delegationID];
-      // TODO: revist this epoch check
-      if (delegation.uptimeCheck[epoch] && epoch >= delegation.startEpoch) {
-        mintDelegatorRewards(epoch, delegationID);
+      for (uint256 j = 0; j < totalDelegations; j++) {
+        bytes32 delegationID = validation.delegationIDs.at(j);
+        DelegationInfo storage delegation = $.delegations[delegationID];
+        // TODO: revist this epoch check
+        if (delegation.uptimeCheck[epoch] && epoch >= delegation.startEpoch) {
+          mintDelegatorRewards(epoch, delegationID);
+        }
       }
     }
   }
@@ -707,25 +698,42 @@ contract NFTStakingManager is
   ///
   /// ADMIN FUNCTIONS
   ///
+  function getSettings() external view returns (NFTStakingManagerSettings memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    // Explicitly create a memory struct and copy fields from storage
+    NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
+      bypassUptimeCheck: $.bypassUptimeCheck,
+      uptimePercentage: $.uptimePercentage,
+      maxLicensesPerValidator: $.maxLicensesPerValidator,
+      initialEpochTimestamp: $.initialEpochTimestamp,
+      epochDuration: $.epochDuration,
+      gracePeriod: $.gracePeriod,
+      licenseWeight: $.licenseWeight,
+      hardwareLicenseWeight: $.hardwareLicenseWeight,
+      validatorManager: address($.manager),
+      license: address($.licenseContract),
+      hardwareLicense: address($.hardwareLicenseContract),
+      epochRewards: $.epochRewards,
+      admin: defaultAdmin()
+    });
+    return settings;
+  }
+
   function setBypassUptimeCheck(bool bypass) external onlyRole(DEFAULT_ADMIN_ROLE) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     $.bypassUptimeCheck = bypass;
   }
 
-  function calculateRewardsPerLicense(uint32 epochNumber) internal view returns (uint256) {
+  function calculateRewardsPerLicense(uint32 epochNumber) public view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochRewards / $.epochs[epochNumber].totalStakedLicenses;
   }
 
-  function getEpochByTimestamp(uint32 timestamp) public view returns (uint32) {
+  function getEpochByTimestamp(uint256 timestamp) public view returns (uint32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     // we don't want to have a 0 epoch, because 0 is also a falsy value
-    uint32 epoch = (timestamp - $.initialEpochTimestamp) / $.epochDuration;
+    uint32 epoch = (uint32(timestamp) - $.initialEpochTimestamp) / $.epochDuration;
     return epoch + 1;
-  }
-
-  function getCurrentEpoch() public view returns (uint32) {
-    return getEpochByTimestamp(uint32(block.timestamp));
   }
 
   function getEpochEndTime(uint32 epoch) public view returns (uint32) {
@@ -743,7 +751,7 @@ contract NFTStakingManager is
     return $.tokenLockedBy[tokenID];
   }
 
-  function getvalidationIDs() external view returns (bytes32[] memory) {
+  function getValidationIDs() external view returns (bytes32[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.validationIDs.values();
   }
