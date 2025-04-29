@@ -30,10 +30,10 @@ contract UpgradeValidatorManager is Script {
 
     ValidatorManager vmgr = ValidatorManager(proxyAddress);
     vmgr.migrateFromV1(
-      bytes32(0x2cef469655ac3e3f8c9c91ddb9547da12f83777159e79763f6f05c21738ac089), 1
+      bytes32(0x31f187560e731c9cea5d3a23de6e6520bc1e47255c2ac24d4d6d7b29adb9f44f), 0
     );
     vmgr.migrateFromV1(
-      bytes32(0xe7aa9240423c183c11f690cbed3b5a62dfed26af44bf85d67a8a58b675d4a40b), 1
+      bytes32(0x5ea1abf3a75e14a1c5103cf6df5a9f8f71ee50c113d9605945f892cb88b11a99), 0
     );
 
     vm.stopBroadcast();

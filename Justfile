@@ -34,4 +34,4 @@ anvil fork_url="":
 
 # Execute a Forge script
 forge-script cmd *FLAGS:
-	forge script {{FLAGS}} --slow  --broadcast --ffi --fork-url=${ETH_RPC_URL} ${PRIVATE_KEY:+--private-key=$PRIVATE_KEY}  script/${cmd%.*.*}.s.sol
+	forge script {{FLAGS}} --slow  --ffi --fork-url=${ETH_RPC_URL} ${PRIVATE_KEY:+--private-key=$PRIVATE_KEY}  script/${cmd%.*.*}.s.sol
