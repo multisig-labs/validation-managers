@@ -569,48 +569,40 @@ contract NFTStakingManager is
     );
   }
 
-  function initiateDelegatorRemoval(bytes32[] calldata delegationIDs) external {
-    // the pesron trying to remove has to either be the owner of the delegators or
-    // the owner of the hardware
-
-    // should there be a max amount to remove? I should measure the gas for this
-    for (uint256 i = 0; i < delegationIDs.length; i++) {
-      initiateDelegatorRemoval(delegationIDs[i]);
-    }
-  }
-
   // TODO enforce a min duration?
-  function initiateDelegatorRemoval(bytes32 delegationID) public {
+  function initiateDelegatorRemoval(bytes32[] calldata delegationIDs) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    DelegationInfo storage delegation = $.delegations[delegationID];
-    ValidationInfo storage validation = $.validations[delegation.validationID];
-    Validator memory validator = $.manager.getValidator(delegation.validationID);
+    for (uint256 i = 0; i < delegationIDs.length; i++) {
+      DelegationInfo storage delegation = $.delegations[delegationIDs[i]];
+      ValidationInfo storage validation = $.validations[delegation.validationID];
+      Validator memory validator = $.manager.getValidator(delegation.validationID);
 
-    if (delegation.owner != _msgSender() && validation.owner != _msgSender()) {
-      revert UnauthorizedOwner();
+      if (delegation.owner != _msgSender() && validation.owner != _msgSender()) {
+        revert UnauthorizedOwner();
+      }
+
+      if (delegation.status != DelegatorStatus.Active) {
+        revert InvalidDelegatorStatus(delegation.status);
+      }
+
+      // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
+      // as they were not present for the whole epoch duration
+
+      uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIDs.length);
+
+      (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
+
+      delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
+      delegation.endingNonce = nonce;
+      delegation.status = DelegatorStatus.PendingRemoved;
+
+      validation.licenseCount -= uint32(delegation.tokenIDs.length);
+
+      emit InitiatedDelegatorRemoval(
+        delegation.validationID, delegationIDs[i], delegation.tokenIDs, delegation.endEpoch
+      );
     }
-
-    if (delegation.status != DelegatorStatus.Active) {
-      revert InvalidDelegatorStatus(delegation.status);
-    }
-
-    // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
-    // as they were not present for the whole epoch duration
-
-    uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIDs.length);
-
-    (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
-
-    delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
-    delegation.endingNonce = nonce;
-    delegation.status = DelegatorStatus.PendingRemoved;
-
-    validation.licenseCount -= uint32(delegation.tokenIDs.length);
-
-    emit InitiatedDelegatorRemoval(
-      delegation.validationID, delegationID, delegation.tokenIDs, delegation.endEpoch
-    );
   }
 
   function completeDelegatorRemoval(bytes32 delegationID, uint32 messageIndex)
@@ -668,15 +660,12 @@ contract NFTStakingManager is
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
   }
 
-  function processProof(bytes32 validationID, uint32 messageIndex) public {
+  function processProof(uint32 messageIndex) public {
     bytes32 uptimeBlockchainID = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
-    (bytes32 uptimeValidationID, uint64 uptimeSeconds) = ValidatorMessages
-      .unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload);
-
-    if (uptimeValidationID != validationID) {
-      revert UnexpectedValidationID(uptimeValidationID, validationID);
-    }
+    (bytes32 validationID, uint64 uptimeSeconds) = ValidatorMessages.unpackValidationUptimeMessage(
+      _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
+    );
 
     uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
     epoch--;
