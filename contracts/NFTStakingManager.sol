@@ -38,17 +38,7 @@ struct EpochInfo {
   uint256 totalStakedLicenses;
 }
 
-enum MyStatus {
-  Unknown,
-  PendingAdded,
-  Active,
-  PendingRemoved,
-  Completed,
-  Invalidated
-}
-
 struct ValidationInfo {
-  MyStatus status;
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
@@ -64,7 +54,6 @@ struct ValidationInfo {
 }
 
 struct ValidationInfoView {
-  MyStatus status;
   uint32 startEpoch;
   uint32 endEpoch;
   uint32 licenseCount;
@@ -227,23 +216,19 @@ contract NFTStakingManager is
   error InvalidNonce(uint64 nonce);
   error InsufficientUptime();
   error MaxLicensesPerValidatorReached();
-  error RewardsAlreadyMintedFortokenID();
-  error StakeDoesNotExist();
+  error RewardsAlreadyMintedForTokenID();
+  error DelegationDoesNotExist();
   error TokenAlreadyLocked(uint256 tokenID);
-  error TokenNotLockedBydelegationID();
+  error TokenNotLockedByDelegationID();
   error UnauthorizedOwner();
-  error validationIDMismatch();
-  error delegationIDMismatch();
+  error ValidationIDMismatch();
   error ValidatorHasEnded();
   error ValidatorRegistrationNotComplete();
-  error ValidatorHasLicenses();
+  error ValidatorHasActiveDelegations();
   error ValidatorNotPoS(bytes32 validationID);
-  error ZeroAddress();
   error InvalidDelegationFeeBips(uint32 delegationFeeBips);
   error InvalidDelegatorStatus(DelegatorStatus status);
-  error InvalidValidatorStatus();
-  error CannotRemoveValidatorDuringGracePeriod();
-  error ValidatorHasClaimableRewards();
+  error InvalidValidatorStatus(ValidatorStatus status);
   error UnexpectedValidationID(bytes32 expectedValidationID, bytes32 actualValidationID);
 
   /// @notice disable initializers if constructed directly
@@ -334,9 +319,7 @@ contract NFTStakingManager is
     );
 
     ValidationInfo storage validation = $.validations[validationID];
-    validation.status = MyStatus.PendingAdded;
     validation.owner = _msgSender();
-    validation.startEpoch = getEpochByTimestamp(block.timestamp);
     validation.hardwareTokenID = hardwareTokenID;
     validation.registrationMessage = registerL1ValidatorMessage;
     validation.lastSubmissionTime = getEpochEndTime(getEpochByTimestamp(block.timestamp) - 1);
@@ -358,9 +341,8 @@ contract NFTStakingManager is
     bytes32 validationID = $.manager.completeValidatorRegistration(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
-
+    
     validation.startEpoch = getEpochByTimestamp(block.timestamp);
-    validation.status = MyStatus.Active;
 
     emit CompletedValidatorRegistration(validationID, validation.startEpoch);
     return validationID;
@@ -382,7 +364,7 @@ contract NFTStakingManager is
 
     // I think I'm just going to error here for now
     if (validation.licenseCount > 0) {
-      revert ValidatorHasLicenses();
+      revert ValidatorHasActiveDelegations();
     }
 
     validation.endEpoch = getEpochByTimestamp(block.timestamp);
@@ -395,26 +377,13 @@ contract NFTStakingManager is
   function completeValidatorRemoval(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    uint32 epoch = getEpochByTimestamp(block.timestamp);
-    if (block.timestamp <= getEpochEndTime(epoch) + $.gracePeriod) {
-      revert CannotRemoveValidatorDuringGracePeriod();
-    }
-
     bytes32 validationID = $.manager.completeValidatorRemoval(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
 
-    // either revert, or don't delete if there are claimable rewards still
-    // do we want to be deleting anyways? or is this historical data nice?
-    if (validation.claimableEpochNumbers.length() > 0) {
-      revert ValidatorHasClaimableRewards();
-    }
-
     _unlockHardwareToken(validation.hardwareTokenID);
 
     emit CompletedValidatorRemoval(validationID);
-
-    validation.status = MyStatus.Completed;
 
     // delete $.validations[validationID];
     // $.validationIDs.remove(validationID);
@@ -498,10 +467,6 @@ contract NFTStakingManager is
       revert ValidatorRegistrationNotComplete();
     }
 
-    if (validation.status == MyStatus.PendingAdded) {
-      revert ValidatorRegistrationNotComplete();
-    }
-
     // Update license count
     validation.licenseCount += uint32(tokenIDs.length);
     if (validation.licenseCount > $.maxLicensesPerValidator) {
@@ -520,9 +485,9 @@ contract NFTStakingManager is
     _lockTokens(delegationID, tokenIDs);
 
     DelegationInfo storage newDelegation = $.delegations[delegationID];
-    newDelegation.status = DelegatorStatus.PendingAdded;
     newDelegation.owner = owner;
     newDelegation.tokenIDs = tokenIDs;
+    newDelegation.status = DelegatorStatus.PendingAdded;
     newDelegation.validationID = validationID;
     newDelegation.startingNonce = nonce;
 
@@ -540,9 +505,8 @@ contract NFTStakingManager is
     }
 
     Validator memory validator = $.manager.getValidator(delegation.validationID);
-
-    if (validator.status == ValidatorStatus.Completed) {
-      revert InvalidValidatorStatus();
+    if (validator.status != ValidatorStatus.Active) {
+      revert InvalidValidatorStatus(validator.status);
     }
 
     uint64 nonce;
@@ -553,7 +517,7 @@ contract NFTStakingManager is
       nonce = receivedNonce;
 
       if (validationID != delegation.validationID) {
-        revert validationIDMismatch();
+        revert ValidationIDMismatch();
       }
 
       if (nonce < delegation.startingNonce) {
@@ -581,11 +545,11 @@ contract NFTStakingManager is
       if (delegation.owner != _msgSender() && validation.owner != _msgSender()) {
         revert UnauthorizedOwner();
       }
-
+      
       if (delegation.status != DelegatorStatus.Active) {
         revert InvalidDelegatorStatus(delegation.status);
       }
-
+      
       // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
       // as they were not present for the whole epoch duration
 
@@ -595,7 +559,6 @@ contract NFTStakingManager is
 
       delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
       delegation.endingNonce = nonce;
-      delegation.status = DelegatorStatus.PendingRemoved;
 
       validation.licenseCount -= uint32(delegation.tokenIDs.length);
 
@@ -642,7 +605,7 @@ contract NFTStakingManager is
     }
 
     // we never delete the delegation so that the user can claim rewards whenever
-    _unlockTokens(delegationID, $.delegations[delegationID].tokenIDs);
+    _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
   }
@@ -707,13 +670,6 @@ contract NFTStakingManager is
       DelegationInfo storage delegation = $.delegations[delegationID];
       delegation.uptimeCheck[epoch] = true;
     }
-
-    // then if there are pending removals, that were initiated,
-    // delete them now?
-    if (validation.status == MyStatus.PendingRemoved) {
-      validation.status = MyStatus.Completed;
-      validation.endEpoch = epoch;
-    }
   }
 
   function mintRewards(bytes32[] calldata validationIDs, uint32 epoch) external {
@@ -746,7 +702,7 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[delegation.validationID];
 
     if (delegation.owner == address(0)) {
-      revert StakeDoesNotExist();
+      revert DelegationDoesNotExist();
     }
 
     if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0))
@@ -766,10 +722,10 @@ contract NFTStakingManager is
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
       if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
-        revert TokenNotLockedBydelegationID();
+        revert TokenNotLockedByDelegationID();
       }
       if ($.isRewardsMinted[epoch][delegation.tokenIDs[i]]) {
-        revert RewardsAlreadyMintedFortokenID();
+        revert RewardsAlreadyMintedForTokenID();
       }
 
       $.isRewardsMinted[epoch][delegation.tokenIDs[i]] = true;
@@ -934,7 +890,6 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
     return ValidationInfoView({
-      status: validation.status,
       owner: validation.owner,
       hardwareTokenID: validation.hardwareTokenID,
       startEpoch: validation.startEpoch,
