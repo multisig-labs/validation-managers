@@ -340,7 +340,7 @@ contract NFTStakingManager is
     bytes32 validationID = $.manager.completeValidatorRegistration(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
-    
+
     validation.startEpoch = getEpochByTimestamp(block.timestamp);
 
     emit CompletedValidatorRegistration(validationID, validation.startEpoch);
@@ -544,11 +544,11 @@ contract NFTStakingManager is
       if (delegation.owner != _msgSender() && validation.owner != _msgSender()) {
         revert UnauthorizedOwner();
       }
-      
+
       if (delegation.status != DelegatorStatus.Active) {
         revert InvalidDelegatorStatus(delegation.status);
       }
-      
+
       // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
       // as they were not present for the whole epoch duration
 
