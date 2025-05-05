@@ -221,7 +221,6 @@ contract NFTStakingManager is
   error TokenAlreadyLocked(uint256 tokenID);
   error TokenNotLockedByDelegationID();
   error UnauthorizedOwner();
-  error ValidationIDMismatch();
   error ValidatorHasEnded();
   error ValidatorRegistrationNotComplete();
   error ValidatorHasActiveDelegations();
@@ -517,7 +516,7 @@ contract NFTStakingManager is
       nonce = receivedNonce;
 
       if (validationID != delegation.validationID) {
-        revert ValidationIDMismatch();
+        revert UnexpectedValidationID(delegation.validationID, validationID);
       }
 
       if (nonce < delegation.startingNonce) {
