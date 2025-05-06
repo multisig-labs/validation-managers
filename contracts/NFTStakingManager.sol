@@ -28,6 +28,7 @@ import { ValidatorManager } from
 import { ValidatorMessages } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
+import { NFTStakingManagerViews } from "./NFTStakingManagerViews.sol";
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 
 interface INativeMinter {
@@ -53,18 +54,6 @@ struct ValidationInfo {
   EnumerableSet.UintSet claimableEpochNumbers;
 }
 
-struct ValidationInfoView {
-  uint32 startEpoch;
-  uint32 endEpoch;
-  uint32 licenseCount;
-  uint32 lastUptimeSeconds;
-  uint32 lastSubmissionTime;
-  uint32 delegationFeeBips;
-  address owner;
-  uint256 hardwareTokenID;
-  bytes registrationMessage;
-}
-
 enum DelegatorStatus {
   Unknown,
   PendingAdded,
@@ -84,17 +73,6 @@ struct DelegationInfo {
   mapping(uint32 epochNumber => uint256 rewards) claimableRewardsPerEpoch; // will get set to zero when claimed
   mapping(uint32 epochNumber => bool passedUptime) uptimeCheck; // will get set to zero when claimed
   EnumerableSet.UintSet claimableEpochNumbers;
-}
-
-struct DelegationInfoView {
-  DelegatorStatus status;
-  uint32 startEpoch;
-  uint32 endEpoch;
-  uint64 startingNonce;
-  uint64 endingNonce;
-  address owner;
-  bytes32 validationID;
-  uint256[] tokenIDs;
 }
 
 struct NFTStakingManagerSettings {
@@ -801,23 +779,7 @@ contract NFTStakingManager is
   ///
   function getSettings() external view returns (NFTStakingManagerSettings memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    // Explicitly create a memory struct and copy fields from storage
-    NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
-      bypassUptimeCheck: $.bypassUptimeCheck,
-      uptimePercentage: $.uptimePercentage,
-      maxLicensesPerValidator: $.maxLicensesPerValidator,
-      initialEpochTimestamp: $.initialEpochTimestamp,
-      epochDuration: $.epochDuration,
-      gracePeriod: $.gracePeriod,
-      licenseWeight: $.licenseWeight,
-      hardwareLicenseWeight: $.hardwareLicenseWeight,
-      validatorManager: address($.manager),
-      license: address($.licenseContract),
-      hardwareLicense: address($.hardwareLicenseContract),
-      epochRewards: $.epochRewards,
-      admin: defaultAdmin()
-    });
-    return settings;
+    return NFTStakingManagerViews.getSettings($);
   }
 
   function setBypassUptimeCheck(bool bypass) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -860,45 +822,6 @@ contract NFTStakingManager is
   function getValidationIDs() external view returns (bytes32[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.validationIDs.values();
-  }
-
-  function getDelegationInfoView(bytes32 delegationID)
-    external
-    view
-    returns (DelegationInfoView memory)
-  {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage delegation = $.delegations[delegationID];
-    return DelegationInfoView({
-      status: delegation.status,
-      owner: delegation.owner,
-      validationID: delegation.validationID,
-      startEpoch: delegation.startEpoch,
-      endEpoch: delegation.endEpoch,
-      startingNonce: delegation.startingNonce,
-      endingNonce: delegation.endingNonce,
-      tokenIDs: delegation.tokenIDs
-    });
-  }
-
-  function getValidationInfoView(bytes32 validationID)
-    external
-    view
-    returns (ValidationInfoView memory)
-  {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationID];
-    return ValidationInfoView({
-      owner: validation.owner,
-      hardwareTokenID: validation.hardwareTokenID,
-      startEpoch: validation.startEpoch,
-      endEpoch: validation.endEpoch,
-      licenseCount: validation.licenseCount,
-      registrationMessage: validation.registrationMessage,
-      lastUptimeSeconds: validation.lastUptimeSeconds,
-      lastSubmissionTime: validation.lastSubmissionTime,
-      delegationFeeBips: validation.delegationFeeBips
-    });
   }
 
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
