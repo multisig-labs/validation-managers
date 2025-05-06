@@ -7,6 +7,7 @@ import {
   DelegationInfo,
   DelegationInfoView,
   EpochInfo,
+  EpochInfoView,
   NFTStakingManager,
   NFTStakingManagerSettings,
   ValidationInfo,
@@ -266,7 +267,7 @@ contract NFTStakingManagerTest is Base {
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
     nftStakingManager.processProof(uint32(0));
 
-    EpochInfo memory epoch = nftStakingManager.getEpochInfo(rewardsEpoch);
+    EpochInfoView memory epoch = nftStakingManager.getEpochInfoView(rewardsEpoch);
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch1AfterGracePeriod);
@@ -419,8 +420,8 @@ contract NFTStakingManagerTest is Base {
     vm.warp(startTime + epochDuration * 3 + GRACE_PERIOD / 2);
     _processUptimeProof(validationID, (uint256(epochDuration) * 3 * 90) / 100);
 
-    EpochInfo memory epoch =
-      nftStakingManager.getEpochInfo(nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
+    EpochInfoView memory epoch =
+      nftStakingManager.getEpochInfoView(nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch3AfterGracePeriod);

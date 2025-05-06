@@ -36,6 +36,11 @@ interface INativeMinter {
 
 struct EpochInfo {
   uint256 totalStakedLicenses;
+  mapping(bytes32 => bool isRewardsMinted) isRewardsMinted;
+}
+
+struct EpochInfoView {
+  uint256 totalStakedLicenses;
 }
 
 struct ValidationInfo {
@@ -156,7 +161,6 @@ contract NFTStakingManager is
     mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
     // Epoch state
     mapping(uint32 epochNumber => EpochInfo) epochs;
-    mapping(uint32 epochNumber => mapping(uint256 tokenID => bool isRewardsMinted)) isRewardsMinted; // ensure we just mint rewards once per epoch/ tokenID combo
   }
 
   NFTStakingManagerStorage private _storage;
@@ -699,6 +703,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationID];
     ValidationInfo storage validation = $.validations[delegation.validationID];
+    EpochInfo storage epochInfo = $.epochs[epoch];
 
     if (delegation.owner == address(0)) {
       revert DelegationDoesNotExist();
@@ -723,11 +728,11 @@ contract NFTStakingManager is
       if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
         revert TokenNotLockedByDelegationID();
       }
-      if ($.isRewardsMinted[epoch][delegation.tokenIDs[i]]) {
+      if (epochInfo.isRewardsMinted[_getKey(epoch, delegation.tokenIDs[i])]) {
         revert RewardsAlreadyMintedForTokenID();
       }
 
-      $.isRewardsMinted[epoch][delegation.tokenIDs[i]] = true;
+      epochInfo.isRewardsMinted[_getKey(epoch, delegation.tokenIDs[i])] = true;
     }
 
     // If the license holder has prepaid credits, deduct them.
@@ -842,9 +847,11 @@ contract NFTStakingManager is
     return $.initialEpochTimestamp + (epoch * $.epochDuration);
   }
 
-  function getEpochInfo(uint32 epoch) external view returns (EpochInfo memory) {
+  function getEpochInfoView(uint32 epoch) external view returns (EpochInfoView memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochs[epoch];
+    return EpochInfoView({
+      totalStakedLicenses: $.epochs[epoch].totalStakedLicenses
+    });
   }
 
   function getTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
@@ -904,6 +911,10 @@ contract NFTStakingManager is
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationID].claimableRewardsPerEpoch[epoch];
+  }
+  
+  function _getKey(uint32 epochNumber, uint256 tokenID) internal pure returns (bytes32) {
+    return keccak256(abi.encode(epochNumber, tokenID));
   }
 
   function _expectedUptime() internal view returns (uint256) {
