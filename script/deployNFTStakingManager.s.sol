@@ -11,8 +11,8 @@ import { ValidatorManager } from
 
 contract DeployNFTStakingManager is Script {
   address public proxyAddress = 0x0Feedc0de0000000000000000000000000000000;
-  address public licenseAddress = 0x0dD45650e59FfBa636a58Fe65957842b8a109e36;
-  address public hardwareLicenseAddress = 0xa6aa420bB27d88614A59A8bb6FD2A28368A49902;
+  address public licenseAddress = vm.envAddress("NODE_LICENSE");
+  address public hardwareLicenseAddress = vm.envAddress("HWOP_LICENSE");
 
   function run() external {
     vm.startBroadcast();

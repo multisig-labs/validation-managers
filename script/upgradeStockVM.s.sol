@@ -16,6 +16,8 @@ contract UpgradeValidatorManager is Script {
   address public proxyAdminAddress = 0xC0fFEE1234567890aBCdeF1234567890abcDef34;
 
   function run() external {
+    bytes32[] memory validationIDs = vm.envBytes32("VALIDATION_IDS", ",");
+
     vm.startBroadcast();
 
     address implementation = address(new ValidatorManager(ICMInitializable.Disallowed));
@@ -29,13 +31,10 @@ contract UpgradeValidatorManager is Script {
     console.log("Proxy upgraded at ", proxyAddress);
 
     ValidatorManager vmgr = ValidatorManager(proxyAddress);
-    vmgr.migrateFromV1(
-      bytes32(0x31f187560e731c9cea5d3a23de6e6520bc1e47255c2ac24d4d6d7b29adb9f44f), 0
-    );
-    vmgr.migrateFromV1(
-      bytes32(0x5ea1abf3a75e14a1c5103cf6df5a9f8f71ee50c113d9605945f892cb88b11a99), 0
-    );
-
+    for (uint256 i = 0; i < validationIDs.length; i++) {
+      console.log("Migrating validationID");
+      vmgr.migrateFromV1(validationIDs[i], 0);
+    }
     vm.stopBroadcast();
   }
 }
