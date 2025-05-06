@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { console2 } from "forge-std-1.9.6/src/console2.sol";
-
 import { IERC721 } from "@openzeppelin-contracts-5.3.0/token/ERC721/IERC721.sol";
 import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 
@@ -169,6 +167,8 @@ contract NFTStakingManager is
   ///
   IWarpMessenger public constant WARP_MESSENGER =
     IWarpMessenger(0x0200000000000000000000000000000000000005);
+  INativeMinter public constant NATIVE_MINTER =
+    INativeMinter(0x0200000000000000000000000000000000000001);
   // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
   bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
     0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
@@ -344,7 +344,6 @@ contract NFTStakingManager is
 
     ValidationInfo storage validation = $.validations[validationID];
 
-    console2.log("epoch", getEpochByTimestamp(block.timestamp));
     validation.startEpoch = getEpochByTimestamp(block.timestamp);
 
     emit CompletedValidatorRegistration(validationID, validation.startEpoch);
@@ -627,11 +626,8 @@ contract NFTStakingManager is
   }
 
   function processProof(uint32 messageIndex) public {
-    bytes32 uptimeBlockchainID = 0x0000000000000000000000000000000000000000000000000000000000000000;
-
-    (bytes32 validationID, uint64 uptimeSeconds) = ValidatorMessages.unpackValidationUptimeMessage(
-      _getPChainWarpMessage(messageIndex, uptimeBlockchainID).payload
-    );
+    (bytes32 validationID, uint64 uptimeSeconds) =
+      ValidatorMessages.unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex).payload);
 
     uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
     epoch--;
@@ -697,9 +693,7 @@ contract NFTStakingManager is
       }
     }
 
-    INativeMinter(0x0200000000000000000000000000000000000001).mintNativeCoin(
-      address(this), rewardsToMint
-    );
+    NATIVE_MINTER.mintNativeCoin(address(this), rewardsToMint);
   }
 
   // verify that the user had a valid uptime for the given epcoh
@@ -970,18 +964,14 @@ contract NFTStakingManager is
     $.hardwareTokenLockedBy[tokenID] = bytes32(0);
   }
 
-  function _getPChainWarpMessage(uint32 messageIndex, bytes32 expectedSourceChainID)
-    internal
-    view
-    returns (WarpMessage memory)
-  {
+  function _getPChainWarpMessage(uint32 messageIndex) internal view returns (WarpMessage memory) {
     (WarpMessage memory warpMessage, bool valid) =
       WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);
     if (!valid) {
       revert InvalidWarpMessage();
     }
     // Must match to P-Chain blockchain id, which is 0.
-    if (warpMessage.sourceChainID != expectedSourceChainID) {
+    if (warpMessage.sourceChainID != bytes32(0)) {
       revert InvalidWarpSourceChainID(warpMessage.sourceChainID);
     }
     if (warpMessage.originSenderAddress != address(0)) {
