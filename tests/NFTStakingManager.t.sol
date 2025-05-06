@@ -144,7 +144,7 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
 
     uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
-    
+
     bytes32[] memory delegationIDs = new bytes32[](1);
     delegationIDs[0] = delegationID;
 
@@ -180,15 +180,13 @@ contract NFTStakingManagerTest is Base {
     vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
     nftStakingManager.initiateValidatorRemoval(validationID);
     vm.stopPrank();
-    
-    
+
     bytes32[] memory delegationIDs = new bytes32[](1);
     delegationIDs[0] = delegationID;
 
     vm.prank(validator);
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
-    
-    
+
     vm.prank(validator);
     nftStakingManager.initiateValidatorRemoval(validationID);
 

@@ -53,7 +53,6 @@ struct ValidationInfo {
   address owner;
   uint256 hardwareTokenID;
   bytes registrationMessage;
-
   EnumerableSet.Bytes32Set delegationIDs;
   EnumerableMap.UintToUintMap claimableRewardsPerEpoch;
 }
@@ -86,7 +85,6 @@ struct DelegationInfo {
   address owner;
   bytes32 validationID;
   uint256[] tokenIDs;
-
   EnumerableMap.UintToUintMap claimableRewardsPerEpoch;
   EnumerableSet.UintSet uptimeCheck;
 }
@@ -684,6 +682,7 @@ contract NFTStakingManager is
       revert GracePeriodHasNotPassed();
     }
 
+    uint256 rewardsToMint = 0;
     for (uint256 i = 0; i < validationIDs.length; i++) {
       ValidationInfo storage validation = $.validations[validationIDs[i]];
       uint256 totalDelegations = validation.delegationIDs.length();
@@ -693,15 +692,22 @@ contract NFTStakingManager is
         DelegationInfo storage delegation = $.delegations[delegationID];
         // TODO: revist this epoch check
         if (delegation.uptimeCheck.contains(epoch) && epoch >= delegation.startEpoch) {
-          _mintDelegatorRewards(epoch, delegationID);
+          rewardsToMint += _mintDelegatorRewards(epoch, delegationID);
         }
       }
     }
+
+    INativeMinter(0x0200000000000000000000000000000000000001).mintNativeCoin(
+      address(this), rewardsToMint
+    );
   }
 
   // verify that the user had a valid uptime for the given epcoh
   // TODO epoch is always the prev epoch, so dont pass in.
-  function _mintDelegatorRewards(uint32 epoch, bytes32 delegationID) internal {
+  function _mintDelegatorRewards(uint32 epoch, bytes32 delegationID)
+    internal
+    returns (uint256 rewardsToMint)
+  {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationID];
     ValidationInfo storage validation = $.validations[delegation.validationID];
@@ -730,7 +736,7 @@ contract NFTStakingManager is
       if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
         revert TokenNotLockedByDelegationID();
       }
-      if (epochInfo.rewardsMintedFor.contains(delegation.tokenIDs[i])){
+      if (epochInfo.rewardsMintedFor.contains(delegation.tokenIDs[i])) {
         revert RewardsAlreadyMintedForTokenID();
       }
 
@@ -757,11 +763,12 @@ contract NFTStakingManager is
 
     validation.claimableRewardsPerEpoch.set(uint256(epoch), delegationFee);
 
-    uint256 rewards = totalRewards - delegationFee;
-    delegation.claimableRewardsPerEpoch.set(uint256(epoch), rewards);
-    // TODO prob should return rwds amt then mint once the whole amount in the fn above
-    INativeMinter(0x0200000000000000000000000000000000000001).mintNativeCoin(address(this), rewards);
-    emit RewardsMinted(epoch, delegationID, rewards);
+    uint256 delegatorRewards = totalRewards - delegationFee;
+    delegation.claimableRewardsPerEpoch.set(uint256(epoch), delegatorRewards);
+
+    emit RewardsMinted(epoch, delegationID, totalRewards);
+
+    return totalRewards;
   }
 
   function claimRewards(bytes32 delegationID, uint32 maxEpochs)
@@ -792,11 +799,7 @@ contract NFTStakingManager is
 
     // Events (after all state changes)
     for (uint32 i = 0; i < maxEpochs; i++) {
-      emit RewardsClaimed(
-        claimedEpochNumbers[i],
-        delegationID,
-        rewardsAmounts[i]
-      );
+      emit RewardsClaimed(claimedEpochNumbers[i], delegationID, rewardsAmounts[i]);
     }
 
     payable(delegation.owner).sendValue(totalRewards);
@@ -851,9 +854,7 @@ contract NFTStakingManager is
 
   function getEpochInfoView(uint32 epoch) external view returns (EpochInfoView memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return EpochInfoView({
-      totalStakedLicenses: $.epochs[epoch].totalStakedLicenses
-    });
+    return EpochInfoView({ totalStakedLicenses: $.epochs[epoch].totalStakedLicenses });
   }
 
   function getTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
@@ -914,7 +915,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationID].claimableRewardsPerEpoch.get(uint256(epoch));
   }
-  
+
   function _getKey(uint32 epochNumber, uint256 tokenID) internal pure returns (bytes32) {
     return keccak256(abi.encode(epochNumber, tokenID));
   }
