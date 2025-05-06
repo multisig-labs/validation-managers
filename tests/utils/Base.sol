@@ -37,4 +37,23 @@ abstract contract Base is Test {
     addresses[0] = 0x1234567812345678123456781234567812345678;
     DEFAULT_P_CHAIN_OWNER = PChainOwner({ threshold: 1, addresses: addresses });
   }
+
+  // Copy over some funcs from DSTestPlus
+  string private checkpointLabel;
+  uint256 private checkpointGasLeft;
+
+  function startMeasuringGas(string memory label) internal virtual {
+    checkpointLabel = label;
+    checkpointGasLeft = gasleft();
+  }
+
+  function stopMeasuringGas() internal virtual {
+    uint256 checkpointGasLeft2 = gasleft();
+
+    string memory label = checkpointLabel;
+
+    emit log_named_uint(
+      string(abi.encodePacked(label, " Gas")), checkpointGasLeft - checkpointGasLeft2
+    );
+  }
 }

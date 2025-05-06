@@ -7,6 +7,7 @@ import {
   DelegationInfo,
   DelegationInfoView,
   EpochInfo,
+  EpochInfoView,
   NFTStakingManager,
   NFTStakingManagerSettings,
   ValidationInfo,
@@ -35,7 +36,7 @@ contract NFTStakingManagerTest is Base {
   address public admin;
 
   uint256 public epochRewards = 1000 ether;
-  uint16 public MAX_LICENSES_PER_VALIDATOR = 10;
+  uint16 public MAX_LICENSES_PER_VALIDATOR = 40;
   uint64 public LICENSE_WEIGHT = 1000;
   uint64 public HARDWARE_LICENSE_WEIGHT = 0;
   uint32 public GRACE_PERIOD = 1 hours;
@@ -98,6 +99,7 @@ contract NFTStakingManagerTest is Base {
   function test_initiateValidatorRegistration() public {
     address validator = getActor("Validator");
     uint256 hardwareTokenId = hardwareNft.mint(validator);
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
 
     vm.startPrank(validator);
     bytes32 validationID = nftStakingManager.initiateValidatorRegistration(
@@ -118,8 +120,91 @@ contract NFTStakingManagerTest is Base {
     assertEq(nftStakingManager.getValidationIDs().length, 1);
     assertEq(nftStakingManager.getValidationIDs()[0], validationID);
 
+    ValidationInfoView memory validationInfoView =
+      nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validationInfoView.startEpoch, 0);
+    assertEq(validationInfoView.delegationFeeBips, DELEGATION_FEE_BIPS);
+    assertEq(validationInfoView.owner, validator);
+    assertEq(validationInfoView.hardwareTokenID, hardwareTokenId);
+
     nftStakingManager.completeValidatorRegistration(0);
+    validationInfoView = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validatorManager.validating(validationID), true);
+    assertEq(validationInfoView.startEpoch, currentEpoch);
+  }
+
+  function test_initiateValidatorRemoval() public {
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    address otherAddress = getActor("OtherAddress");
+    vm.startPrank(otherAddress);
+    vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+    vm.stopPrank();
+
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+
+    vm.startPrank(validator);
+    vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+
+    ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validationInfo.endEpoch, currentEpoch);
+
+    // Verify delegated tokens are unlocked
+    // DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
+    // for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
+    //   assertEq(nftStakingManager.getTokenLockedBy(delegation.tokenIDs[i]), bytes32(0));
+    // }
+
+    assertEq(validatorManager.pendingRemoval(validationID), true);
+    assertEq(validatorManager.validating(validationID), false);
+  }
+
+  function test_completeValidatorRemoval() public {
+    // Create validator and initiate removal
+    address validator = getActor("Validator");
+    uint256 hardwareTokenId = hardwareNft.mint(validator);
+
+    (bytes32 validationID,) = _createValidator(validator, hardwareTokenId);
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    vm.startPrank(validator);
+    vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+    vm.stopPrank();
+    
+    
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+
+    vm.prank(validator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    
+    
+    vm.prank(validator);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+
+    // Complete the removal
+    nftStakingManager.completeValidatorRemoval(0);
+
+    // Verify validator is removed from the list
+    // bytes32[] memory validationIDs = nftStakingManager.getValidationIDs();
+    // assertEq(validationIDs.length, 0);
+
+    // Verify hardware token is unlocked
+    assertEq(nftStakingManager.getHardwareTokenLockedBy(hardwareTokenId), bytes32(0));
+
+    // Verify validator manager state
+    assertEq(validatorManager.pendingRemoval(validationID), false);
+    assertEq(validatorManager.validating(validationID), false);
   }
 
   function test_initiateDelegatorRegistration() public {
@@ -134,18 +219,18 @@ contract NFTStakingManagerTest is Base {
     nftStakingManager.addPrepaidCredits(delegator, uint32(1 days));
 
     vm.startPrank(delegator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
+    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
     vm.stopPrank();
 
-    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIDs.length, 1);
     assertEq(delegation.tokenIDs[0], 0);
     assertEq(delegation.validationID, validationID);
 
-    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
+    nftStakingManager.completeDelegatorRegistration(delegationID, 0);
 
-    delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.startEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp));
 
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
@@ -154,24 +239,15 @@ contract NFTStakingManagerTest is Base {
     assertEq(validatorManager.weights(validationID), LICENSE_WEIGHT);
   }
 
-  function _mockGetUptimeWarpMessage(bytes memory expectedPayload, bool valid, uint32 index)
-    internal
-  {
-    vm.mockCall(
-      WARP_PRECOMPILE_ADDRESS,
-      abi.encodeWithSelector(IWarpMessenger.getVerifiedWarpMessage.selector, index),
-      abi.encode(
-        WarpMessage({
-          sourceChainID: 0x0000000000000000000000000000000000000000000000000000000000000000,
-          originSenderAddress: address(0),
-          payload: expectedPayload
-        }),
-        valid
-      )
-    );
-    vm.expectCall(
-      WARP_PRECOMPILE_ADDRESS, abi.encodeCall(IWarpMessenger.getVerifiedWarpMessage, index)
-    );
+  function test_initiateDelegatorRemoval_multiple() public {
+    (bytes32 validationID, address validator) = _createValidator();
+    // I want a function that creates multiple delegations
+    bytes32[] memory delegationIDs = _createMultipleDelegations(validationID, validator, 20);
+
+    vm.startPrank(validator);
+    startMeasuringGas("initiateDelegatorRemoval");
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    stopMeasuringGas();
   }
 
   function test_processProof_base() public {
@@ -189,7 +265,7 @@ contract NFTStakingManagerTest is Base {
 
     uint32 rewardsEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
     (bytes32 validationID, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationID, 1);
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
@@ -213,14 +289,14 @@ contract NFTStakingManagerTest is Base {
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
     nftStakingManager.processProof(uint32(0));
 
-    EpochInfo memory epoch = nftStakingManager.getEpochInfo(rewardsEpoch);
+    EpochInfoView memory epoch = nftStakingManager.getEpochInfoView(rewardsEpoch);
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch1AfterGracePeriod);
     mintOneReward(validationID, rewardsEpoch);
 
     // check that the delegator has rewards
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, rewardsEpoch);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, rewardsEpoch);
     assertEq(rewards, epochRewards);
     rewardsEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
 
@@ -233,12 +309,12 @@ contract NFTStakingManagerTest is Base {
     vm.warp(epoch2AfterGracePeriod);
     mintOneReward(validationID, rewardsEpoch);
 
-    rewards = nftStakingManager.getRewardsForEpoch(delegationId, rewardsEpoch);
+    rewards = nftStakingManager.getRewardsForEpoch(delegationID, rewardsEpoch);
     assertEq(rewards, epochRewards);
 
     vm.prank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationId, 2);
+      nftStakingManager.claimRewards(delegationID, 2);
 
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
@@ -248,7 +324,7 @@ contract NFTStakingManagerTest is Base {
 
   function test_DelegationFee_NoCredits() public {
     (bytes32 validationID,) = _createValidator();
-    (bytes32 delegationId,) = _createDelegation(validationID, 1);
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
     vm.warp(block.timestamp + 1 days + 1 seconds);
     bytes memory uptimeMessage =
@@ -258,13 +334,13 @@ contract NFTStakingManagerTest is Base {
 
     vm.warp(block.timestamp + 1 hours);
     mintOneReward(validationID, 1);
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 1);
     assertEq(rewards, 900 ether);
   }
 
   function test_DelegationFee_AllCredits_OneLicense() public {
     (bytes32 validationID, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationID, 1);
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, 1 days);
@@ -277,13 +353,13 @@ contract NFTStakingManagerTest is Base {
 
     vm.warp(block.timestamp + 1 hours);
     mintOneReward(validationID, 1);
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 1);
     assertEq(rewards, 1000 ether);
   }
 
   function test_DelegationFee_AllCredits_10Licenses() public {
     (bytes32 validationID, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationID, 10);
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 10);
 
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, 10 days);
@@ -296,13 +372,13 @@ contract NFTStakingManagerTest is Base {
 
     vm.warp(block.timestamp + 1 hours);
     mintOneReward(validationID, 1);
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 1);
     assertEq(rewards, 1000 ether);
   }
 
   function test_DelegationFee_HalfCredits_10Licenses() public {
     (bytes32 validationID, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationID, 10);
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 10);
 
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, 5 days);
@@ -315,7 +391,7 @@ contract NFTStakingManagerTest is Base {
 
     vm.warp(block.timestamp + 1 hours);
     mintOneReward(validationID, 1);
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 1);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 1);
     assertEq(rewards, 500 ether + 500 ether * 90 / 100);
   }
 
@@ -344,7 +420,7 @@ contract NFTStakingManagerTest is Base {
     uint256 epochDuration = 1 days;
 
     (bytes32 validationID, address validator) = _createValidator();
-    (bytes32 delegationId, address delegator) = _createDelegation(validationID, 1);
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
@@ -366,64 +442,14 @@ contract NFTStakingManagerTest is Base {
     vm.warp(startTime + epochDuration * 3 + GRACE_PERIOD / 2);
     _processUptimeProof(validationID, (uint256(epochDuration) * 3 * 90) / 100);
 
-    EpochInfo memory epoch =
-      nftStakingManager.getEpochInfo(nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
+    EpochInfoView memory epoch =
+      nftStakingManager.getEpochInfoView(nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
     assertEq(epoch.totalStakedLicenses, 1);
 
     vm.warp(epoch3AfterGracePeriod);
     mintOneReward(validationID, 3);
-    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationId, 3);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 3);
     assertEq(rewards, epochRewards);
-  }
-
-  function _createValidator() internal returns (bytes32, address) {
-    address validator = getActor("Validator");
-    uint256 hardwareTokenId = hardwareNft.mint(validator);
-
-    vm.startPrank(admin);
-    nftStakingManager.grantRole(nftStakingManager.PREPAYMENT_ROLE(), validator);
-    vm.stopPrank();
-
-    vm.startPrank(validator);
-    bytes32 validationID = nftStakingManager.initiateValidatorRegistration(
-      DEFAULT_NODE_ID,
-      DEFAULT_BLS_PUBLIC_KEY,
-      DEFAULT_BLS_POP,
-      DEFAULT_P_CHAIN_OWNER,
-      DEFAULT_P_CHAIN_OWNER,
-      hardwareTokenId,
-      DELEGATION_FEE_BIPS
-    );
-    nftStakingManager.completeValidatorRegistration(0);
-    vm.stopPrank();
-
-    return (validationID, validator);
-  }
-
-  function _processUptimeProof(bytes32 validationID, uint256 uptimeSeconds) internal {
-    bytes memory uptimeMessage =
-      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeSeconds));
-    _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
-  }
-
-  function _createDelegation(bytes32 validationID, uint256 licenseCount)
-    internal
-    returns (bytes32, address)
-  {
-    address delegator = getActor("Delegator1");
-    uint256[] memory tokenIDs = new uint256[](licenseCount);
-
-    for (uint256 i = 0; i < licenseCount; i++) {
-      tokenIDs[i] = nft.mint(delegator);
-    }
-
-    vm.startPrank(delegator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
-    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
-    vm.stopPrank();
-
-    return (delegationId, delegator);
   }
 
   function test_multipleDelegatorsWithDifferentTokens() public {
@@ -447,9 +473,9 @@ contract NFTStakingManagerTest is Base {
     vm.stopPrank();
 
     // Create delegations with different token amounts
-    bytes32 delegationId1 = createDelegation(validationID, delegator1, 1);
-    bytes32 delegationId2 = createDelegation(validationID, delegator2, 2);
-    bytes32 delegationId3 = createDelegation(validationID, delegator3, 3);
+    bytes32 delegationId1 = _createDelegation(validationID, delegator1, 1);
+    bytes32 delegationId2 = _createDelegation(validationID, delegator2, 2);
+    bytes32 delegationId3 = _createDelegation(validationID, delegator3, 3);
 
     // Verify total staked licenses
     // assertEq(nftStakingManager.getCurrentTotalStakedLicenses(), 6);
@@ -496,22 +522,22 @@ contract NFTStakingManagerTest is Base {
 
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId =
+    bytes32 delegationID =
       nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationID, delegator, tokenIDs);
     vm.stopPrank();
 
     // Verify the delegation was created correctly
-    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIDs.length, 1);
     assertEq(delegation.tokenIDs[0], tokenIDs[0]);
     assertEq(delegation.validationID, validationID);
 
     // Complete the registration
-    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
+    nftStakingManager.completeDelegatorRegistration(delegationID, 0);
 
     // Verify the delegation is active
-    delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.startEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp));
 
     // Verify the validator's license count
@@ -565,12 +591,12 @@ contract NFTStakingManagerTest is Base {
 
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId =
+    bytes32 delegationID =
       nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationID, delegator, tokenIDs);
     vm.stopPrank();
 
     // Verify the delegation was created correctly
-    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIDs.length, 2);
     assertEq(delegation.tokenIDs[0], tokenIDs[0]);
@@ -597,12 +623,12 @@ contract NFTStakingManagerTest is Base {
 
     // Call the new function as the hardware provider
     vm.startPrank(validator);
-    bytes32 delegationId =
+    bytes32 delegationID =
       nftStakingManager.initiateDelegatorRegistrationOnBehalfOf(validationID, delegator, tokenIDs);
     vm.stopPrank();
 
     // Verify the delegation was created correctly
-    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationId);
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIDs.length, 3);
     assertEq(delegation.tokenIDs[0], tokenIDs[0]);
@@ -611,22 +637,100 @@ contract NFTStakingManagerTest is Base {
     assertEq(delegation.validationID, validationID);
   }
 
-  function createDelegation(bytes32 validationID, address delegator, uint256 licenseCount)
-    internal
-    returns (bytes32)
-  {
-    vm.startPrank(delegator);
-    bytes32 delegationId = nftStakingManager.initiateDelegatorRegistration(
-      validationID, nft.batchMint(delegator, licenseCount)
-    );
-    nftStakingManager.completeDelegatorRegistration(delegationId, 0);
-    vm.stopPrank();
-    return delegationId;
-  }
-
   function mintOneReward(bytes32 validationID, uint32 epoch) internal {
     bytes32[] memory validationIDs = new bytes32[](1);
     validationIDs[0] = validationID;
     nftStakingManager.mintRewards(validationIDs, epoch);
+  }
+
+  function _createValidator() internal returns (bytes32, address) {
+    address validator = getActor("Validator");
+    uint256 hardwareTokenId = hardwareNft.mint(validator);
+
+    return _createValidator(validator, hardwareTokenId);
+  }
+
+  function _createValidator(address validator, uint256 hardwareTokenId)
+    internal
+    returns (bytes32, address)
+  {
+    vm.startPrank(admin);
+    nftStakingManager.grantRole(nftStakingManager.PREPAYMENT_ROLE(), validator);
+    vm.stopPrank();
+
+    vm.startPrank(validator);
+    bytes32 validationID = nftStakingManager.initiateValidatorRegistration(
+      DEFAULT_NODE_ID,
+      DEFAULT_BLS_PUBLIC_KEY,
+      DEFAULT_BLS_POP,
+      DEFAULT_P_CHAIN_OWNER,
+      DEFAULT_P_CHAIN_OWNER,
+      hardwareTokenId,
+      DELEGATION_FEE_BIPS
+    );
+    nftStakingManager.completeValidatorRegistration(0);
+    vm.stopPrank();
+
+    return (validationID, validator);
+  }
+
+  function _processUptimeProof(bytes32 validationID, uint256 uptimeSeconds) internal {
+    bytes memory uptimeMessage =
+      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeSeconds));
+    _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
+    nftStakingManager.processProof(uint32(0));
+  }
+
+  function _createMultipleDelegations(bytes32 validationID, address delegator, uint256 count)
+    internal
+    returns (bytes32[] memory delegationIDs)
+  {
+    delegationIDs = new bytes32[](count);
+    for (uint256 i = 0; i < count; i++) {
+      delegationIDs[i] = _createDelegation(validationID, delegator, 1);
+    }
+    return delegationIDs;
+  }
+
+  function _createDelegation(bytes32 validationID, address delegator, uint256 licenseCount)
+    internal
+    returns (bytes32)
+  {
+    vm.startPrank(delegator);
+    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(
+      validationID, nft.batchMint(delegator, licenseCount)
+    );
+    nftStakingManager.completeDelegatorRegistration(delegationID, 0);
+    vm.stopPrank();
+    return delegationID;
+  }
+
+  function _createDelegation(bytes32 validationID, uint256 licenseCount)
+    internal
+    returns (bytes32, address)
+  {
+    address delegator = getActor("Delegator1");
+    bytes32 delegationID = _createDelegation(validationID, delegator, licenseCount);
+    return (delegationID, delegator);
+  }
+
+  function _mockGetUptimeWarpMessage(bytes memory expectedPayload, bool valid, uint32 index)
+    internal
+  {
+    vm.mockCall(
+      WARP_PRECOMPILE_ADDRESS,
+      abi.encodeWithSelector(IWarpMessenger.getVerifiedWarpMessage.selector, index),
+      abi.encode(
+        WarpMessage({
+          sourceChainID: 0x0000000000000000000000000000000000000000000000000000000000000000,
+          originSenderAddress: address(0),
+          payload: expectedPayload
+        }),
+        valid
+      )
+    );
+    vm.expectCall(
+      WARP_PRECOMPILE_ADDRESS, abi.encodeCall(IWarpMessenger.getVerifiedWarpMessage, index)
+    );
   }
 }

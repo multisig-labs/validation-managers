@@ -119,7 +119,7 @@ struct EpochInfo {
 |var|initReg|completeReg|initRemoval|completeRemoval|
 |---|---|---|---|---|
 |`set::validationIDs`|add|-|-|delete|
-|`v::startEpoch`|record|-|-|-|
+|`v::startEpoch`|-|record|-|-|
 |`v::endEpoch`|-|-|record|-|
 |`v::licenseCount`|-|-|-|-|
 |`v::lastUptimeSeconds`|-|-|-|-|
