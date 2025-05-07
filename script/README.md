@@ -1,15 +1,15 @@
-
 # Setup and Deployment
 
 
 ## Environment variables
 All scripts rely on these two environment variables 
 
-`ETH_RPC_URL` . RPC url of the subnet
+|env var| description |
+|---|---|
+| `ETH_RPC_URL` | RPC url of the subnet|
+| `PRIVATE_KEY` | private key of deployer|
 
-`PRIVATE_KEY` of deployer
-
-## To upgrade AvaCloud ValidatorManager contracts
+## 1. Upgrade AvaCloud ValidatorManager contracts
 Firstly, update the `ValidatorManager` that was deployed by default on Avacloud. 
 
 You'll need the validationIDs of the current validators. You can find them with the following curl command. 
@@ -32,7 +32,7 @@ forge script upgradeStockVM.s.sol --broadcast
 ```
 
 
-## Deploy NodeLicense
+## 2. Deploy NodeLicense
 
 NodeLicense is the NFT that contributes to the stake weight of a validator through delegation.
 
@@ -57,7 +57,7 @@ forge script deployNodeLicense.s.sol --broadcast
 ```
 
 
-## HardwareOperatorLicense
+## 3. HardwareOperatorLicense
 
 This license is staked to create validators, for node license delegation
 
@@ -78,7 +78,7 @@ bytes memory initData = abi.encodeWithSelector(
 forge script deployHardwareOperatorLicense.s.sol --broadcast
 ```
 
-## NFTStakingManager
+## 4. NFTStakingManager
 
 Now we're ready to deploy the NFTStakingManager. 
 
@@ -88,23 +88,21 @@ Set the newly deployed NodeLicense and HardwareOperatorLicense addresses as envi
 
 Next configure settings in `deployNFTStakingManager.s.sol`
 
-```
-struct NFTStakingManagerSettings {
-  bool bypassUptimeCheck; // flag to bypass uptime check
-  uint16 uptimePercentage; // 100 = 100%, per epoch validator uptime requirement for rewards
-  uint16 maxLicensesPerValidator; // max node licenses that can be staked to a validator
-  uint32 initialEpochTimestamp; // timestamp when rewards epochs will start
-  uint32 epochDuration; // duration of epoch in seconds
-  uint32 gracePeriod; // period after end of an epoch for uptime proofs, in seconds
-  uint64 licenseWeight; // weight that each NodeLicense contributes to the overall validator weight
-  uint64 hardwareLicenseWeight; // weight of the hardware license by itself
-  address admin; // default admin address
-  address validatorManager; // address of validator manager
-  address license; // address of node license
-  address hardwareLicense; // address of hardware license
-  uint256 epochRewards; // amount of rewards per epoch
-}
-```
+| Setting | Type | Description |
+|---|---|---|
+| `bypassUptimeCheck` | bool | Flag to bypass uptime check during testing |
+| `uptimePercentage` | uint16 | Required uptime percentage per epoch (100 = 100%) |
+| `maxLicensesPerValidator` | uint16 | Maximum number of node licenses that can be staked to a validator |
+| `initialEpochTimestamp` | uint32 | Timestamp when rewards epochs will start |
+| `epochDuration` | uint32 | Duration of each epoch in seconds |
+| `gracePeriod` | uint32 | Period after end of an epoch for uptime proofs, in seconds |
+| `licenseWeight` | uint64 | Weight that each NodeLicense contributes to validator weight |
+| `hardwareLicenseWeight` | uint64 | Weight of the hardware license by itself |
+| `admin` | address | Default admin address |
+| `validatorManager` | address | Address of validator manager |
+| `license` | address | Address of node license contract |
+| `hardwareLicense` | address | Address of hardware license contract |
+| `epochRewards` | uint256 | Amount of rewards per epoch |
 
 and run 
 
@@ -115,9 +113,10 @@ forge script deployNFTStakingManager.s.sol --broadcast
 ## After deployment
 Now you can create a validator!
 
-1. Mint a HardwareOperatorLicense to a user. 
+1. Mint a `HardwareOperatorLicense` to a user. 
 2. Call `NFTStakingManager::initiateValidatorRegistration` with all of the hardware node information.
 3. With the warp message index call `NFTStakingManager::completeValidatorRegistration`. We have a backend system that will watch for warp messages and automatically call these `complete` methods that we will setup for you.
+3. Mint a `NodeLicense` to a user
 4. Now NodeLicenses can delegate with `NFTStakingManager::initiateDelegatorRegistration`. 
 5. Complete by calling `NFTStakingManager::completeDelegatorRegistration`. 
 
