@@ -133,21 +133,21 @@ contract NFTStakingManager is
   /// STORAGE
   ///
   struct NFTStakingManagerStorage {
-    bool bypassUptimeCheck; // 1 byte
-    uint16 maxLicensesPerValidator; // 100 // 2 bytes
-    uint16 uptimePercentage; // 100 = 100% // 2 bytes
-    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC  // 4 bytes
-    uint32 currentTotalStakedLicenses; // 4 bytes
-    uint32 epochDuration; // 1 days // 4 bytes
-    uint32 gracePeriod; // starting at 1 hours // 4 bytes
-    uint32 minimumDelegationFeeBips; // 0 // 4 bytes
-    uint32 maximumDelegationFeeBips; // 10000 // 4 bytes
-    uint64 licenseWeight; // 1000 // 8 bytes
-    uint64 hardwareLicenseWeight; // 1 million // 8 bytes
-    ValidatorManager manager; // 20 bytes
-    IERC721 licenseContract; // 20 bytes
-    IERC721 hardwareLicenseContract; // 20 bytes
-    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether // 32 bytes
+    bool bypassUptimeCheck;
+    uint16 maxLicensesPerValidator; // 100
+    uint16 uptimePercentage; // 100 = 100%
+    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC
+    uint32 currentTotalStakedLicenses;
+    uint32 epochDuration; // 1 days
+    uint32 gracePeriod; // starting at 1 hours
+    uint32 minimumDelegationFeeBips; // 0
+    uint32 maximumDelegationFeeBips; // 10000
+    uint64 licenseWeight; // 1000
+    uint64 hardwareLicenseWeight; // 1 million
+    ValidatorManager manager;
+    IERC721 licenseContract;
+    IERC721 hardwareLicenseContract;
+    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
     // Validation state
     EnumerableSet.Bytes32Set validationIDs;
     mapping(bytes32 validationID => ValidationInfo) validations;
