@@ -11,8 +11,15 @@ import {
   NFTStakingManager,
   NFTStakingManagerSettings,
   ValidationInfo,
+  DelegatorStatus,
   ValidationInfoView
 } from "../contracts/NFTStakingManager.sol";
+
+import {
+  PChainOwner,
+  Validator,
+  ValidatorStatus
+} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
 
 import { ERC721Mock } from "./mocks/ERC721Mock.sol";
 import { NativeMinterMock } from "./mocks/NativeMinterMock.sol";
@@ -114,9 +121,12 @@ contract NFTStakingManagerTest is Base {
     );
     vm.stopPrank();
 
+    
+    Validator memory v = validatorManager.getValidator(validationID);
+
     assertEq(hardwareNft.balanceOf(validator), 1);
-    assertEq(validatorManager.created(validationID), true);
-    assertEq(validatorManager.weights(validationID), HARDWARE_LICENSE_WEIGHT);
+    assertEq(uint8(v.status), uint8(ValidatorStatus.PendingAdded));
+    assertEq(v.weight, HARDWARE_LICENSE_WEIGHT);
 
     assertEq(nftStakingManager.getValidationIDs().length, 1);
     assertEq(nftStakingManager.getValidationIDs()[0], validationID);
@@ -129,8 +139,10 @@ contract NFTStakingManagerTest is Base {
     assertEq(validationInfoView.hardwareTokenID, hardwareTokenId);
 
     nftStakingManager.completeValidatorRegistration(0);
+    
+    v = validatorManager.getValidator(validationID);
     validationInfoView = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validatorManager.validating(validationID), true);
+    assertEq(uint8(v.status), uint8(ValidatorStatus.Active));
     assertEq(validationInfoView.startEpoch, currentEpoch);
   }
 
@@ -161,9 +173,10 @@ contract NFTStakingManagerTest is Base {
 
     ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validationInfo.endEpoch, currentEpoch);
+    
+    Validator memory v = validatorManager.getValidator(validationID);
 
-    assertEq(validatorManager.pendingRemoval(validationID), true);
-    assertEq(validatorManager.validating(validationID), false);
+    assertEq(uint8(v.status), uint8(ValidatorStatus.PendingRemoved));
   }
 
   function test_completeValidatorRemoval() public {
@@ -197,10 +210,11 @@ contract NFTStakingManagerTest is Base {
 
     // Verify hardware token is unlocked
     assertEq(nftStakingManager.getHardwareTokenLockedBy(hardwareTokenId), bytes32(0));
+    
+    Validator memory v = validatorManager.getValidator(validationID);
 
     // Verify validator manager state
-    assertEq(validatorManager.pendingRemoval(validationID), false);
-    assertEq(validatorManager.validating(validationID), false);
+    assertEq(uint8(v.status), uint8(ValidatorStatus.Completed));
   }
 
   //
@@ -235,7 +249,8 @@ contract NFTStakingManagerTest is Base {
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validation.licenseCount, 1);
 
-    assertEq(validatorManager.weights(validationID), LICENSE_WEIGHT);
+    Validator memory v = validatorManager.getValidator(validationID);
+    assertEq(v.weight, LICENSE_WEIGHT);
   }
 
   function test_initiateDelegatorRegistrationByOperator_default() public {
@@ -736,6 +751,78 @@ contract NFTStakingManagerTest is Base {
 
     // after staking 2 tokenIds for separate days, the prepayment should be down to 1 day remaining
     assertEq(nftStakingManager.getPrepaidCredits(hardwareProvider, delegator), 1 days);
+  }
+  
+  ///
+  /// NONCE TESTS
+  ///
+  function test_overlappingDelegationWeightUpdates() public {
+    // Create validator
+    (bytes32 validationID, address validator) = _createValidator();
+
+    // Create two delegators
+    address delegator1 = getActor("Delegator1");
+    address delegator2 = getActor("Delegator2");
+
+    // Mint tokens for both delegators
+    uint256[] memory tokenIDs1 = new uint256[](1);
+    uint256[] memory tokenIDs2 = new uint256[](1);
+    tokenIDs1[0] = nft.mint(delegator1);
+    tokenIDs2[0] = nft.mint(delegator2);
+
+    // Add prepaid credits
+    vm.startPrank(validator);
+    nftStakingManager.addPrepaidCredits(delegator1, uint32(1 days));
+    nftStakingManager.addPrepaidCredits(delegator2, uint32(1 days));
+    vm.stopPrank();
+
+    // First delegator initiates registration, should get a lower nonce number
+    vm.prank(delegator1);
+    bytes32 delegationID1 = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs1);
+
+    DelegationInfoView memory delegation1 = nftStakingManager.getDelegationInfoView(delegationID1);
+    uint64 firstNonce = delegation1.startingNonce;
+    
+    Validator memory v = validatorManager.getValidator(validationID);
+    assertEq(v.weight, LICENSE_WEIGHT);
+    assertEq(v.sentNonce, firstNonce);
+    assertEq(v.receivedNonce, 0);
+
+    // Second delegator initiates registration, should get another nonce number that's higher
+    vm.prank(delegator2);
+    bytes32 delegationID2 = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs2);
+
+    DelegationInfoView memory delegation2 = nftStakingManager.getDelegationInfoView(delegationID2);
+    uint64 secondNonce = delegation2.startingNonce;
+    
+    v = validatorManager.getValidator(validationID);
+    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.sentNonce, secondNonce);
+    assertEq(v.receivedNonce, 0);
+    
+    
+    // Complete weight update for second delegation
+    nftStakingManager.completeDelegatorRegistration(delegationID2, uint32(0));
+    
+    v = validatorManager.getValidator(validationID);
+    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.receivedNonce, secondNonce);
+    
+    
+    nftStakingManager.completeDelegatorRegistration(delegationID1, uint32(0));
+
+    v = validatorManager.getValidator(validationID);
+    
+    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.receivedNonce, secondNonce);
+
+
+
+    // Verify both delegations are active
+    delegation1 = nftStakingManager.getDelegationInfoView(delegationID1);
+    delegation2 = nftStakingManager.getDelegationInfoView(delegationID2);
+    assertEq(uint8(delegation1.status), uint8(DelegatorStatus.Active));
+    assertEq(uint8(delegation2.status), uint8(DelegatorStatus.Active));
   }
 
   function _mintOneReward(bytes32 validationID, uint32 epoch) internal {
