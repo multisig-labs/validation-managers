@@ -387,15 +387,186 @@ contract NFTStakingManagerTest is Base {
   //
   // DELEGATOR REMOVAL
   //
-  function test_initiateDelegatorRemoval_multiple() public {
-    (bytes32 validationID, address validator) = _createValidator();
-    // I want a function that creates multiple delegations
-    bytes32[] memory delegationIDs = _createMultipleDelegations(validationID, validator, 20);
+  function test_initiateDelegatorRemoval_unauthorized() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
-    vm.startPrank(validator);
-    startMeasuringGas("initiateDelegatorRemoval");
+    // Unauthorized caller cannot initiate removal
+    address unauthorized = getActor("Unauthorized");
+    vm.startPrank(unauthorized);
+    vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
-    stopMeasuringGas();
+    vm.stopPrank();
+  }
+
+  function test_initiateDelegatorRemoval_invalidStatus() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+
+    // First initiate removal to change status to PendingRemoved
+    vm.startPrank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    vm.stopPrank();
+
+    // Try to remove again - should fail
+    vm.startPrank(delegator);
+    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.PendingRemoved));
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    vm.stopPrank();
+  }
+
+  function test_initiateDelegatorRemoval_byValidator() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+
+    // Validator initiates removal
+    vm.startPrank(validator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    vm.stopPrank();
+
+    // Verify state changes
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(uint8(delegation.status), uint8(DelegatorStatus.PendingRemoved));
+    assertEq(delegation.endEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
+
+    // Verify validator state
+    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.licenseCount, 0);
+  }
+
+  function test_initiateDelegatorRemoval_multiple() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    bytes32[] memory delegationIDs = _createMultipleDelegations(validationID, validator, 3);
+    
+    // Remove all delegations at once
+    vm.startPrank(validator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    vm.stopPrank();
+
+    // Verify all delegations are in PendingRemoved state
+    for (uint256 i = 0; i < delegationIDs.length; i++) {
+      DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationIDs[i]);
+      assertEq(uint8(delegation.status), uint8(DelegatorStatus.PendingRemoved));
+      assertEq(delegation.endEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
+    }
+
+    // Verify validator state
+    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.licenseCount, 0);
+  }
+  
+  //
+  // COMPLETE DELEGATOR REMOVAL
+  //
+  
+  function test_completeDelegatorRemoval_invalidStatus() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    // Try to complete removal without initiating it first
+    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.Active));
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+  }
+
+  function test_completeDelegatorRemoval_invalidNonce() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Initiate removal
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
+
+    validatorManager.setInvalidNonce(validationID, delegation.endingNonce - 1);
+
+    // Mock a weight update with a lower nonce than the delegation's ending nonce
+    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidNonce.selector, delegation.endingNonce - 1));
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+  }
+
+  function test_completeDelegatorRemoval_unexpectedValidationID() public {
+    // Create two validators
+    (bytes32 validationID1,) = _createValidator();
+    (bytes32 validationID2,) = _createValidator();
+    
+    // Create delegations for both validators
+    (bytes32 delegationID1, address delegator) = _createDelegation(validationID1, 1);
+
+    // Initiate removal for first delegation
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID1;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    
+    bytes32 bogusValidationID = validatorManager.randomBytes32();
+    validatorManager.setBadValidationID(bogusValidationID);
+    console2.log("bogus validationid");
+    console2.logBytes32(bogusValidationID);
+    console2.log("real validationId");
+    console2.logBytes32(validationID1);
+
+    // Mock a weight update for the wrong validator
+    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.UnexpectedValidationID.selector, bogusValidationID, validationID1));
+    nftStakingManager.completeDelegatorRemoval(delegationID1, 0);
+  }
+
+  function test_completeDelegatorRemoval_success() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Initiate removal
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+
+    // Complete removal
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+
+    // Verify tokens are unlocked
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
+    for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
+      assertEq(nftStakingManager.getTokenLockedBy(delegation.tokenIDs[i]), bytes32(0));
+    }
+  }
+
+  function test_completeDelegatorRemoval_multipleDelegations() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    bytes32[] memory delegationIDs = _createMultipleDelegations(validationID, validator, 3);
+
+    // Initiate removal for all delegations
+    vm.prank(validator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+
+    // Complete removal for each delegation
+    for (uint256 i = 0; i < delegationIDs.length; i++) {
+      nftStakingManager.completeDelegatorRemoval(delegationIDs[i], 0);
+
+      // Verify tokens are unlocked
+      DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationIDs[i]);
+      for (uint256 j = 0; j < delegation.tokenIDs.length; j++) {
+        assertEq(nftStakingManager.getTokenLockedBy(delegation.tokenIDs[j]), bytes32(0));
+      }
+    }
   }
 
   //

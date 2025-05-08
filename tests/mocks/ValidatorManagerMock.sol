@@ -14,6 +14,8 @@ contract MockValidatorManager {
   uint64 public constant REGISTRATION_EXPIRY_LENGTH = 1 days;
 
   bytes32 public lastValidationID;
+  bytes32 public badValidationID;
+
 
   uint256 private randNonce = 0;
 
@@ -96,8 +98,22 @@ contract MockValidatorManager {
     Validator storage validator = validators[lastValidationID];
     validator.receivedNonce = validator.sentNonce;
     
+    if (badValidationID != bytes32(0)) {
+      bytes32 id = badValidationID;
+      badValidationID = bytes32(0);
+      return (id, validator.receivedNonce);
+    }
     
     return (lastValidationID, validator.receivedNonce);
+  }
+  
+  function setInvalidNonce(bytes32 validationID, uint64 badNonce) external {
+    Validator storage validator = validators[validationID];
+    validator.sentNonce = badNonce;
+  }
+  
+  function setBadValidationID(bytes32 bad) external {
+    badValidationID = bad;
   }
 
   function subnetID() external pure returns (bytes32) {
@@ -109,7 +125,7 @@ contract MockValidatorManager {
     return uint64(randNonce);
   }
 
-  function randomBytes32() internal returns (bytes32) {
+  function randomBytes32() public returns (bytes32) {
     randNonce++;
     return keccak256(abi.encodePacked(block.timestamp, randNonce, address(this)));
   }
