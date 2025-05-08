@@ -16,7 +16,6 @@ contract MockValidatorManager {
   bytes32 public lastValidationID;
   bytes32 public badValidationID;
 
-
   uint256 private randNonce = 0;
 
   function initiateValidatorRegistration(
@@ -27,7 +26,7 @@ contract MockValidatorManager {
     uint64 weight // weight
   ) external returns (bytes32) {
     bytes32 validationID = _getValidationID();
-    
+
     lastValidationID = validationID;
 
     validators[validationID] = Validator({
@@ -52,7 +51,7 @@ contract MockValidatorManager {
     // get the last validationID,
     // how do I parse the message from the messageIndex?
     Validator storage validator = validators[lastValidationID];
-    
+
     validator.status = ValidatorStatus.Active;
     validator.startTime = uint64(block.timestamp);
 
@@ -85,7 +84,7 @@ contract MockValidatorManager {
   {
     Validator storage validator = validators[validationId];
     uint64 nonce = getNextNonce();
-    
+
     validator.sentNonce = nonce;
     validator.weight = weight;
 
@@ -97,21 +96,21 @@ contract MockValidatorManager {
   function completeValidatorWeightUpdate(uint32) external returns (bytes32, uint64) {
     Validator storage validator = validators[lastValidationID];
     validator.receivedNonce = validator.sentNonce;
-    
+
     if (badValidationID != bytes32(0)) {
       bytes32 id = badValidationID;
       badValidationID = bytes32(0);
       return (id, validator.receivedNonce);
     }
-    
+
     return (lastValidationID, validator.receivedNonce);
   }
-  
+
   function setInvalidNonce(bytes32 validationID, uint64 badNonce) external {
     Validator storage validator = validators[validationID];
     validator.sentNonce = badNonce;
   }
-  
+
   function setBadValidationID(bytes32 bad) external {
     badValidationID = bad;
   }
@@ -129,7 +128,7 @@ contract MockValidatorManager {
     randNonce++;
     return keccak256(abi.encodePacked(block.timestamp, randNonce, address(this)));
   }
-  
+
   function setNonce(bytes32 validationID, uint64 nonce) external {
     Validator storage validator = validators[validationID];
     validator.receivedNonce = nonce;

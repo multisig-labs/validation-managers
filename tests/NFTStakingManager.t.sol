@@ -6,12 +6,12 @@ import { Base } from "./utils/Base.sol";
 import {
   DelegationInfo,
   DelegationInfoView,
+  DelegatorStatus,
   EpochInfo,
   EpochInfoView,
   NFTStakingManager,
   NFTStakingManagerSettings,
   ValidationInfo,
-  DelegatorStatus,
   ValidationInfoView
 } from "../contracts/NFTStakingManager.sol";
 
@@ -121,7 +121,6 @@ contract NFTStakingManagerTest is Base {
     );
     vm.stopPrank();
 
-    
     Validator memory v = validatorManager.getValidator(validationID);
 
     assertEq(hardwareNft.balanceOf(validator), 1);
@@ -139,7 +138,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(validationInfoView.hardwareTokenID, hardwareTokenId);
 
     nftStakingManager.completeValidatorRegistration(0);
-    
+
     v = validatorManager.getValidator(validationID);
     validationInfoView = nftStakingManager.getValidationInfoView(validationID);
     assertEq(uint8(v.status), uint8(ValidatorStatus.Active));
@@ -173,7 +172,7 @@ contract NFTStakingManagerTest is Base {
 
     ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validationInfo.endEpoch, currentEpoch);
-    
+
     Validator memory v = validatorManager.getValidator(validationID);
 
     assertEq(uint8(v.status), uint8(ValidatorStatus.PendingRemoved));
@@ -210,7 +209,7 @@ contract NFTStakingManagerTest is Base {
 
     // Verify hardware token is unlocked
     assertEq(nftStakingManager.getHardwareTokenLockedBy(hardwareTokenId), bytes32(0));
-    
+
     Validator memory v = validatorManager.getValidator(validationID);
 
     // Verify validator manager state
@@ -417,7 +416,11 @@ contract NFTStakingManagerTest is Base {
 
     // Try to remove again - should fail
     vm.startPrank(delegator);
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.PendingRemoved));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.PendingRemoved
+      )
+    );
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
     vm.stopPrank();
   }
@@ -449,7 +452,7 @@ contract NFTStakingManagerTest is Base {
     // Create validator and delegator
     (bytes32 validationID, address validator) = _createValidator();
     bytes32[] memory delegationIDs = _createMultipleDelegations(validationID, validator, 3);
-    
+
     // Remove all delegations at once
     vm.startPrank(validator);
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
@@ -457,7 +460,8 @@ contract NFTStakingManagerTest is Base {
 
     // Verify all delegations are in PendingRemoved state
     for (uint256 i = 0; i < delegationIDs.length; i++) {
-      DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationIDs[i]);
+      DelegationInfoView memory delegation =
+        nftStakingManager.getDelegationInfoView(delegationIDs[i]);
       assertEq(uint8(delegation.status), uint8(DelegatorStatus.PendingRemoved));
       assertEq(delegation.endEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
     }
@@ -466,18 +470,21 @@ contract NFTStakingManagerTest is Base {
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validation.licenseCount, 0);
   }
-  
+
   //
   // COMPLETE DELEGATOR REMOVAL
   //
-  
   function test_completeDelegatorRemoval_invalidStatus() public {
     // Create validator and delegator
     (bytes32 validationID,) = _createValidator();
     (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
     // Try to complete removal without initiating it first
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.Active));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        NFTStakingManager.InvalidDelegatorStatus.selector, DelegatorStatus.Active
+      )
+    );
     nftStakingManager.completeDelegatorRemoval(delegationID, 0);
   }
 
@@ -491,13 +498,15 @@ contract NFTStakingManagerTest is Base {
     delegationIDs[0] = delegationID;
     vm.prank(delegator);
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
-    
+
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
 
     validatorManager.setInvalidNonce(validationID, delegation.endingNonce - 1);
 
     // Mock a weight update with a lower nonce than the delegation's ending nonce
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.InvalidNonce.selector, delegation.endingNonce - 1));
+    vm.expectRevert(
+      abi.encodeWithSelector(NFTStakingManager.InvalidNonce.selector, delegation.endingNonce - 1)
+    );
     nftStakingManager.completeDelegatorRemoval(delegationID, 0);
   }
 
@@ -505,7 +514,7 @@ contract NFTStakingManagerTest is Base {
     // Create two validators
     (bytes32 validationID1,) = _createValidator();
     (bytes32 validationID2,) = _createValidator();
-    
+
     // Create delegations for both validators
     (bytes32 delegationID1, address delegator) = _createDelegation(validationID1, 1);
 
@@ -514,7 +523,7 @@ contract NFTStakingManagerTest is Base {
     delegationIDs[0] = delegationID1;
     vm.prank(delegator);
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
-    
+
     bytes32 bogusValidationID = validatorManager.randomBytes32();
     validatorManager.setBadValidationID(bogusValidationID);
     console2.log("bogus validationid");
@@ -523,7 +532,11 @@ contract NFTStakingManagerTest is Base {
     console2.logBytes32(validationID1);
 
     // Mock a weight update for the wrong validator
-    vm.expectRevert(abi.encodeWithSelector(NFTStakingManager.UnexpectedValidationID.selector, bogusValidationID, validationID1));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        NFTStakingManager.UnexpectedValidationID.selector, bogusValidationID, validationID1
+      )
+    );
     nftStakingManager.completeDelegatorRemoval(delegationID1, 0);
   }
 
@@ -562,7 +575,8 @@ contract NFTStakingManagerTest is Base {
       nftStakingManager.completeDelegatorRemoval(delegationIDs[i], 0);
 
       // Verify tokens are unlocked
-      DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationIDs[i]);
+      DelegationInfoView memory delegation =
+        nftStakingManager.getDelegationInfoView(delegationIDs[i]);
       for (uint256 j = 0; j < delegation.tokenIDs.length; j++) {
         assertEq(nftStakingManager.getTokenLockedBy(delegation.tokenIDs[j]), bytes32(0));
       }
@@ -923,7 +937,7 @@ contract NFTStakingManagerTest is Base {
     // after staking 2 tokenIds for separate days, the prepayment should be down to 1 day remaining
     assertEq(nftStakingManager.getPrepaidCredits(hardwareProvider, delegator), 1 days);
   }
-  
+
   ///
   /// NONCE TESTS
   ///
@@ -953,7 +967,7 @@ contract NFTStakingManagerTest is Base {
 
     DelegationInfoView memory delegation1 = nftStakingManager.getDelegationInfoView(delegationID1);
     uint64 firstNonce = delegation1.startingNonce;
-    
+
     Validator memory v = validatorManager.getValidator(validationID);
     assertEq(v.weight, LICENSE_WEIGHT);
     assertEq(v.sentNonce, firstNonce);
@@ -965,29 +979,25 @@ contract NFTStakingManagerTest is Base {
 
     DelegationInfoView memory delegation2 = nftStakingManager.getDelegationInfoView(delegationID2);
     uint64 secondNonce = delegation2.startingNonce;
-    
+
     v = validatorManager.getValidator(validationID);
     assertEq(v.weight, LICENSE_WEIGHT * 2);
     assertEq(v.sentNonce, secondNonce);
     assertEq(v.receivedNonce, 0);
-    
-    
+
     // Complete weight update for second delegation
     nftStakingManager.completeDelegatorRegistration(delegationID2, uint32(0));
-    
+
     v = validatorManager.getValidator(validationID);
     assertEq(v.weight, LICENSE_WEIGHT * 2);
     assertEq(v.receivedNonce, secondNonce);
-    
-    
+
     nftStakingManager.completeDelegatorRegistration(delegationID1, uint32(0));
 
     v = validatorManager.getValidator(validationID);
-    
+
     assertEq(v.weight, LICENSE_WEIGHT * 2);
     assertEq(v.receivedNonce, secondNonce);
-
-
 
     // Verify both delegations are active
     delegation1 = nftStakingManager.getDelegationInfoView(delegationID1);

@@ -181,19 +181,27 @@ contract NFTStakingManager is
   /// EVENTS
   ///
   event InitiatedValidatorRegistration(
-    bytes32 indexed validationID, uint256 hardwareTokenID, bytes blsPoP
+    bytes32 indexed validationID, uint256 indexed hardwareTokenID, bytes blsPoP
   );
-  event CompletedValidatorRegistration(bytes32 indexed validationID, uint32 startEpoch);
-  event InitiatedValidatorRemoval(bytes32 validationID, uint256 hardwareTokenID, uint32 endEpoch);
-  event CompletedValidatorRemoval(bytes32 validationID);
+  event CompletedValidatorRegistration(bytes32 indexed validationID, uint32 indexed startEpoch);
+  event InitiatedValidatorRemoval(
+    bytes32 indexed validationID, uint256 indexed hardwareTokenID, uint32 indexed endEpoch
+  );
+  event CompletedValidatorRemoval(bytes32 indexed validationID);
   event InitiatedDelegatorRegistration(
     bytes32 indexed validationID, bytes32 indexed delegationID, uint256[] tokenIDs
   );
   event CompletedDelegatorRegistration(
-    bytes32 indexed validationID, bytes32 indexed delegationID, uint64 nonce, uint32 startEpoch
+    bytes32 indexed validationID,
+    bytes32 indexed delegationID,
+    uint32 indexed startEpoch,
+    uint64 nonce
   );
   event InitiatedDelegatorRemoval(
-    bytes32 indexed validationID, bytes32 indexed delegationID, uint256[] tokenIDs, uint32 endEpoch
+    bytes32 indexed validationID,
+    bytes32 indexed delegationID,
+    uint32 indexed endEpoch,
+    uint256[] tokenIDs
   );
   event CompletedDelegatorRemoval(
     bytes32 indexed validationID, bytes32 indexed delegationID, uint64 nonce
@@ -531,7 +539,7 @@ contract NFTStakingManager is
     delegation.startEpoch = getEpochByTimestamp(block.timestamp);
 
     emit CompletedDelegatorRegistration(
-      delegation.validationID, delegationID, nonce, delegation.startEpoch
+      delegation.validationID, delegationID, delegation.startEpoch, nonce
     );
   }
 
@@ -566,7 +574,7 @@ contract NFTStakingManager is
       validation.licenseCount -= uint32(delegation.tokenIDs.length);
 
       emit InitiatedDelegatorRemoval(
-        delegation.validationID, delegationIDs[i], delegation.tokenIDs, delegation.endEpoch
+        delegation.validationID, delegationIDs[i], delegation.endEpoch, delegation.tokenIDs
       );
     }
   }
