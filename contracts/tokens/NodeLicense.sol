@@ -75,10 +75,15 @@ contract NodeLicense is
   uint256 private _nextTokenId;
   uint32 private _lockedUntil;
   address private _nftStakingManager;
+  
+  mapping(uint256 tokenId => address) private _tokenStakeApprovals;
+  mapping(address owner => mapping(address operator => bool)) private _stakeOperatorApprovals;
 
   event BaseURIUpdated(string newBaseURI);
   event NFTStakingManagerUpdated(address indexed oldManager, address indexed newManager);
   event UnlockTimeUpdated(uint32 newUnlockTime);
+  event StakeApproval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+  event StakeApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
   error ArrayLengthMismatch();
   error ArrayLengthZero();
@@ -147,6 +152,38 @@ contract NodeLicense is
   function burn(uint256 tokenId) public onlyRole(MINTER_ROLE) {
     _burn(tokenId);
   }
+  
+  function approveStake(address to, uint256 tokenId) public {
+    _approve(to, tokenId, _msgSender());
+  }
+  
+  function _approveStake(address to, uint256 tokenId, address auth) internal {
+    if (auth != address(0)) {
+      address owner = _requireOwned(tokenId);
+      
+      if (auth != address(0) && owner != auth && !isApprovedForAll(owner, auth)) {
+        revert ERC721InvalidApprover(auth);
+      }
+      
+      emit StakeApproval(owner, to, tokenId);
+    }
+    
+    _tokenStakeApprovals[tokenId] = to;
+
+  }
+  
+  function setApprovalForAllStake(address operator, bool approved) public {
+    _setApprovalForAllStake(_msgSender(), operator, approved);
+  }
+  
+  function _setApprovalForAllStake(address owner, address operator, bool approved) internal {
+    if (operator == address(0)) {
+      revert ERC721InvalidOperator(operator);
+    }
+    
+    _stakeOperatorApprovals[owner][operator] = approved;
+    emit StakeApprovalForAll(owner, operator, approved);
+    }
 
   function setBaseURI(string memory baseTokenURI) public onlyRole(DEFAULT_ADMIN_ROLE) {
     emit BaseURIUpdated(baseTokenURI);
