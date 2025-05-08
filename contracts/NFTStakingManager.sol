@@ -889,6 +889,12 @@ contract NFTStakingManager is
     return creditSeconds;
   }
 
+  function getDelegations(bytes32 validationID) external view returns (bytes32[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationID];
+    return validation.delegationIDs.values();
+  }
+
   function getDelegationInfoView(bytes32 delegationID)
     external
     view
