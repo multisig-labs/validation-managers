@@ -15,6 +15,8 @@ import {
   ValidationInfoView
 } from "../contracts/NFTStakingManager.sol";
 
+import { NodeLicense, NodeLicenseSettings } from "../contracts/tokens/NodeLicense.sol";
+
 import {
   PChainOwner,
   Validator,
@@ -35,7 +37,7 @@ import { ValidatorMessages } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
 contract NFTStakingManagerTest is Base {
-  ERC721Mock public nft;
+  NodeLicense public nft;
   ERC721Mock public hardwareNft;
   MockValidatorManager public validatorManager;
   NFTStakingManager public nftStakingManager;
@@ -60,8 +62,25 @@ contract NFTStakingManagerTest is Base {
 
     validatorManager = new MockValidatorManager();
 
-    nft = new ERC721Mock("NFT License", "NFTL");
     hardwareNft = new ERC721Mock("Hardware NFT License", "HARDNFTL");
+
+    NodeLicense nodeLicenseImpl = new NodeLicense();
+    ERC1967Proxy nodeLicenseProxy = new ERC1967Proxy(
+      address(nodeLicenseImpl),
+      abi.encodeCall(
+        NodeLicense.initialize,
+        NodeLicenseSettings({
+          name: "NFT License",
+          symbol: "NFTL",
+          admin: admin,
+          minter: address(this),
+          nftStakingManager: address(nftStakingManager),
+          baseTokenURI: "https://example.com/nft/",
+          unlockTime: 0
+        })
+      )
+    );
+    nft = NodeLicense(address(nodeLicenseProxy));
 
     NFTStakingManager stakingManagerImpl = new NFTStakingManager();
     ERC1967Proxy stakingManagerProxy = new ERC1967Proxy(
@@ -74,6 +93,9 @@ contract NFTStakingManagerTest is Base {
       )
     );
     nftStakingManager = NFTStakingManager(address(stakingManagerProxy));
+
+    vm.prank(admin);
+    nft.setNFTStakingManager(address(nftStakingManager));
 
     NativeMinterMock nativeMinter = new NativeMinterMock();
     vm.etch(0x0200000000000000000000000000000000000001, address(nativeMinter).code);
@@ -219,7 +241,7 @@ contract NFTStakingManagerTest is Base {
   //
   // DELEGATOR REGISTRATION
   //
-  function test_initiateDelegatorRegistration() public {
+  function test_initiateDelegatorRegistration_base() public {
     (bytes32 validationID, address validator) = _createValidator();
 
     address delegator = getActor("Delegator");
@@ -237,7 +259,7 @@ contract NFTStakingManagerTest is Base {
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(delegation.owner, delegator);
     assertEq(delegation.tokenIDs.length, 1);
-    assertEq(delegation.tokenIDs[0], 0);
+    assertEq(delegation.tokenIDs[0], 1);
     assertEq(delegation.validationID, validationID);
 
     nftStakingManager.completeDelegatorRegistration(delegationID, 0);
@@ -263,7 +285,7 @@ contract NFTStakingManagerTest is Base {
 
     // Delegator approves validator as operator
     vm.startPrank(delegator);
-    nft.setApprovalForAll(validator, true);
+    nft.setDelegationApprovalForAll(validator, true);
     vm.stopPrank();
 
     // Call the new function as the hardware provider
@@ -308,7 +330,7 @@ contract NFTStakingManagerTest is Base {
 
     // Approve operator
     vm.startPrank(delegator);
-    nft.setApprovalForAll(validator, true);
+    nft.setDelegationApprovalForAll(validator, true);
     vm.stopPrank();
 
     // Try with wrong validator
@@ -331,8 +353,8 @@ contract NFTStakingManagerTest is Base {
 
     // Approve validator for specific tokens
     vm.startPrank(delegator);
-    nft.approve(validator, tokenIDs[0]);
-    nft.approve(validator, tokenIDs[1]);
+    nft.approveDelegation(validator, tokenIDs[0]);
+    nft.approveDelegation(validator, tokenIDs[1]);
     vm.stopPrank();
 
     // Call the new function as the hardware provider
@@ -364,7 +386,7 @@ contract NFTStakingManagerTest is Base {
     // Mixed approval approach
     vm.startPrank(delegator);
     nft.approve(validator, tokenIDs[0]); // Individual approval for first token
-    nft.setApprovalForAll(validator, true); // Blanket approval for all tokens
+    nft.setDelegationApprovalForAll(validator, true); // Blanket approval for all tokens
     vm.stopPrank();
 
     // Call the new function as the hardware provider
@@ -526,10 +548,6 @@ contract NFTStakingManagerTest is Base {
 
     bytes32 bogusValidationID = validatorManager.randomBytes32();
     validatorManager.setBadValidationID(bogusValidationID);
-    console2.log("bogus validationid");
-    console2.logBytes32(bogusValidationID);
-    console2.log("real validationId");
-    console2.logBytes32(validationID1);
 
     // Mock a weight update for the wrong validator
     vm.expectRevert(
@@ -1065,10 +1083,13 @@ contract NFTStakingManagerTest is Base {
     internal
     returns (bytes32)
   {
+    uint256[] memory tokenIds = new uint256[](licenseCount);
+    for (uint256 i = 0; i < licenseCount; i++) {
+      tokenIds[i] = nft.mint(delegator);
+    }
+
     vm.startPrank(delegator);
-    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(
-      validationID, nft.batchMint(delegator, licenseCount)
-    );
+    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIds);
     nftStakingManager.completeDelegatorRegistration(delegationID, 0);
     vm.stopPrank();
     return delegationID;
