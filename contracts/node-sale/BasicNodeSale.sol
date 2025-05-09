@@ -13,25 +13,25 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     /// @notice Treasury address where collected funds are sent
-    address constant TREASURY = 0x1E3D04c315eDBb584A9fB85F5Aa30d6385a6859C;
+    address public immutable treasury;
     
     /// @notice USDC token contract address
     IERC20 public immutable usdc;
     
     /// @notice Price per node in USDC (6 decimals)
-    uint256 public price = 1000 * 10**6;
+    uint256 public price = 10_000; // 0.01 USDC (1 cent)
     
     /// @notice Maximum number of nodes a single address can purchase
-    uint256 public maxNodes = 25;
+    uint256 public maxNodes = 250;
     
     /// @notice Total number of nodes sold
     uint256 public supply;
     
     /// @notice Flag indicating if sales are currently active
-    bool public salesActive = false;
+    bool public salesActive = true;
     
     /// @notice Flag indicating if whitelist functionality is enabled
-    bool public isWhitelistEnabled = true;
+    bool public isWhitelistEnabled = false;
 
     /// @notice List of all addresses that have purchased nodes
     address[] public buyers;
@@ -45,7 +45,8 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @notice Emitted when a node is purchased
     /// @param buyer Address of the buyer
     /// @param amount Number of nodes purchased
-    event NodePurchased(address buyer, uint256 amount);
+    /// @param totalCost Total cost paid in USDC
+    event NodePurchased(address buyer, uint256 amount, uint256 totalCost);
     
     /// @notice Emitted when an address is added to whitelist
     /// @param user Address added to whitelist
@@ -73,6 +74,7 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
 
     /// @notice Custom errors
     error InvalidUSDCAddress();
+    error InvalidTreasuryAddress();
     error SalesNotActive();
     error NotWhitelisted();
     error ExceedsMaxNodes();
@@ -81,9 +83,12 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
 
     /// @notice Constructor initializes the contract with the deployer as owner and sets USDC address
     /// @param usdcAddress Address of the USDC token contract
-    constructor(address usdcAddress) Ownable(msg.sender) {
+    /// @param treasuryAddress Address where collected funds will be sent
+    constructor(address usdcAddress, address treasuryAddress) Ownable(msg.sender) {
         if (usdcAddress == address(0)) revert InvalidUSDCAddress();
+        if (treasuryAddress == address(0)) revert InvalidTreasuryAddress();
         usdc = IERC20(usdcAddress);
+        treasury = treasuryAddress;
     }
 
     /// @notice Purchase nodes using USDC
@@ -105,7 +110,7 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         }
         nodesPurchased[msg.sender] += nodeAmount;
         supply += nodeAmount;
-        emit NodePurchased(msg.sender, nodeAmount);
+        emit NodePurchased(msg.sender, nodeAmount, totalPrice);
     }
 
     /// @notice Enable or disable whitelist functionality
@@ -167,7 +172,7 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     function withdrawToTreasury() external onlyOwner {
         uint256 balance = usdc.balanceOf(address(this));
         if (balance > 0) {
-            usdc.safeTransfer(TREASURY, balance);
+            usdc.safeTransfer(treasury, balance);
         }
     }
 

@@ -51,9 +51,11 @@ contract MockERC20 is IERC20 {
 }
 
 contract BasicNodeSaleTest is Base {
+    event NodePurchased(address buyer, uint256 amount, uint256 totalCost);
+
     BasicNodeSale public nodeSale;
     MockERC20 public usdc;
-    address constant TREASURY = 0x1E3D04c315eDBb584A9fB85F5Aa30d6385a6859C;
+    address public treasury;
     address public buyer;
     address public nonWhitelistedBuyer;
 
@@ -63,8 +65,11 @@ contract BasicNodeSaleTest is Base {
         // Deploy mock USDC
         usdc = new MockERC20();
         
+        // Setup treasury
+        treasury = getNamedActor("treasury");
+        
         // Deploy BasicNodeSale
-        nodeSale = new BasicNodeSale(address(usdc));
+        nodeSale = new BasicNodeSale(address(usdc), treasury);
         
         // Setup actors
         buyer = getNamedActor("buyer");
@@ -83,63 +88,68 @@ contract BasicNodeSaleTest is Base {
 
     function test_InitialState() public {
         assertEq(address(nodeSale.usdc()), address(usdc));
-        assertEq(nodeSale.price(), 1000 * 10**6);
-        assertEq(nodeSale.maxNodes(), 25);
+        assertEq(nodeSale.treasury(), treasury);
+        assertEq(nodeSale.price(), 10_000); // 0.01 USDC
+        assertEq(nodeSale.maxNodes(), 250);
         assertEq(nodeSale.supply(), 0);
         assertTrue(nodeSale.salesActive());
-        assertTrue(nodeSale.isWhitelistEnabled());
+        assertFalse(nodeSale.isWhitelistEnabled());
     }
 
     function test_BuyNode() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 1000 * 10**6);
+        usdc.approve(address(nodeSale), 10_000);
         
         // Buy node
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(buyer, 1, 10_000);
         nodeSale.buy(1);
         
         // Verify
         assertEq(nodeSale.nodesPurchased(buyer), 1);
         assertEq(nodeSale.supply(), 1);
-        assertEq(usdc.balanceOf(address(nodeSale)), 1000 * 10**6);
+        assertEq(usdc.balanceOf(address(nodeSale)), 10_000);
         vm.stopPrank();
     }
 
     function test_BuyNodeWithoutWhitelist() public {
         // Setup
         vm.startPrank(nonWhitelistedBuyer);
-        usdc.approve(address(nodeSale), 1000 * 10**6);
+        usdc.approve(address(nodeSale), 10_000);
         
-        // Should fail without whitelist
+        // Should succeed since whitelist is disabled by default
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(nonWhitelistedBuyer, 1, 10_000);
+        nodeSale.buy(1);
+        
+        // Enable whitelist
+        vm.stopPrank();
+        vm.startPrank(nodeSale.owner());
+        nodeSale.setWhitelistEnabled(true);
+        
+        // Should fail now
+        vm.stopPrank();
+        vm.startPrank(nonWhitelistedBuyer);
         vm.expectRevert(BasicNodeSale.NotWhitelisted.selector);
         nodeSale.buy(1);
         
-        // Disable whitelist
-        vm.stopPrank();
-        vm.prank(nodeSale.owner());
-        nodeSale.setWhitelistEnabled(false);
-        
-        // Should succeed now
-        vm.startPrank(nonWhitelistedBuyer);
-        nodeSale.buy(1);
-        
-        // Verify
-        assertEq(nodeSale.nodesPurchased(nonWhitelistedBuyer), 1);
-        assertEq(nodeSale.supply(), 1);
         vm.stopPrank();
     }
 
     function test_BuyMaxNodes() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 25000 * 10**6);
+        usdc.approve(address(nodeSale), 250 * 10_000);
         
         // Buy max nodes
-        nodeSale.buy(25);
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(buyer, 250, 250 * 10_000);
+        nodeSale.buy(250);
         
         // Verify
-        assertEq(nodeSale.nodesPurchased(buyer), 25);
-        assertEq(nodeSale.supply(), 25);
+        assertEq(nodeSale.nodesPurchased(buyer), 250);
+        assertEq(nodeSale.supply(), 250);
         
         // Try to buy more
         vm.expectRevert(BasicNodeSale.ExceedsMaxNodes.selector);
@@ -151,7 +161,9 @@ contract BasicNodeSaleTest is Base {
     function test_Withdraw() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 1000 * 10**6);
+        usdc.approve(address(nodeSale), 10_000);
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(buyer, 1, 10_000);
         nodeSale.buy(1);
         vm.stopPrank();
         
@@ -161,24 +173,26 @@ contract BasicNodeSaleTest is Base {
         
         // Verify
         assertEq(usdc.balanceOf(address(nodeSale)), 0);
-        assertEq(usdc.balanceOf(TREASURY), 1000 * 10**6);
+        assertEq(usdc.balanceOf(treasury), 10_000);
     }
 
     function test_UpdatePrice() public {
         // Setup
         vm.prank(nodeSale.owner());
-        nodeSale.setNodePrice(2000 * 10**6);
+        nodeSale.setNodePrice(20_000);
         
         // Verify
-        assertEq(nodeSale.price(), 2000 * 10**6);
+        assertEq(nodeSale.price(), 20_000);
         
         // Buy with new price
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 2000 * 10**6);
+        usdc.approve(address(nodeSale), 20_000);
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(buyer, 1, 20_000);
         nodeSale.buy(1);
         
         // Verify
-        assertEq(usdc.balanceOf(address(nodeSale)), 2000 * 10**6);
+        assertEq(usdc.balanceOf(address(nodeSale)), 20_000);
         vm.stopPrank();
     }
 
@@ -192,7 +206,9 @@ contract BasicNodeSaleTest is Base {
         
         // Buy more nodes
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 50000 * 10**6);
+        usdc.approve(address(nodeSale), 50 * 10_000);
+        vm.expectEmit(true, true, true, true);
+        emit NodePurchased(buyer, 50, 50 * 10_000);
         nodeSale.buy(50);
         
         // Verify
@@ -221,7 +237,7 @@ contract BasicNodeSaleTest is Base {
         
         // Try to buy
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 1000 * 10**6);
+        usdc.approve(address(nodeSale), 10_000);
         vm.expectRevert(BasicNodeSale.SalesNotActive.selector);
         nodeSale.buy(1);
         vm.stopPrank();
