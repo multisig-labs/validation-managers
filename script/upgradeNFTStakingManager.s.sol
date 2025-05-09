@@ -9,7 +9,7 @@ import { console } from "forge-std-1.9.6/src/console.sol";
 import { NFTStakingManager } from "../contracts/NFTStakingManager.sol";
 
 contract UpgradeNFTStakingManager is Script {
-  address public proxyAddress = 0x816faE6ADce52fD7D79F3C35f6E0671A97d0a63d;
+  address public proxyAddress = vm.envAddress("NFT_STAKING_MANAGER");
 
   function run() external {
     vm.startBroadcast();
