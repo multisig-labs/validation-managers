@@ -8,7 +8,7 @@ import { NodeSaleWithWhitelist } from "../contracts/node-sale/NodeSaleWithWhitel
 import { Base } from "./utils/Base.sol";
 import { console } from "forge-std-1.9.6/src/console.sol";
 
-contract NodeSaleTest is Base {
+contract NodeSaleWithWhitelistTest is Base {
   ERC721Mock public nft;
   NodeSaleWithWhitelist public nodeSale;
   address public admin;
