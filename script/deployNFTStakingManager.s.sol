@@ -36,7 +36,8 @@ contract DeployNFTStakingManager is Script {
       maxLicensesPerValidator: 50, // Example value
       gracePeriod: 1 hours, // Example value
       uptimePercentage: 80, // Example value (95%)
-      bypassUptimeCheck: true
+      bypassUptimeCheck: true,
+      minDelegationEpochs: 0
     });
 
     bytes memory nftsmInitData =
