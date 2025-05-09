@@ -24,7 +24,7 @@ contract NodeAsAServiceTest is Base {
     address public user1;
     address public user2;
     
-    uint256 public constant INITIAL_PRICE = 100 * 1e6; // 100 USDC (6 decimals)
+    uint256 public constant INITIAL_PRICE = 100 * 1e6; // 100 USDC per 30 days (6 decimals)
     uint256 public constant INITIAL_BALANCE = 1000 * 1e6; // 1000 USDC
     
     bytes32 public constant SCRIBE_ROLE = keccak256("SCRIBE_ROLE");
@@ -78,7 +78,7 @@ contract NodeAsAServiceTest is Base {
     function test_Initialization() public {
         assertEq(address(nodeAsAService.usdc()), address(usdc));
         assertEq(address(nodeAsAService.nodeLicense()), address(nodeLicense));
-        assertEq(nodeAsAService.licensePricePerMonth(), INITIAL_PRICE);
+        assertEq(nodeAsAService.licensePricePer30Days(), INITIAL_PRICE);
         assertTrue(nodeAsAService.hasRole(nodeAsAService.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(nodeAsAService.hasRole(nodeAsAService.SCRIBE_ROLE(), scribe));
         assertTrue(nodeAsAService.hasRole(nodeAsAService.PROTOCOL_MANAGER_ROLE(), protocolManager));
@@ -90,7 +90,7 @@ contract NodeAsAServiceTest is Base {
      */
     function test_PayForNodeServices() public {
         uint256 licenseCount = 2;
-        uint256 duration = 30 days;
+        uint256 duration = 30 days; // Exactly 30 days
         bytes32 subnetId = bytes32("test-subnet");
         
         // Approve USDC spending
@@ -98,11 +98,12 @@ contract NodeAsAServiceTest is Base {
         usdc.approve(address(nodeAsAService), type(uint256).max);
         
         // Calculate expected payment
-        uint256 expectedPayment = nodeAsAService.calculateRequiredPayment(licenseCount, duration);
+        // For 2 licenses of 30 days each, totalCumulativeDurationInSeconds is 60 days
+        uint256 expectedPayment = nodeAsAService.calculateRequiredPayment(duration * licenseCount);
         
         // Pay for services
         vm.prank(user1);
-        nodeAsAService.payForNodeServices(licenseCount, duration, subnetId);
+        nodeAsAService.payForNodeServices(licenseCount, duration * licenseCount, subnetId);
         
         // Verify payment record
         NodeAsAService.PaymentRecord[] memory records = nodeAsAService.getUserPaymentRecords(user1);
@@ -111,9 +112,22 @@ contract NodeAsAServiceTest is Base {
         assertEq(record.user, user1);
         assertEq(record.licenseCount, licenseCount);
         assertEq(record.subnetId, subnetId);
-        assertEq(record.totalCumulativeDurationInSeconds, duration);
+        assertEq(record.totalCumulativeDurationInSeconds, duration * licenseCount);
         assertEq(record.totalAmountPaidInUSDC, expectedPayment);
-        assertEq(record.pricePerMonthAtPayment, INITIAL_PRICE);
+        assertEq(record.priceAtPayment, INITIAL_PRICE);
+    }
+    
+    /**
+     * @notice Tests that payment for node services reverts with non-30-day duration
+     * @dev Verifies the DurationMustBeMultipleOf30Days error is thrown
+     */
+    function test_RevertWhen_PayForNodeServices_Non30DayDuration() public {
+        uint256 licenseCount = 1;
+        uint256 invalidDuration = 31 days; // Not a multiple of 30 days
+        
+        vm.prank(user1);
+        vm.expectRevert(NodeAsAService.DurationMustBeMultipleOf30Days.selector);
+        nodeAsAService.payForNodeServices(licenseCount, invalidDuration, bytes32("test-subnet"));
     }
     
     /**
@@ -204,15 +218,15 @@ contract NodeAsAServiceTest is Base {
     
     /**
      * @notice Tests the license price update functionality
-     * @dev Verifies that admins can update the license price per month
+     * @dev Verifies that admins can update the license price per 30 days
      */
     function test_UpdateLicensePrice() public {
-        uint256 newPrice = 200 * 1e6; // 200 USDC
+        uint256 newPrice = 200 * 1e6; // 200 USDC per 30 days
         
         vm.prank(admin);
-        nodeAsAService.setLicensePricePerMonth(newPrice);
+        nodeAsAService.setLicensePricePer30Days(newPrice);
         
-        assertEq(nodeAsAService.licensePricePerMonth(), newPrice);
+        assertEq(nodeAsAService.licensePricePer30Days(), newPrice);
     }
     
     /**
@@ -280,10 +294,13 @@ contract NodeAsAServiceTest is Base {
      * @dev Verifies the InsufficientBalance error is thrown when user has insufficient USDC
      */
     function test_RevertWhen_PayForNodeServices_InsufficientBalance() public {
-        vm.prank(user2);
-        // Try to pay for a large number of licenses to exceed balance
+        // Create a user with no USDC balance
+        address poorUser = makeAddr("poorUser");
+        
+        // Try to pay for services
+        vm.prank(poorUser);
         vm.expectRevert(NodeAsAService.InsufficientBalance.selector);
-        nodeAsAService.payForNodeServices(100, 30 days, bytes32("test-subnet"));
+        nodeAsAService.payForNodeServices(1, 30 days, bytes32("test-subnet"));
     }
 
     /**
@@ -380,7 +397,7 @@ contract NodeAsAServiceTest is Base {
     function test_RevertWhen_UpdateLicensePrice_ZeroPrice() public {
         vm.prank(admin);
         vm.expectRevert(NodeAsAService.InvalidPrice.selector);
-        nodeAsAService.setLicensePricePerMonth(0);
+        nodeAsAService.setLicensePricePer30Days(0);
     }
 
     /**

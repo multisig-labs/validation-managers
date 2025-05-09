@@ -28,10 +28,10 @@ contract NodeAsAService is
         address user;  // The user who owns this payment record
         uint256 licenseCount;  // Number of licenses being paid for
         bytes32 subnetId;  // The subnet this payment is for
-        uint256 totalCumulativeDurationInSeconds;  // Duration in seconds
+        uint256 totalCumulativeDurationInSeconds;  // Total duration in seconds for all licenses combined
         uint256 totalAmountPaidInUSDC;  // Total amount paid in USDC
         uint256 startTime;  // When the payment started
-        uint256 pricePerMonthAtPayment; // Price in USDC (6 decimals)
+        uint256 priceAtPayment; // Price per 30 days in USDC (6 decimals)
         TokenAssignment[100] tokenAssignments;  // Fixed size array for token assignments (max 100 licenses)
     }
     
@@ -41,7 +41,7 @@ contract NodeAsAService is
     IERC20 public usdc;
     NodeLicense public nodeLicense;
     
-    uint256 public licensePricePerMonth; // Price in USDC (6 decimals)
+    uint256 public licensePricePer30Days; // Price in USDC (6 decimals) for a 30-day period
     
     mapping(address => PaymentRecord[]) public userPaymentRecords;
     
@@ -52,7 +52,7 @@ contract NodeAsAService is
         uint256 totalCumulativeDurationInSeconds,
         uint256 totalAmountPaidInUSDC,
         uint256 startTime,
-        uint256 pricePerMonthAtPayment
+        uint256 priceAtPayment // Price per 30 days in USDC (6 decimals)
     );
     event LicensePriceUpdated(uint256 oldPrice, uint256 newPrice);
     event TokenAssignmentUpdated(
@@ -68,6 +68,7 @@ contract NodeAsAService is
     error TransferFailed();
     error MustPayForAtLeastOneLicense();
     error DurationMustBeGreaterThanZero();
+    error DurationMustBeMultipleOf30Days();
     error AmountMustBeGreaterThanZero();
     error InsufficientContractBalance();
     error InvalidPaymentRecordIndex();
@@ -87,20 +88,20 @@ contract NodeAsAService is
      * @param _nodeLicense Address of the NodeLicense contract
      * @param _defaultAdmin Address that will have admin privileges
      * @param _scribe Address that will have scribe privileges
-     * @param _initialPricePerMonth Initial price per month in USDC (6 decimals)
+     * @param _initialPricePer30Days Initial price for a 30-day period in USDC (6 decimals)
      */
     function initialize(
         address _usdc,
         address _nodeLicense,
         address _defaultAdmin,
         address _scribe,
-        uint256 _initialPricePerMonth
+        uint256 _initialPricePer30Days
     ) public initializer {
         if (_usdc == address(0) || _nodeLicense == address(0))
         {
             revert ZeroAddress();
         }
-        if (_initialPricePerMonth == 0)
+        if (_initialPricePer30Days == 0)
         {
             revert InvalidPrice();
         }
@@ -113,7 +114,7 @@ contract NodeAsAService is
         
         usdc = IERC20(_usdc);
         nodeLicense = NodeLicense(_nodeLicense);
-        licensePricePerMonth = _initialPricePerMonth;
+        licensePricePer30Days = _initialPricePer30Days;
     }
 
     ///
@@ -123,9 +124,9 @@ contract NodeAsAService is
     /**
      * @notice Pays for node services per node license
      * @param licenseCount Number of licenses to pay for
-     * @param totalCumulativeDurationInSeconds Total duration in seconds for all licenses
+     * @param totalCumulativeDurationInSeconds Total duration in seconds for all licenses combined (e.g., for 2 licenses of 30 days each, this would be 60 days in seconds)
      * @param subnetId The ID of the subnet being paid for
-     * @dev Requires USDC approval for the payment amount
+     * @dev Requires USDC approval for the payment amount. The total duration should be the sum of durations for all licenses and must be a multiple of 30 days.
      */
     function payForNodeServices(
         uint256 licenseCount, 
@@ -145,8 +146,14 @@ contract NodeAsAService is
             revert DurationMustBeGreaterThanZero();
         }
         
+        // Check if duration is a multiple of 30 days
+        if (totalCumulativeDurationInSeconds % (30 days) != 0)
+        {
+            revert DurationMustBeMultipleOf30Days();
+        }
+        
         // Calculate required payment
-        uint256 requiredPayment = calculateRequiredPayment(licenseCount, totalCumulativeDurationInSeconds);
+        uint256 requiredPayment = calculateRequiredPayment(totalCumulativeDurationInSeconds);
         if (usdc.balanceOf(msg.sender) < requiredPayment)
         {
             revert InsufficientBalance();
@@ -166,7 +173,7 @@ contract NodeAsAService is
         newPayment.totalCumulativeDurationInSeconds = totalCumulativeDurationInSeconds;
         newPayment.totalAmountPaidInUSDC = requiredPayment;
         newPayment.startTime = startTime;
-        newPayment.pricePerMonthAtPayment = licensePricePerMonth;
+        newPayment.priceAtPayment = licensePricePer30Days;
         
         // Initialize empty token assignments
         for (uint256 i = 0; i < 100; i++) {
@@ -181,7 +188,7 @@ contract NodeAsAService is
             totalCumulativeDurationInSeconds: totalCumulativeDurationInSeconds,
             totalAmountPaidInUSDC: requiredPayment,
             startTime: startTime,
-            pricePerMonthAtPayment: licensePricePerMonth
+            priceAtPayment: licensePricePer30Days
         });
     }
 
@@ -294,17 +301,17 @@ contract NodeAsAService is
     ///
 
     /**
-     * @notice Sets the price per month for licenses
-     * @param _newPricePerMonth New price per month in USDC (6 decimals)
+     * @notice Sets the price per 30 days for licenses
+     * @param _newPricePer30Days New price per 30 days in USDC (6 decimals)
      * @dev Only callable by the default admin
      */
-    function setLicensePricePerMonth(uint256 _newPricePerMonth) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_newPricePerMonth == 0)
+    function setLicensePricePer30Days(uint256 _newPricePer30Days) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_newPricePer30Days == 0)
         {
             revert InvalidPrice();
         }
-        emit LicensePriceUpdated(licensePricePerMonth, _newPricePerMonth);
-        licensePricePerMonth = _newPricePerMonth;
+        emit LicensePriceUpdated(licensePricePer30Days, _newPricePer30Days);
+        licensePricePer30Days = _newPricePer30Days;
     }
 
     /**
@@ -376,15 +383,15 @@ contract NodeAsAService is
 
     /**
      * @notice Calculates the required USDC payment for node services
-     * @param licenseCount Number of licenses to pay for
-     * @param totalCumulativeDurationInSeconds Duration in seconds
+     * @param totalCumulativeDurationInSeconds Total duration in seconds for all licenses combined
      * @return Required payment amount in USDC
+     * @dev The total duration must be a multiple of 30 days. For example, for 2 licenses of 30 days each,
+     *      totalCumulativeDurationInSeconds should be 60 days in seconds.
      */
-    function calculateRequiredPayment(uint256 licenseCount, uint256 totalCumulativeDurationInSeconds) public view returns (uint256) {
-        // Convert duration to months (rounding up to nearest month)
-        uint256 secondsInMonth = 30 days;
-        uint256 durationInMonths = (totalCumulativeDurationInSeconds + secondsInMonth - 1) / secondsInMonth;
-        return licensePricePerMonth * durationInMonths * licenseCount;
+    function calculateRequiredPayment(uint256 totalCumulativeDurationInSeconds) public view returns (uint256) {
+        uint256 thirtyDaysInSeconds = 30 days;
+        uint256 num30DayPeriods = totalCumulativeDurationInSeconds / thirtyDaysInSeconds;
+        return licensePricePer30Days * num30DayPeriods;
     }
 
     /**
