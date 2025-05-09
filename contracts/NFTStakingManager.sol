@@ -105,6 +105,7 @@ struct NFTStakingManagerSettings {
   uint32 initialEpochTimestamp;
   uint32 epochDuration;
   uint32 gracePeriod;
+  uint32 minDelegationEpochs;
   uint64 licenseWeight;
   uint64 hardwareLicenseWeight;
   address admin;
@@ -142,6 +143,7 @@ contract NFTStakingManager is
     uint32 gracePeriod; // starting at 1 hours
     uint32 minimumDelegationFeeBips; // 0
     uint32 maximumDelegationFeeBips; // 10000
+    uint32 minDelegationEpochs; 
     uint64 licenseWeight; // 1000
     uint64 hardwareLicenseWeight; // 1 million
     ValidatorManager manager;
@@ -227,6 +229,7 @@ contract NFTStakingManager is
   error InvalidNonce(uint64 nonce);
   error InsufficientUptime();
   error MaxLicensesPerValidatorReached();
+  error MinDelegationDurationNotMet();
   error RewardsAlreadyMintedForTokenID();
   error DelegationDoesNotExist();
   error TokenAlreadyLocked(uint256 tokenID);
@@ -551,6 +554,12 @@ contract NFTStakingManager is
       DelegationInfo storage delegation = $.delegations[delegationIDs[i]];
       ValidationInfo storage validation = $.validations[delegation.validationID];
       Validator memory validator = $.manager.getValidator(delegation.validationID);
+      
+      // I want to check a min duration for the delegation
+      // but maybe there's something to be said for a validator wanting to remove a delegator doesn't ahve to enforce it
+      if (delegation.owner == _msgSender() && delegation.startEpoch + $.minDelegationEpochs > getEpochByTimestamp(block.timestamp)) {
+        revert MinDelegationDurationNotMet();
+      }
 
       if (delegation.owner != _msgSender() && validation.owner != _msgSender()) {
         revert UnauthorizedOwner();
@@ -823,6 +832,7 @@ contract NFTStakingManager is
       initialEpochTimestamp: $.initialEpochTimestamp,
       epochDuration: $.epochDuration,
       gracePeriod: $.gracePeriod,
+      minDelegationEpochs: $.minDelegationEpochs,
       licenseWeight: $.licenseWeight,
       hardwareLicenseWeight: $.hardwareLicenseWeight,
       validatorManager: address($.manager),
