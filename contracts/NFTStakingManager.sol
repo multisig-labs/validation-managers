@@ -573,6 +573,7 @@ contract NFTStakingManager is
       delegation.status = DelegatorStatus.PendingRemoved;
 
       validation.licenseCount -= uint32(delegation.tokenIDs.length);
+      validation.delegationIDs.remove(delegationIDs[i]);
 
       emit InitiatedDelegatorRemoval(
         delegation.validationID, delegationIDs[i], delegation.endEpoch, delegation.tokenIDs
@@ -698,7 +699,7 @@ contract NFTStakingManager is
         DelegationInfo storage delegation = $.delegations[delegationID];
         // TODO: revist this epoch check
         if (delegation.uptimeCheck.contains(epoch) && epoch >= delegation.startEpoch) {
-          rewardsToMint += _mintDelegatorRewards(epoch, delegationID);
+          rewardsToMint += _mintRewardsPerDelegator(epoch, delegationID);
         }
       }
     }
@@ -708,7 +709,7 @@ contract NFTStakingManager is
 
   // verify that the user had a valid uptime for the given epcoh
   // TODO epoch is always the prev epoch, so dont pass in.
-  function _mintDelegatorRewards(uint32 epoch, bytes32 delegationID)
+  function _mintRewardsPerDelegator(uint32 epoch, bytes32 delegationID)
     internal
     returns (uint256 rewardsToMint)
   {
@@ -726,14 +727,6 @@ contract NFTStakingManager is
       revert EpochOutOfRange();
     }
 
-    if (delegation.endEpoch != 0) {
-      // The delegator will be paid out for the last epoch, but has ended, so delete it now
-      // If we leave old ones in then they will pile up and make looping over everything more costly
-      validation.delegationIDs.remove(delegationID);
-      // TODO The delegation data we could keep? For historical querying?
-      // delete $.delegations[delegationID];
-    }
-
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
       // TODO if either of these happen it seems unrecoverable? How would we fix?
       // admin fn to manually add data to rewards and locked mappings?
@@ -748,7 +741,6 @@ contract NFTStakingManager is
     }
 
     // If the license holder has prepaid credits, deduct them.
-    // How many tokens can they pay for for a full epoch?
     // If there are no credits left, all remaining tokens will pay a delegation fee to validator
     (, uint256 creditSeconds) = $.prepaidCredits[validation.owner].tryGet(delegation.owner);
     uint256 prepaidTokenCount = creditSeconds / $.epochDuration;
@@ -768,12 +760,45 @@ contract NFTStakingManager is
 
     validation.claimableRewardsPerEpoch.set(uint256(epoch), delegationFee);
 
-    uint256 delegatorRewards = totalRewards - delegationFee;
-    delegation.claimableRewardsPerEpoch.set(uint256(epoch), delegatorRewards);
+    delegation.claimableRewardsPerEpoch.set(uint256(epoch), totalRewards - delegationFee);
 
     emit RewardsMinted(epoch, delegationID, totalRewards);
 
     return totalRewards;
+  }
+
+  function _claimRewards(
+    address owner,
+    EnumerableMap.UintToUintMap storage rewardsMap,
+    bytes32 id,
+    uint32 maxEpochs
+  ) internal returns (uint256, uint32[] memory) {
+    if (maxEpochs > rewardsMap.length()) {
+      maxEpochs = uint32(rewardsMap.length());
+    }
+
+    uint256 totalRewards = 0;
+    uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
+    uint256[] memory rewardsAmounts = new uint256[](maxEpochs);
+
+    for (uint32 i = 0; i < maxEpochs; i++) {
+      (uint256 epochNumber, uint256 rewards) = rewardsMap.at(0);
+
+      // State changes
+      claimedEpochNumbers[i] = uint32(epochNumber);
+      totalRewards += rewards;
+      rewardsAmounts[i] = rewards;
+      // this remove updates the array indicies. so always remove item 0
+      rewardsMap.remove(epochNumber);
+    }
+
+    // Events (after all state changes)
+    for (uint32 i = 0; i < maxEpochs; i++) {
+      emit RewardsClaimed(claimedEpochNumbers[i], id, rewardsAmounts[i]);
+    }
+
+    payable(owner).sendValue(totalRewards);
+    return (totalRewards, claimedEpochNumbers);
   }
 
   function claimRewards(bytes32 delegationID, uint32 maxEpochs)
@@ -784,32 +809,21 @@ contract NFTStakingManager is
     DelegationInfo storage delegation = $.delegations[delegationID];
 
     if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
-    if (maxEpochs > delegation.claimableRewardsPerEpoch.length()) {
-      maxEpochs = uint32(delegation.claimableRewardsPerEpoch.length());
-    }
 
-    uint256 totalRewards = 0;
-    uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
-    uint256[] memory rewardsAmounts = new uint256[](maxEpochs);
+    return
+      _claimRewards(delegation.owner, delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
+  }
 
-    for (uint32 i = 0; i < maxEpochs; i++) {
-      (uint256 epochNumber, uint256 rewards) = delegation.claimableRewardsPerEpoch.at(0);
+  function claimValidatorRewards(bytes32 validationID, uint32 maxEpochs)
+    external
+    returns (uint256, uint32[] memory)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationID];
+    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
 
-      // State changes
-      claimedEpochNumbers[i] = uint32(epochNumber);
-      totalRewards += rewards;
-      rewardsAmounts[i] = rewards;
-      // this remove updates the array indicies. so always remove item 0
-      delegation.claimableRewardsPerEpoch.remove(epochNumber);
-    }
-
-    // Events (after all state changes)
-    for (uint32 i = 0; i < maxEpochs; i++) {
-      emit RewardsClaimed(claimedEpochNumbers[i], delegationID, rewardsAmounts[i]);
-    }
-
-    payable(delegation.owner).sendValue(totalRewards);
-    return (totalRewards, claimedEpochNumbers);
+    return
+      _claimRewards(validation.owner, validation.claimableRewardsPerEpoch, validationID, maxEpochs);
   }
 
   ///
