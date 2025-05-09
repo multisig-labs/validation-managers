@@ -111,7 +111,7 @@ contract BasicNodeSaleTest is Base {
         usdc.approve(address(nodeSale), 1000 * 10**6);
         
         // Should fail without whitelist
-        vm.expectRevert("Not whitelisted");
+        vm.expectRevert(BasicNodeSale.NotWhitelisted.selector);
         nodeSale.buy(1);
         
         // Disable whitelist
@@ -142,7 +142,7 @@ contract BasicNodeSaleTest is Base {
         assertEq(nodeSale.supply(), 25);
         
         // Try to buy more
-        vm.expectRevert("You can't buy more nodes");
+        vm.expectRevert(BasicNodeSale.ExceedsMaxNodes.selector);
         nodeSale.buy(1);
         
         vm.stopPrank();
@@ -222,7 +222,7 @@ contract BasicNodeSaleTest is Base {
         // Try to buy
         vm.startPrank(buyer);
         usdc.approve(address(nodeSale), 1000 * 10**6);
-        vm.expectRevert("Sales are not active");
+        vm.expectRevert(BasicNodeSale.SalesNotActive.selector);
         nodeSale.buy(1);
         vm.stopPrank();
         

@@ -71,10 +71,18 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @param newMaxNodes New maximum nodes limit
     event MaxNodesUpdated(uint256 newMaxNodes);
 
+    /// @notice Custom errors
+    error InvalidUSDCAddress();
+    error SalesNotActive();
+    error NotWhitelisted();
+    error ExceedsMaxNodes();
+    error InsufficientUSDCAllowance();
+    error InsufficientUSDCBalance();
+
     /// @notice Constructor initializes the contract with the deployer as owner and sets USDC address
     /// @param usdcAddress Address of the USDC token contract
     constructor(address usdcAddress) Ownable(msg.sender) {
-        require(usdcAddress != address(0), "Invalid USDC address");
+        if (usdcAddress == address(0)) revert InvalidUSDCAddress();
         usdc = IERC20(usdcAddress);
     }
 
@@ -82,16 +90,13 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @dev Checks for whitelist if enabled, verifies USDC allowance and balance
     /// @param nodeAmount Number of nodes to purchase
     function buy(uint256 nodeAmount) external nonReentrant {
-        require(salesActive, "Sales are not active");
-        if (isWhitelistEnabled) {
-            require(whitelist[msg.sender], "Not whitelisted");
-        }
-        
-        require(nodesPurchased[msg.sender] + nodeAmount <= maxNodes, "You can't buy more nodes");
+        if (!salesActive) revert SalesNotActive();
+        if (isWhitelistEnabled && !whitelist[msg.sender]) revert NotWhitelisted();
+        if (nodesPurchased[msg.sender] + nodeAmount > maxNodes) revert ExceedsMaxNodes();
         
         uint256 totalPrice = price * nodeAmount;
-        require(usdc.allowance(msg.sender, address(this)) >= totalPrice, "Insufficient USDC allowance");
-        require(usdc.balanceOf(msg.sender) >= totalPrice, "Insufficient USDC balance");
+        if (usdc.allowance(msg.sender, address(this)) < totalPrice) revert InsufficientUSDCAllowance();
+        if (usdc.balanceOf(msg.sender) < totalPrice) revert InsufficientUSDCBalance();
         
         usdc.safeTransferFrom(msg.sender, address(this), totalPrice);
         
