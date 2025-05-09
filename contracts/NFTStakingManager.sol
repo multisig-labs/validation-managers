@@ -27,6 +27,7 @@ import { ValidatorMessages } from
   "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
 
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
+import { NodeLicense } from "./tokens/NodeLicense.sol";
 
 interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
@@ -145,7 +146,7 @@ contract NFTStakingManager is
     uint64 licenseWeight; // 1000
     uint64 hardwareLicenseWeight; // 1 million
     ValidatorManager manager;
-    IERC721 licenseContract;
+    NodeLicense licenseContract;
     IERC721 hardwareLicenseContract;
     uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
     // Validation state
@@ -263,7 +264,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     $.manager = ValidatorManager(settings.validatorManager);
-    $.licenseContract = IERC721(settings.license);
+    $.licenseContract = NodeLicense(settings.license);
     $.hardwareLicenseContract = IERC721(settings.hardwareLicense);
     $.initialEpochTimestamp = settings.initialEpochTimestamp;
     $.epochDuration = settings.epochDuration;
@@ -431,12 +432,12 @@ contract NFTStakingManager is
       revert UnauthorizedOwner();
     }
 
-    bool isApprovedForAll = $.licenseContract.isApprovedForAll(owner, _msgSender());
+    bool isApprovedForAll = $.licenseContract.isDelegationApprovedForAll(owner, _msgSender());
 
     // If no blanket approval, check each token individually
     if (!isApprovedForAll) {
       for (uint256 i = 0; i < tokenIDs.length; i++) {
-        if ($.licenseContract.getApproved(tokenIDs[i]) != _msgSender()) {
+        if ($.licenseContract.getDelegationApproval(tokenIDs[i]) != _msgSender()) {
           revert UnauthorizedOwner();
         }
       }
