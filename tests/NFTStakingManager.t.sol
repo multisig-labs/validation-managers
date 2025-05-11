@@ -120,7 +120,8 @@ contract NFTStakingManagerTest is Base {
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
       gracePeriod: GRACE_PERIOD,
       uptimePercentage: 80,
-      bypassUptimeCheck: false
+      bypassUptimeCheck: false,
+      minDelegationEpochs: 0
     });
   }
 
