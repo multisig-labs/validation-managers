@@ -443,8 +443,6 @@ contract NFTStakingManager is
     public
     returns (bytes32)
   {
-    // TODO: consider checking if the sender owns the tokensids here
-    // or check in _lockTokens method
     return _initiateDelegatorRegistration(validationID, _msgSender(), tokenIDs);
   }
 
@@ -763,7 +761,6 @@ contract NFTStakingManager is
       for (uint256 j = 0; j < totalDelegations; j++) {
         bytes32 delegationID = validation.delegationIDs.at(j);
         DelegationInfo storage delegation = $.delegations[delegationID];
-        // TODO: revist this epoch check
         if (delegation.uptimeCheck.contains(epoch) && epoch >= delegation.startEpoch) {
           rewardsToMint += _mintRewardsPerDelegator(epoch, delegationID);
         }
@@ -798,8 +795,6 @@ contract NFTStakingManager is
     }
 
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
-      // TODO if either of these happen it seems unrecoverable? How would we fix?
-      // admin fn to manually add data to rewards and locked mappings?
       if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
         revert TokenNotLockedByDelegationID();
       }
@@ -1148,9 +1143,6 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < tokenIDs.length; i++) {
       uint256 tokenID = tokenIDs[i];
       owner = $.licenseContract.ownerOf(tokenID);
-      // TODO: Do we need this chekc? or a different call that verifies the owner trying to lock the tokens owns the token
-      // we move the burden of chekcing the approval from this function to the caller
-      // if (owner != _msgSender()) revert UnauthorizedOwner(owner);
       if ($.tokenLockedBy[tokenID] != bytes32(0)) revert TokenAlreadyLocked(tokenID);
       $.tokenLockedBy[tokenID] = delegationID;
     }
