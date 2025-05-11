@@ -104,7 +104,7 @@ struct DelegationInfoView {
 
 /// @notice Settings for NFT Staking Manager
 struct NFTStakingManagerSettings {
-  bool bypassUptimeCheck; // flag to bypass uptime check
+  bool bypassUptimeCheck;
   uint16 uptimePercentage; // 100 = 100%
   uint16 maxLicensesPerValidator;
   uint32 initialEpochTimestamp;
@@ -151,21 +151,21 @@ contract NFTStakingManager is
   ///
   struct NFTStakingManagerStorage {
     bool bypassUptimeCheck;
-    uint16 maxLicensesPerValidator; // 100
+    uint16 maxLicensesPerValidator;
     uint16 uptimePercentage; // 100 = 100%
-    uint32 initialEpochTimestamp; // 1716864000 2024-05-27 00:00:00 UTC
+    uint32 initialEpochTimestamp;
     uint32 currentTotalStakedLicenses;
-    uint32 epochDuration; // 1 days
-    uint32 gracePeriod; // starting at 1 hours
+    uint32 epochDuration;
+    uint32 gracePeriod;
     uint32 minimumDelegationFeeBips; // 0
     uint32 maximumDelegationFeeBips; // 10000
-    uint32 minDelegationEpochs; 
-    uint64 licenseWeight; // 1000
-    uint64 hardwareLicenseWeight; // 1 million
+    uint32 minDelegationEpochs;
+    uint64 licenseWeight;
+    uint64 hardwareLicenseWeight;
     ValidatorManager manager;
     NodeLicense licenseContract;
     IERC721 hardwareLicenseContract;
-    uint256 epochRewards; // 1_369_863 (2_500_000_000 / (365 * 5)) * 1 ether
+    uint256 epochRewards;
     // Validation state
     EnumerableSet.Bytes32Set validationIDs;
     mapping(bytes32 validationID => ValidationInfo) validations;
@@ -427,9 +427,6 @@ contract NFTStakingManager is
 
     emit CompletedValidatorRemoval(validationID);
 
-    // delete $.validations[validationID];
-    // $.validationIDs.remove(validationID);
-
     return validationID;
   }
 
@@ -543,7 +540,7 @@ contract NFTStakingManager is
 
   /// @notice Completes a delegator registration
   ///
-  /// @dev This function takes a delegationID because we can't get the delegation from 
+  /// @dev This function takes a delegationID because we can't get the delegation from
   ///      the warp message itself
   ///
   /// @param delegationID the id of the delegation to complete
@@ -596,8 +593,11 @@ contract NFTStakingManager is
       DelegationInfo storage delegation = $.delegations[delegationIDs[i]];
       ValidationInfo storage validation = $.validations[delegation.validationID];
       Validator memory validator = $.manager.getValidator(delegation.validationID);
-      
-      if (delegation.owner == _msgSender() && delegation.startEpoch + $.minDelegationEpochs > getEpochByTimestamp(block.timestamp)) {
+
+      if (
+        delegation.owner == _msgSender()
+          && delegation.startEpoch + $.minDelegationEpochs > getEpochByTimestamp(block.timestamp)
+      ) {
         revert MinDelegationDurationNotMet();
       }
 
@@ -608,9 +608,6 @@ contract NFTStakingManager is
       if (delegation.status != DelegatorStatus.Active) {
         revert InvalidDelegatorStatus(delegation.status);
       }
-
-      // End the delegation as of the prev epoch, so users will not receive rewards for the current epoch
-      // as they were not present for the whole epoch duration
 
       uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIDs.length);
 
@@ -692,8 +689,8 @@ contract NFTStakingManager is
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
   }
 
-  /// @notice Processes a proof of an uptime message for a validator 
-  /// 
+  /// @notice Processes a proof of an uptime message for a validator
+  ///
   /// @dev We are tracking uptime per epoch, so we record uptime and submission time for pervious
   ///      epochs and check that the uptime is sufficient for the current epoch.
   ///
@@ -875,7 +872,7 @@ contract NFTStakingManager is
 
   /// @notice Claims rewards for a delegation
   ///
-  /// @param delegationID The id of the delegation to claim 
+  /// @param delegationID The id of the delegation to claim
   /// @param maxEpochs The maximum number of epochs to claim
   ///
   /// @return totalRewards The total rewards to claim
