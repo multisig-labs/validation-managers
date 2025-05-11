@@ -29,19 +29,18 @@ import { ValidatorMessages } from
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 import { NodeLicense } from "./tokens/NodeLicense.sol";
 
-interface INativeMinter {
-  function mintNativeCoin(address addr, uint256 amount) external;
-}
-
+/// @notice Information about each rewards epoch
 struct EpochInfo {
   uint256 totalStakedLicenses;
   EnumerableSet.UintSet rewardsMintedFor; // which tokenids have rewards been minted for
 }
 
+/// @notice Returnable epoch information
 struct EpochInfoView {
   uint256 totalStakedLicenses;
 }
 
+/// @notice Validator state information
 struct ValidationInfo {
   uint32 startEpoch;
   uint32 endEpoch;
@@ -56,6 +55,7 @@ struct ValidationInfo {
   EnumerableMap.UintToUintMap claimableRewardsPerEpoch;
 }
 
+/// @notice Validator information without mappings for view functions
 struct ValidationInfoView {
   uint32 startEpoch;
   uint32 endEpoch;
@@ -68,6 +68,7 @@ struct ValidationInfoView {
   bytes registrationMessage;
 }
 
+/// @notice Delegator statuses
 enum DelegatorStatus {
   Unknown,
   PendingAdded,
@@ -75,6 +76,7 @@ enum DelegatorStatus {
   PendingRemoved
 }
 
+/// @notice Delegator information
 struct DelegationInfo {
   DelegatorStatus status;
   uint32 startEpoch;
@@ -88,6 +90,7 @@ struct DelegationInfo {
   EnumerableSet.UintSet uptimeCheck;
 }
 
+/// @notice Delegator information without mappings for view functions
 struct DelegationInfoView {
   DelegatorStatus status;
   uint32 startEpoch;
@@ -99,6 +102,7 @@ struct DelegationInfoView {
   uint256[] tokenIDs;
 }
 
+/// @notice Settings for NFT Staking Manager
 struct NFTStakingManagerSettings {
   bool bypassUptimeCheck; // flag to bypass uptime check
   uint16 uptimePercentage; // 100 = 100%
@@ -115,6 +119,17 @@ struct NFTStakingManagerSettings {
   uint256 epochRewards;
 }
 
+/// @notice Interface for minting native tokens on the blockchain
+interface INativeMinter {
+  function mintNativeCoin(address addr, uint256 amount) external;
+}
+
+/// @title NFTStakingManager: Stake NFTs on a blockchain to enable validator registration
+///
+/// @dev This contract allows a user to stake HardwareOperator NFTs to run validators
+///      and delegator NodeLicense NFTs to give the validators weight
+///
+/// @author MultisigLabs (https://github.com/multisig-labs/validation-managers)
 contract NFTStakingManager is
   Initializable,
   UUPSUpgradeable,
@@ -237,6 +252,7 @@ contract NFTStakingManager is
   error ValidatorRegistrationNotComplete();
   error ValidatorHasActiveDelegations();
   error ValidatorNotPoS(bytes32 validationID);
+  error ValidatorNotPoA(bytes32 validationID);
   error InvalidDelegationFeeBips(uint32 delegationFeeBips);
   error InvalidDelegatorStatus(DelegatorStatus status);
   error InvalidValidatorStatus(ValidatorStatus status);
@@ -247,6 +263,7 @@ contract NFTStakingManager is
     _disableInitializers();
   }
 
+  /// @notice Initializes NFTStakingManager with necessary parameters and settings
   function initialize(NFTStakingManagerSettings calldata settings) external initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
     ContextUpgradeable.__Context_init();
@@ -257,6 +274,7 @@ contract NFTStakingManager is
     __NFTStakingManager_init(settings);
   }
 
+  /// @notice Chained initializtion function with NFTStakingManager settings
   function __NFTStakingManager_init(NFTStakingManagerSettings calldata settings)
     internal
     onlyInitializing
@@ -282,6 +300,21 @@ contract NFTStakingManager is
   ///
   /// VALIDATOR FUNCTIONS
   ///
+
+  /// @notice Initiate validator registration
+  ///
+  /// @dev This function takes a HardwareOperatorLicense NFT and calls to the ValidatorManager
+  ///      to initiate validator registration.
+  ///
+  /// @param nodeID Node ID of the validator
+  /// @param blsPublicKey BLS public key of the validator
+  /// @param blsPoP BLS PoP of the validator
+  /// @param remainingBalanceOwner Owner of the remaining balance of the validator
+  /// @param disableOwner Owner of the disable address of the validator
+  /// @param hardwareTokenID HardwareOperatorLicense NFT token ID
+  /// @param delegationFeeBips Delegation fee in bips
+  ///
+  /// @return validationID created for the valdiator
   function initiateValidatorRegistration(
     bytes memory nodeID,
     bytes memory blsPublicKey,
@@ -300,7 +333,7 @@ contract NFTStakingManager is
       revert InvalidDelegationFeeBips(delegationFeeBips);
     }
 
-    // this will revert if the token does not exist
+    // will revert if the token does not exist
     $.hardwareLicenseContract.ownerOf(hardwareTokenID);
 
     bytes32 validationID = $.manager.initiateValidatorRegistration({
@@ -359,21 +392,13 @@ contract NFTStakingManager is
     return validationID;
   }
 
-  // TODO How to handle the original 5 PoA validators?
-  // Ava lets anyone remove the original 5
-  // https://github.com/ava-labs/icm-contracts/blob/main/contracts/validator-manager/StakingManager.sol#L377
-  // we would check if validations[validaionId].owner == address(0) then its a PoA validator
-  // maybe we have a seperate func onlyAdmin that can remove the PoA validators.
-  // AND DO NOT let people delegate to them.
-
-  // TODO: we want to remove delegators here, and check that they're all removed before removing the validator
-  // question: how many delegators can I remove in one call?
+  /// @notice Initiates validator removal
+  /// @param validationID The id of validation to remove
   function initiateValidatorRemoval(bytes32 validationID) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
     if (validation.owner != _msgSender()) revert UnauthorizedOwner();
 
-    // I think I'm just going to error here for now
     if (validation.licenseCount > 0) {
       revert ValidatorHasActiveDelegations();
     }
@@ -385,6 +410,9 @@ contract NFTStakingManager is
     emit InitiatedValidatorRemoval(validationID, validation.hardwareTokenID, validation.endEpoch);
   }
 
+  /// @notice Completes validator removal
+  ///
+  /// @param messageIndex The index of the warp message to complete validator removal
   function completeValidatorRemoval(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
@@ -403,8 +431,10 @@ contract NFTStakingManager is
   }
 
   /// @notice callable by the delagtor to stake node licenses
+  ///
   /// @param validationID the validation id of the validator
   /// @param tokenIDs the token ids of the licenses to stake
+  ///
   /// @return the delegation id
   function initiateDelegatorRegistration(bytes32 validationID, uint256[] calldata tokenIDs)
     public
@@ -416,9 +446,11 @@ contract NFTStakingManager is
   }
 
   /// @notice callable by the validation owner to stake node licenses on behalf of the delagtor
+  ///
   /// @param validationID the validation id of the validator
   /// @param owner the owner of the licenses
   /// @param tokenIDs the token ids of the licenses to stake
+  ///
   /// @return the delegation id
   function initiateDelegatorRegistrationOnBehalfOf(
     bytes32 validationID,
@@ -447,9 +479,11 @@ contract NFTStakingManager is
   }
 
   /// @notice internal function to initiate a delegation
+  ///
   /// @param validationID the validation id of the validator
   /// @param owner the owner of the licenses
   /// @param tokenIDs the token ids of the licenses to stake
+  ///
   /// @return the delegation id
   function _initiateDelegatorRegistration(
     bytes32 validationID,
@@ -506,6 +540,13 @@ contract NFTStakingManager is
     return delegationID;
   }
 
+  /// @notice Completes a delegator registration
+  ///
+  /// @dev This function takes a delegationID because we can't get the delegation from 
+  ///      the warp message itself
+  ///
+  /// @param delegationID the id of the delegation to complete
+  /// @param messageIndex the index of the warp message to complete the delegation
   function completeDelegatorRegistration(bytes32 delegationID, uint32 messageIndex) public {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
@@ -783,7 +824,6 @@ contract NFTStakingManager is
 
     for (uint32 i = 0; i < maxEpochs; i++) {
       (uint256 epochNumber, uint256 rewards) = rewardsMap.at(0);
-
       // State changes
       claimedEpochNumbers[i] = uint32(epochNumber);
       totalRewards += rewards;

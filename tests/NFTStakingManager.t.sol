@@ -52,6 +52,7 @@ contract NFTStakingManagerTest is Base {
   uint32 public DELEGATION_FEE_BIPS = 1000;
   address public constant WARP_PRECOMPILE_ADDRESS = 0x0200000000000000000000000000000000000005;
   uint32 public EPOCH_DURATION = 1 days;
+  uint256 public BIPS_CONVERSION_FACTOR = 10000;
 
   bytes32 public constant DEFAULT_SOURCE_BLOCKCHAIN_ID =
     bytes32(hex"abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd");
@@ -954,6 +955,236 @@ contract NFTStakingManagerTest is Base {
 
     // after staking 2 tokenIds for separate days, the prepayment should be down to 1 day remaining
     assertEq(nftStakingManager.getPrepaidCredits(hardwareProvider, delegator), 1 days);
+  }
+
+  ///
+  /// REWARDS TESTS
+  ///
+  function test_claimValidatorRewards_success() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards for first epoch
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Process proof and mint rewards for second epoch
+    _warpToGracePeriod(2);
+    _processUptimeProof(validationID, EPOCH_DURATION * 2 * 90 / 100);
+    _warpAfterGracePeriod(2);
+    _mintOneReward(validationID, 2);
+
+    // Claim rewards as validator
+    vm.startPrank(validator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimValidatorRewards(validationID, 2);
+    vm.stopPrank();
+
+    // Verify rewards
+    assertEq(totalRewards, epochRewards * 2 * DELEGATION_FEE_BIPS / BIPS_CONVERSION_FACTOR);
+    assertEq(claimedEpochNumbers.length, 2);
+    assertEq(claimedEpochNumbers[0], 1);
+    assertEq(claimedEpochNumbers[1], 2);
+  }
+
+  function test_claimValidatorRewards_unauthorized() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Try to claim rewards as unauthorized address
+    address unauthorized = getActor("Unauthorized");
+    vm.startPrank(unauthorized);
+    vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
+    nftStakingManager.claimValidatorRewards(validationID, 1);
+    vm.stopPrank();
+  }
+
+  function test_claimValidatorRewards_noRewards() public {
+    // Create validator
+    (bytes32 validationID, address validator) = _createValidator();
+
+    // Try to claim rewards when none exist
+    vm.startPrank(validator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimValidatorRewards(validationID, 1);
+    vm.stopPrank();
+
+    assertEq(totalRewards, 0);
+    assertEq(claimedEpochNumbers.length, 0);
+  }
+
+  function test_claimValidatorRewards_partialClaim() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards for three epochs
+    for (uint32 i = 1; i <= 3; i++) {
+      _warpToGracePeriod(i);
+      _processUptimeProof(validationID, EPOCH_DURATION * i * 90 / 100);
+      _warpAfterGracePeriod(i);
+      _mintOneReward(validationID, i);
+    }
+
+    // Claim only 2 epochs worth of rewards
+    vm.startPrank(validator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimValidatorRewards(validationID, 2);
+    vm.stopPrank();
+
+    // Verify first two epochs were claimed
+    assertEq(totalRewards, epochRewards * 2 * DELEGATION_FEE_BIPS / BIPS_CONVERSION_FACTOR);
+    assertEq(claimedEpochNumbers.length, 2);
+
+    // Claim remaining epoch
+    vm.startPrank(validator);
+    (totalRewards, claimedEpochNumbers) = nftStakingManager.claimValidatorRewards(validationID, 1);
+    vm.stopPrank();
+
+    // Verify last epoch was claimed
+    assertEq(totalRewards, epochRewards * DELEGATION_FEE_BIPS / BIPS_CONVERSION_FACTOR);
+    assertEq(claimedEpochNumbers.length, 1);
+  }
+
+  function test_claimDelegatorRewards_success() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards for first epoch
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Process proof and mint rewards for second epoch
+    _warpToGracePeriod(2);
+    _processUptimeProof(validationID, EPOCH_DURATION * 2 * 90 / 100);
+    _warpAfterGracePeriod(2);
+    _mintOneReward(validationID, 2);
+
+    // Claim rewards as delegator
+    vm.startPrank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimRewards(delegationID, 2);
+    vm.stopPrank();
+
+    // Verify rewards (delegator gets full rewards minus delegation fee)
+    uint256 expectedRewards =
+      epochRewards * 2 * (BIPS_CONVERSION_FACTOR - DELEGATION_FEE_BIPS) / BIPS_CONVERSION_FACTOR;
+    assertEq(totalRewards, expectedRewards);
+    assertEq(claimedEpochNumbers.length, 2);
+    assertEq(claimedEpochNumbers[0], 1);
+    assertEq(claimedEpochNumbers[1], 2);
+  }
+
+  function test_claimDelegatorRewards_unauthorized() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Try to claim rewards as unauthorized address
+    address unauthorized = getActor("Unauthorized");
+    vm.startPrank(unauthorized);
+    vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
+    nftStakingManager.claimRewards(delegationID, 1);
+    vm.stopPrank();
+  }
+
+  function test_claimDelegatorRewards_noRewards() public {
+    // Create validator and delegator
+    (bytes32 validationID,) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Try to claim rewards when none exist
+    vm.startPrank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimRewards(delegationID, 1);
+    vm.stopPrank();
+
+    assertEq(totalRewards, 0);
+    assertEq(claimedEpochNumbers.length, 0);
+  }
+
+  function test_claimDelegatorRewards_partialClaim() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards for three epochs
+    for (uint32 i = 1; i <= 3; i++) {
+      _warpToGracePeriod(i);
+      _processUptimeProof(validationID, EPOCH_DURATION * i * 90 / 100);
+      _warpAfterGracePeriod(i);
+      _mintOneReward(validationID, i);
+    }
+
+    // Claim only 2 epochs worth of rewards
+    vm.startPrank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimRewards(delegationID, 2);
+    vm.stopPrank();
+
+    // Verify first two epochs were claimed
+    uint256 expectedRewards =
+      epochRewards * 2 * (BIPS_CONVERSION_FACTOR - DELEGATION_FEE_BIPS) / BIPS_CONVERSION_FACTOR;
+    assertEq(totalRewards, expectedRewards);
+    assertEq(claimedEpochNumbers.length, 2);
+
+    // Claim remaining epoch
+    vm.startPrank(delegator);
+    (totalRewards, claimedEpochNumbers) = nftStakingManager.claimRewards(delegationID, 1);
+    vm.stopPrank();
+
+    // Verify last epoch was claimed
+    expectedRewards =
+      epochRewards * (BIPS_CONVERSION_FACTOR - DELEGATION_FEE_BIPS) / BIPS_CONVERSION_FACTOR;
+    assertEq(totalRewards, expectedRewards);
+    assertEq(claimedEpochNumbers.length, 1);
+  }
+
+  function test_claimDelegatorRewards_withPrepaidCredits() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Add prepaid credits
+    vm.prank(validator);
+    nftStakingManager.addPrepaidCredits(delegator, uint32(2 * EPOCH_DURATION));
+
+    // Process proof and mint rewards for two epochs
+    for (uint32 i = 1; i <= 2; i++) {
+      _warpToGracePeriod(i);
+      _processUptimeProof(validationID, EPOCH_DURATION * i * 90 / 100);
+      _warpAfterGracePeriod(i);
+      _mintOneReward(validationID, i);
+    }
+
+    // Claim rewards as delegator
+    vm.startPrank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimRewards(delegationID, 2);
+    vm.stopPrank();
+
+    // Verify delegator gets full rewards (no delegation fee due to prepaid credits)
+    assertEq(totalRewards, epochRewards * 2);
+    assertEq(claimedEpochNumbers.length, 2);
   }
 
   ///
