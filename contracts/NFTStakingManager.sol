@@ -105,7 +105,7 @@ struct DelegationInfoView {
 /// @notice Settings for NFT Staking Manager
 struct NFTStakingManagerSettings {
   bool bypassUptimeCheck;
-  uint16 uptimePercentage; // 100 = 100%
+  uint16 uptimePercentageBips; // 10000 = 100%
   uint16 maxLicensesPerValidator;
   uint32 initialEpochTimestamp;
   uint32 epochDuration;
@@ -152,7 +152,7 @@ contract NFTStakingManager is
   struct NFTStakingManagerStorage {
     bool bypassUptimeCheck;
     uint16 maxLicensesPerValidator;
-    uint16 uptimePercentage; // 100 = 100%
+    uint16 uptimePercentageBips; // 10000 = 100%
     uint32 initialEpochTimestamp;
     uint32 currentTotalStakedLicenses;
     uint32 epochDuration;
@@ -294,7 +294,7 @@ contract NFTStakingManager is
     $.epochRewards = settings.epochRewards;
     $.gracePeriod = settings.gracePeriod;
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
-    $.uptimePercentage = settings.uptimePercentage;
+    $.uptimePercentageBips = settings.uptimePercentageBips;
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
     $.minimumDelegationFeeBips = 0; // 0%
     $.maximumDelegationFeeBips = 10000; // 100%
@@ -917,7 +917,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
       bypassUptimeCheck: $.bypassUptimeCheck,
-      uptimePercentage: $.uptimePercentage,
+      uptimePercentageBips: $.uptimePercentageBips,
       maxLicensesPerValidator: $.maxLicensesPerValidator,
       initialEpochTimestamp: $.initialEpochTimestamp,
       epochDuration: $.epochDuration,
@@ -1117,7 +1117,7 @@ contract NFTStakingManager is
   /// @return uptime The expected uptime for the given epoch
   function _expectedUptime() internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochDuration * $.uptimePercentage / 100;
+    return $.epochDuration * $.uptimePercentageBips / BIPS_CONVERSION_FACTOR;
   }
 
   /// @notice Gets the NFT Staking Manager storage

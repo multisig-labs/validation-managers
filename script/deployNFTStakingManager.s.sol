@@ -35,7 +35,7 @@ contract DeployNFTStakingManager is Script {
       epochRewards: 1000 ether, // Example value
       maxLicensesPerValidator: 50, // Example value
       gracePeriod: 1 hours, // Example value
-      uptimePercentage: 80, // Example value (95%)
+      uptimePercentageBips: 8000, // Example value (95%)
       bypassUptimeCheck: true,
       minDelegationEpochs: 0
     });
