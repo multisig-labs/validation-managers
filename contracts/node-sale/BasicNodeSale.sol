@@ -24,6 +24,9 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @notice Maximum number of nodes a single address can purchase
     uint256 public maxNodes = 250;
     
+    /// @notice Maximum total number of nodes that can be sold
+    uint256 public maxTotalSupply = 1000;
+    
     /// @notice Total number of nodes sold
     uint256 public supply;
     
@@ -72,12 +75,17 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @param newMaxNodes New maximum nodes limit
     event MaxNodesUpdated(uint256 newMaxNodes);
 
+    /// @notice Emitted when maximum total supply is updated
+    /// @param newMaxTotalSupply New maximum total supply limit
+    event MaxTotalSupplyUpdated(uint256 newMaxTotalSupply);
+
     /// @notice Custom errors
     error InvalidUSDCAddress();
     error InvalidTreasuryAddress();
     error SalesNotActive();
     error NotWhitelisted();
     error ExceedsMaxNodes();
+    error ExceedsMaxTotalSupply();
     error InsufficientUSDCAllowance();
     error InsufficientUSDCBalance();
 
@@ -98,6 +106,7 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         if (!salesActive) revert SalesNotActive();
         if (isWhitelistEnabled && !whitelist[msg.sender]) revert NotWhitelisted();
         if (nodesPurchased[msg.sender] + nodeAmount > maxNodes) revert ExceedsMaxNodes();
+        if (supply + nodeAmount > maxTotalSupply) revert ExceedsMaxTotalSupply();
         
         uint256 totalPrice = price * nodeAmount;
         if (usdc.allowance(msg.sender, address(this)) < totalPrice) revert InsufficientUSDCAllowance();
@@ -185,5 +194,13 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
             counts[i] = nodesPurchased[buyers[i]];
         }
         return (buyers, counts);
+    }
+
+    /// @notice Update maximum total supply
+    /// @dev Only callable by owner
+    /// @param newMaxTotalSupply New maximum total supply limit
+    function setMaxTotalSupply(uint256 newMaxTotalSupply) external onlyOwner {
+        maxTotalSupply = newMaxTotalSupply;
+        emit MaxTotalSupplyUpdated(newMaxTotalSupply);
     }
 }

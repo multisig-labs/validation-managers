@@ -91,6 +91,7 @@ contract BasicNodeSaleTest is Base {
         assertEq(nodeSale.treasury(), treasury);
         assertEq(nodeSale.price(), 10_000); // 0.01 USDC
         assertEq(nodeSale.maxNodes(), 250);
+        assertEq(nodeSale.maxTotalSupply(), 1000);
         assertEq(nodeSale.supply(), 0);
         assertTrue(nodeSale.salesActive());
         assertFalse(nodeSale.isWhitelistEnabled());
@@ -252,5 +253,41 @@ contract BasicNodeSaleTest is Base {
         nodeSale.buy(1);
         assertEq(nodeSale.nodesPurchased(buyer), 1);
         vm.stopPrank();
+    }
+
+    function test_UpdateMaxTotalSupply() public {
+        // Setup
+        vm.prank(nodeSale.owner());
+        nodeSale.setMaxTotalSupply(2000);
+        
+        // Verify
+        assertEq(nodeSale.maxTotalSupply(), 2000);
+    }
+
+    function test_ExceedsMaxTotalSupply() public {
+        // Setup multiple buyers
+        address[] memory testBuyers = new address[](5);
+        for(uint i = 0; i < 5; i++) {
+            testBuyers[i] = address(uint160(0x1000 + i));
+            usdc.mint(testBuyers[i], 1000 * 10_000); // Give each buyer enough USDC
+        }
+
+        // Buy up to max total supply
+        for(uint i = 0; i < 4; i++) {
+            vm.startPrank(testBuyers[i]);
+            usdc.approve(address(nodeSale), 250 * 10_000);
+            nodeSale.buy(250); // Each buyer buys max nodes
+            vm.stopPrank();
+        }
+
+        // Last buyer tries to buy more than remaining supply
+        vm.startPrank(testBuyers[4]);
+        usdc.approve(address(nodeSale), 250 * 10_000);
+        vm.expectRevert(BasicNodeSale.ExceedsMaxTotalSupply.selector);
+        nodeSale.buy(250); // This would exceed max total supply
+        vm.stopPrank();
+
+        // Verify total supply
+        assertEq(nodeSale.supply(), 1000);
     }
 } 
