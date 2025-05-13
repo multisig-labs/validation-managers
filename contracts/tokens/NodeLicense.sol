@@ -10,6 +10,8 @@ import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
+
 
 interface INFTStakingManager {
   function getTokenLockedBy(uint256 tokenId) external view returns (bytes32);
@@ -69,6 +71,8 @@ contract NodeLicense is
   AccessControlDefaultAdminRulesUpgradeable,
   UUPSUpgradeable
 {
+  using EnumerableSet for EnumerableSet.AddressSet;
+
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
   string private _baseTokenURI;
@@ -77,7 +81,7 @@ contract NodeLicense is
   address private _nftStakingManager;
 
   mapping(uint256 tokenId => address) private _tokenDelegateApprovals;
-  mapping(address owner => mapping(address operator => bool)) private _delegateOperatorApprovals;
+  mapping(address => EnumerableSet.AddressSet) private _delegateOperatorApprovals;
 
   event BaseURIUpdated(string newBaseURI);
   event NFTStakingManagerUpdated(address indexed oldManager, address indexed newManager);
@@ -180,12 +184,17 @@ contract NodeLicense is
       revert ERC721InvalidOperator(operator);
     }
 
-    _delegateOperatorApprovals[owner][operator] = approved;
+    if (approved) {
+      _delegateOperatorApprovals[owner].add(operator);
+    } else {
+      _delegateOperatorApprovals[owner].remove(operator);
+    }
+
     emit DelegateApprovalForAll(owner, operator, approved);
   }
 
   function isDelegationApprovedForAll(address owner, address operator) public view returns (bool) {
-    return _delegateOperatorApprovals[owner][operator];
+    return _delegateOperatorApprovals[owner].contains(operator);
   }
 
   function getDelegationApproval(uint256 tokenId) public view returns (address) {
@@ -261,5 +270,9 @@ contract NodeLicense is
 
   function getUnlockTime() external view returns (uint32) {
     return _lockedUntil;
+  }
+
+  function getDelegateOperatorsForOwner(address owner) external view returns (address[] memory) {
+    return _delegateOperatorApprovals[owner].values();
   }
 }
