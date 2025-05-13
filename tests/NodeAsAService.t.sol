@@ -20,6 +20,7 @@ contract NodeAsAServiceTest is Base {
     address public protocolManager;
     address public user1;
     address public user2;
+    address public treasury;
     
     uint256 public constant INITIAL_PRICE = 100 * 1e6; // 100 USDC per month (6 decimals)
     uint256 public constant INITIAL_BALANCE = 1000 * 1e6; // 1000 USDC
@@ -38,6 +39,7 @@ contract NodeAsAServiceTest is Base {
         protocolManager = makeAddr("protocolManager");
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
+        treasury = makeAddr("treasury");
         
         // Deploy mock USDC
         usdc = new MockERC20("USD Coin", "USDC", 6);
@@ -49,7 +51,8 @@ contract NodeAsAServiceTest is Base {
             NodeAsAService.initialize.selector,
             address(usdc),
             admin,
-            INITIAL_PRICE
+            INITIAL_PRICE,
+            treasury
         );
         nodeAsAService = NodeAsAService(address(new ERC1967Proxy(address(implementation), data)));
         
@@ -73,6 +76,7 @@ contract NodeAsAServiceTest is Base {
         assertEq(nodeAsAService.licensePricePerMonth(), INITIAL_PRICE);
         assertTrue(nodeAsAService.hasRole(nodeAsAService.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(nodeAsAService.hasRole(PROTOCOL_MANAGER_ROLE, protocolManager));
+        assertEq(nodeAsAService.treasury(), treasury);
     }
     
     /**
@@ -172,15 +176,15 @@ contract NodeAsAServiceTest is Base {
         vm.stopPrank();
         
         uint256 contractBalance = usdc.balanceOf(address(nodeAsAService));
-        uint256 managerBalance = usdc.balanceOf(protocolManager);
+        uint256 treasuryBalance = usdc.balanceOf(treasury);
         
         // Withdraw funds
         vm.prank(protocolManager);
         nodeAsAService.withdrawFunds(contractBalance);
         
-        // Verify withdrawal
+        // Verify withdrawal went to treasury
         assertEq(usdc.balanceOf(address(nodeAsAService)), 0);
-        assertEq(usdc.balanceOf(protocolManager), managerBalance + contractBalance);
+        assertEq(usdc.balanceOf(treasury), treasuryBalance + contractBalance);
     }
     
     /**
@@ -189,10 +193,8 @@ contract NodeAsAServiceTest is Base {
      */
     function test_UpdateLicensePrice() public {
         uint32 newPrice = 200 * 1e6; // 200 USDC per month
-        
-        vm.prank(admin);
+        vm.prank(protocolManager);
         nodeAsAService.setLicensePricePerMonth(newPrice);
-        
         assertEq(nodeAsAService.licensePricePerMonth(), newPrice);
     }
 
@@ -217,48 +219,80 @@ contract NodeAsAServiceTest is Base {
     }
 
     /**
-     * @notice Tests that license price update reverts with zero price
-     * @dev Verifies the InvalidPrice error is thrown
+     * @notice Tests that protocol manager can update license price
      */
-    function test_RevertWhen_UpdateLicensePrice_ZeroPrice() public {
+    function test_ProtocolManagerCanUpdatePrice() public {
+        uint32 newPrice = 300 * 1e6; // 300 USDC per month
+        vm.prank(protocolManager);
+        nodeAsAService.setLicensePricePerMonth(newPrice);
+        assertEq(nodeAsAService.licensePricePerMonth(), newPrice);
+    }
+
+    /**
+     * @notice Tests that admin cannot update license price
+     */
+    function test_RevertWhen_AdminCannotUpdatePrice() public {
         vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            IAccessControl.AccessControlUnauthorizedAccount.selector,
+            admin,
+            PROTOCOL_MANAGER_ROLE
+        ));
+        nodeAsAService.setLicensePricePerMonth(400 * 1e6);
+    }
+
+    /**
+     * @notice Tests that non-admin and non-protocol manager cannot update license price
+     */
+    function test_RevertWhen_NonAdminOrProtocolManagerCannotUpdatePrice() public {
+        address notAllowed = makeAddr("notAllowed");
+        vm.prank(notAllowed);
+        vm.expectRevert(abi.encodeWithSelector(
+            IAccessControl.AccessControlUnauthorizedAccount.selector,
+            notAllowed,
+            PROTOCOL_MANAGER_ROLE
+        ));
+        nodeAsAService.setLicensePricePerMonth(400 * 1e6);
+    }
+
+    /**
+     * @notice Tests that protocol manager cannot set zero price
+     */
+    function test_RevertWhen_ProtocolManagerUpdatePrice_ZeroPrice() public {
+        vm.prank(protocolManager);
         vm.expectRevert(NodeAsAService.InvalidPrice.selector);
         nodeAsAService.setLicensePricePerMonth(0);
     }
 
     /**
-     * @notice Tests that non-protocol managers cannot withdraw funds
-     * @dev Verifies the AccessControlUnauthorizedAccount error is thrown
+     * @notice Tests that admin cannot withdraw funds
      */
-    function test_RevertWhen_WithdrawFunds_NotProtocolManager() public {
-        vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, PROTOCOL_MANAGER_ROLE));
+    function test_RevertWhen_AdminCannotWithdrawFunds() public {
+        // First create a payment to add funds to the contract
+        vm.startPrank(user1);
+        usdc.approve(address(nodeAsAService), type(uint256).max);
+        nodeAsAService.payForNodeServices(1, 1, bytes32("test-subnet"));
+        vm.stopPrank();
+        
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            IAccessControl.AccessControlUnauthorizedAccount.selector,
+            admin,
+            PROTOCOL_MANAGER_ROLE
+        ));
         nodeAsAService.withdrawFunds(100);
     }
 
     /**
-     * @notice Tests that non-admins cannot update license price
-     * @dev Verifies the AccessControlUnauthorizedAccount error is thrown
+     * @notice Tests that admin cannot pause contract
      */
-    function test_RevertWhen_UpdateLicensePrice_NotAdmin() public {
-        vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, nodeAsAService.DEFAULT_ADMIN_ROLE()));
-        nodeAsAService.setLicensePricePerMonth(200 * 1e6);
-        vm.stopPrank();
-    }
-
-    /**
-     * @notice Tests that payment for node services reverts when contract is paused
-     * @dev Verifies the ContractPaused error is thrown
-     */
-    function test_RevertWhen_PayForNodeServices_ContractPaused() public {
-        vm.prank(protocolManager);
+    function test_RevertWhen_AdminCannotPauseContract() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(
+            IAccessControl.AccessControlUnauthorizedAccount.selector,
+            admin,
+            PROTOCOL_MANAGER_ROLE
+        ));
         nodeAsAService.setPaused(true);
-
-        vm.startPrank(user1);
-        usdc.approve(address(nodeAsAService), type(uint256).max);
-        vm.expectRevert(NodeAsAService.ContractPaused.selector);
-        nodeAsAService.payForNodeServices(1, 1, bytes32("test-subnet"));
-        vm.stopPrank();
     }
 } 

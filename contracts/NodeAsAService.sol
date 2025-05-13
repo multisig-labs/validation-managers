@@ -38,6 +38,7 @@ contract NodeAsAService is
   uint32 public invoiceNumber;
   uint256 public licensePricePerMonth; // Price in USDC (6 decimals) for a 30-day period
   bool public isPaused;
+  address public treasury;
 
   mapping(uint32 invoiceNumber => PaymentRecord) public paymentRecord;
   mapping(address buyer => uint32[] invoiceNumbers) public buyerInvoices;
@@ -65,6 +66,7 @@ contract NodeAsAService is
   error InsufficientContractBalance();
   error InvalidPaymentRecordIndex();
   error ContractPaused();
+  error InvalidTreasuryAddress();
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -76,17 +78,22 @@ contract NodeAsAService is
    * @param _usdc Address of the USDC token contract
    * @param _defaultAdmin Address that will have admin privileges
    * @param _initialPricePerMonthInUSDC Initial price for a 30-day period in USDC (6 decimals)
+   * @param _treasury Address of the treasury
    */
   function initialize(
     address _usdc,
     address _defaultAdmin,
-    uint256 _initialPricePerMonthInUSDC
+    uint256 _initialPricePerMonthInUSDC,
+    address _treasury
   ) public initializer {
     if (_usdc == address(0)) {
       revert ZeroAddress();
     }
     if (_initialPricePerMonthInUSDC == 0) {
       revert InvalidPrice();
+    }
+    if (_treasury == address(0)) {
+      revert InvalidTreasuryAddress();
     }
 
     __AccessControlDefaultAdminRules_init(0, _defaultAdmin);
@@ -97,6 +104,7 @@ contract NodeAsAService is
     licensePricePerMonth = _initialPricePerMonthInUSDC;
     invoiceNumber = 1; // Initialize, e.g., to start invoices from 1
     isPaused = false;
+    treasury = _treasury;
   }
 
   ///
@@ -154,7 +162,7 @@ contract NodeAsAService is
   }
 
   /**
-   * @notice Withdraws USDC from the contract
+   * @notice Withdraws USDC from the contract to the treasury
    * @param amount Amount of USDC to withdraw
    * @dev Only callable by protocol managers
    */
@@ -165,7 +173,7 @@ contract NodeAsAService is
     if (usdc.balanceOf(address(this)) < amount) {
       revert InsufficientContractBalance();
     }
-    usdc.safeTransfer(msg.sender, amount);
+    usdc.safeTransfer(treasury, amount);
   }
 
   ///
@@ -175,9 +183,9 @@ contract NodeAsAService is
   /**
    * @notice Sets the price per 30 days for licenses
    * @param _newPricePerMonth New price per 30 days in USDC (6 decimals)
-   * @dev Only callable by the default admin
+   * @dev Only callable by the protocol manager
    */
-  function setLicensePricePerMonth(uint256 _newPricePerMonth) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  function setLicensePricePerMonth(uint256 _newPricePerMonth) external onlyRole(PROTOCOL_MANAGER_ROLE) {
     if (_newPricePerMonth == 0) {
       revert InvalidPrice();
     }
