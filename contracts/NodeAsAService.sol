@@ -58,13 +58,10 @@ contract NodeAsAService is
   error ZeroAddress();
   error InvalidPrice();
   error InsufficientBalance();
-  error TransferFailed();
   error MustPayForAtLeastOneLicense();
   error DurationMustBeGreaterThanZero();
-  error DurationMustBeMultipleOf30Days();
   error AmountMustBeGreaterThanZero();
   error InsufficientContractBalance();
-  error InvalidPaymentRecordIndex();
   error ContractPaused();
   error InvalidTreasuryAddress();
 

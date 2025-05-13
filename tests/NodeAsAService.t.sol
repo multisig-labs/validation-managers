@@ -145,7 +145,7 @@ contract NodeAsAServiceTest is Base {
 
     /**
      * @notice Tests that payment for node services reverts with transfer failure
-     * @dev Verifies the TransferFailed error is thrown when USDC transfer fails
+     * @dev Verifies that the SafeERC20 error is thrown when USDC transfer fails
      */
     function test_RevertWhen_PayForNodeServices_TransferFailed() public {
         // First approve spending
