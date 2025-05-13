@@ -373,7 +373,6 @@ contract NodeLicenseTest is Base {
     );
     nodeLicense.getDelegationApproval(nonExistentTokenId);
   }
-
   function test_RemoveDelegaation_NonExistantDelegation() public {
     address operator = makeAddr("operator");
 
