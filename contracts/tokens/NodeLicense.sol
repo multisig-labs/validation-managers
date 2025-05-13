@@ -208,7 +208,6 @@ contract NodeLicense is
   }
 
   function setNFTStakingManager(address nftStakingManager) public onlyRole(DEFAULT_ADMIN_ROLE) {
-    if (nftStakingManager == address(0)) revert ZeroAddress();
     emit NFTStakingManagerUpdated(_nftStakingManager, nftStakingManager);
     _nftStakingManager = nftStakingManager;
   }

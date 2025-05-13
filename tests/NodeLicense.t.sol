@@ -437,4 +437,42 @@ contract NodeLicenseTest is Base {
     );
     nodeLicense.setDelegationApprovalForAll(address(0), true);
   }
+
+  function test_SetNFTStakingManager_ToZeroAddress_DisablesStakingLock() public {
+    // Mint a token to user1
+    vm.prank(minter);
+    uint256 tokenId = nodeLicense.mint(user1);
+
+    // Initially, lock the token with the mockStakingManager
+    bytes32 lockId = keccak256("test-lock-for-zero-address-test");
+    // Ensure mockStakingManager is the current one from setUp
+    assertEq(nodeLicense.getNFTStakingManager(), address(mockStakingManager), "Initial staking manager mismatch");
+    vm.prank(address(mockStakingManager)); // Staking manager itself locks the token
+    mockStakingManager.setTokenLocked(tokenId, lockId);
+
+    // Try to transfer - should fail because token is locked by the current staking manager
+    vm.startPrank(user1);
+    vm.expectRevert(NodeLicense.LicenseStakedError.selector);
+    nodeLicense.transferFrom(user1, user2, tokenId);
+    vm.stopPrank();
+
+    // Admin sets the NFTStakingManager address to address(0)
+    address currentStakingManager = nodeLicense.getNFTStakingManager();
+    vm.startPrank(admin);
+    vm.expectEmit(true, true, true, false); // oldManager, newManager, adminRole
+    emit NodeLicense.NFTStakingManagerUpdated(currentStakingManager, address(0));
+    nodeLicense.setNFTStakingManager(address(0));
+    vm.stopPrank();
+
+    // Verify the staking manager address is now address(0)
+    assertEq(nodeLicense.getNFTStakingManager(), address(0), "Staking manager should be address(0)");
+
+    // Try to transfer again - should succeed because the staking manager check is bypassed
+    vm.startPrank(user1);
+    nodeLicense.transferFrom(user1, user2, tokenId);
+    vm.stopPrank();
+
+    // Verify the transfer was successful and user2 is the new owner
+    assertEq(nodeLicense.ownerOf(tokenId), user2, "user2 should now own the token");
+  }
 }
