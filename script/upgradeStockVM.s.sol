@@ -7,9 +7,9 @@ import { ITransparentUpgradeableProxy } from
 import { Script } from "forge-std-1.9.6/src/Script.sol";
 import { console } from "forge-std-1.9.6/src/console.sol";
 
-import { ICMInitializable } from "icm-contracts-d426c55/contracts/utilities/ICMInitializable.sol";
+import { ICMInitializable } from "icm-contracts-2.0.0/contracts/utilities/ICMInitializable.sol";
 import { ValidatorManager } from
-  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
 
 contract UpgradeValidatorManager is Script {
   address public proxyAddress = 0x0Feedc0de0000000000000000000000000000000;

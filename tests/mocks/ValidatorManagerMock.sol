@@ -6,7 +6,7 @@ import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-2.0.0/contracts/validator-manager/interfaces/IACP99Manager.sol";
 
 contract MockValidatorManager {
   mapping(bytes32 validationID => Validator validator) public validators;

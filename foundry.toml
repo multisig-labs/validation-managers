@@ -30,8 +30,8 @@ wrap_comments = false
 forge-std = "1.9.6"
 "@openzeppelin-contracts" = "5.3.0"
 "@openzeppelin-contracts-upgradeable" = "5.3.0"
-icm-contracts = { version = "d426c55", git = "https://github.com/ava-labs/icm-contracts.git", rev = "d426c55e7c871f872b4f4cb595d156b19cde67dc" }
 solmate = "6.8.0"
+icm-contracts = { version = "2.0.0", git = "https://github.com/ava-labs/icm-contracts", tag = "validator-manager-v2.0.0" }
 
 [soldeer]
 # whether Soldeer manages remappings

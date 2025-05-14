@@ -20,11 +20,11 @@ import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-2.0.0/contracts/validator-manager/interfaces/IACP99Manager.sol";
 import { ValidatorManager } from
-  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
 import { ValidatorMessages } from
-  "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorMessages.sol";
 
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 import { NodeLicense } from "./tokens/NodeLicense.sol";
