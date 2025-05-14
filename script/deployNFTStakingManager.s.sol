@@ -7,7 +7,7 @@ import { console } from "forge-std-1.9.6/src/console.sol";
 
 import { NFTStakingManager, NFTStakingManagerSettings } from "../contracts/NFTStakingManager.sol";
 import { ValidatorManager } from
-  "icm-contracts-d426c55/contracts/validator-manager/ValidatorManager.sol";
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
 
 contract DeployNFTStakingManager is Script {
   address public proxyAddress = 0x0Feedc0de0000000000000000000000000000000;
