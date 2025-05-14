@@ -21,7 +21,7 @@ import {
   PChainOwner,
   Validator,
   ValidatorStatus
-} from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+} from "icm-contracts-2.0.0/contracts/validator-manager/interfaces/IACP99Manager.sol";
 
 import { ERC721Mock } from "./mocks/ERC721Mock.sol";
 import { NativeMinterMock } from "./mocks/NativeMinterMock.sol";
@@ -31,10 +31,10 @@ import { IWarpMessenger, WarpMessage } from "./utils/IWarpMessenger.sol";
 
 import { ERC1967Proxy } from "@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
-import { PChainOwner } from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+import { PChainOwner } from "icm-contracts-2.0.0/contracts/validator-manager/ACP99Manager.sol";
 
 import { ValidatorMessages } from
-  "icm-contracts-d426c55/contracts/validator-manager/ValidatorMessages.sol";
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorMessages.sol";
 
 contract NFTStakingManagerTest is Base {
   NodeLicense public nft;

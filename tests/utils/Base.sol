@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 import { Test } from "forge-std-1.9.6/src/Test.sol";
-import { PChainOwner } from "icm-contracts-d426c55/contracts/validator-manager/ACP99Manager.sol";
+import { PChainOwner } from "icm-contracts-2.0.0/contracts/validator-manager/ACP99Manager.sol";
 
 abstract contract Base is Test {
   PChainOwner public DEFAULT_P_CHAIN_OWNER;
