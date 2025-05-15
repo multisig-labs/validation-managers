@@ -668,7 +668,7 @@ contract NFTStakingManagerTest is Base {
 
     vm.prank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationID, 2);
+      nftStakingManager.claimDelegatorRewards(delegationID, 2);
 
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
@@ -920,7 +920,7 @@ contract NFTStakingManagerTest is Base {
 
       // claim rewards
       vm.prank(delegator);
-      (uint256 claimedRewards,) = nftStakingManager.claimRewards(delegationID1, 1);
+      (uint256 claimedRewards,) = nftStakingManager.claimDelegatorRewards(delegationID1, 1);
       assertEq(claimedRewards, epochRewards);
     }
 
@@ -947,7 +947,7 @@ contract NFTStakingManagerTest is Base {
 
       // Claim rewards
       vm.prank(delegator);
-      (uint256 claimedRewards,) = nftStakingManager.claimRewards(delegationID2, 1);
+      (uint256 claimedRewards,) = nftStakingManager.claimDelegatorRewards(delegationID2, 1);
 
       assertEq(claimedRewards, epochRewards);
     }
@@ -1075,7 +1075,7 @@ contract NFTStakingManagerTest is Base {
     // Claim rewards as delegator
     vm.startPrank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationID, 2);
+      nftStakingManager.claimDelegatorRewards(delegationID, 2);
     vm.stopPrank();
 
     // Verify rewards (delegator gets full rewards minus delegation fee)
@@ -1102,7 +1102,7 @@ contract NFTStakingManagerTest is Base {
     address unauthorized = getActor("Unauthorized");
     vm.startPrank(unauthorized);
     vm.expectRevert(NFTStakingManager.UnauthorizedOwner.selector);
-    nftStakingManager.claimRewards(delegationID, 1);
+    nftStakingManager.claimDelegatorRewards(delegationID, 1);
     vm.stopPrank();
   }
 
@@ -1114,7 +1114,7 @@ contract NFTStakingManagerTest is Base {
     // Try to claim rewards when none exist
     vm.startPrank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationID, 1);
+      nftStakingManager.claimDelegatorRewards(delegationID, 1);
     vm.stopPrank();
 
     assertEq(totalRewards, 0);
@@ -1137,7 +1137,7 @@ contract NFTStakingManagerTest is Base {
     // Claim only 2 epochs worth of rewards
     vm.startPrank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationID, 2);
+      nftStakingManager.claimDelegatorRewards(delegationID, 2);
     vm.stopPrank();
 
     // Verify first two epochs were claimed
@@ -1148,7 +1148,7 @@ contract NFTStakingManagerTest is Base {
 
     // Claim remaining epoch
     vm.startPrank(delegator);
-    (totalRewards, claimedEpochNumbers) = nftStakingManager.claimRewards(delegationID, 1);
+    (totalRewards, claimedEpochNumbers) = nftStakingManager.claimDelegatorRewards(delegationID, 1);
     vm.stopPrank();
 
     // Verify last epoch was claimed
@@ -1178,7 +1178,7 @@ contract NFTStakingManagerTest is Base {
     // Claim rewards as delegator
     vm.startPrank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
-      nftStakingManager.claimRewards(delegationID, 2);
+      nftStakingManager.claimDelegatorRewards(delegationID, 2);
     vm.stopPrank();
 
     // Verify delegator gets full rewards (no delegation fee due to prepaid credits)
@@ -1293,7 +1293,7 @@ contract NFTStakingManagerTest is Base {
     vm.warp(block.timestamp + EPOCH_DURATION * 2);
 
     vm.prank(delegator1);
-    (uint256 d1TotalRewards,) = nftStakingManager.claimRewards(delegationID1, 1);
+    (uint256 d1TotalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID1, 1);
     assertGt(d1TotalRewards, 0, "Should have claimed some rewards");
 
     assertEq(
@@ -1338,7 +1338,7 @@ contract NFTStakingManagerTest is Base {
     );
 
     vm.prank(delegator2);
-    (uint256 d2TotalRewards,) = nftStakingManager.claimRewards(delegationID2, 1);
+    (uint256 d2TotalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID2, 1);
     assertGt(d2TotalRewards, 0, "Should have claimed some rewards");
 
     assertEq(
@@ -1370,7 +1370,7 @@ contract NFTStakingManagerTest is Base {
     _mintOneReward(validationID, rewardsEpoch);
 
     vm.prank(delegator3);
-    (uint256 d3TotalRewards,) = nftStakingManager.claimRewards(delegationID3, 1);
+    (uint256 d3TotalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID3, 1);
     assertGt(d3TotalRewards, 0, "Should have claimed some rewards");
 
     // Delegation is NOT ended
@@ -1521,7 +1521,7 @@ contract NFTStakingManagerTest is Base {
 
     // Claim delegator rewards
     vm.prank(delegatorOwner);
-    (uint256 totalRewards,) = nftStakingManager.claimRewards(delegationID, 1);
+    (uint256 totalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID, 1);
     assertGt(totalRewards, 0, "Delegator should have claimed rewards");
 
     assertEq(

@@ -846,7 +846,7 @@ contract NFTStakingManager is
   ///
   /// @return totalRewardsToTransfer The total rewards to claim
   /// @return claimedEpochNumbers The epoch numbers that were claimed
-  function _claimRewardsInternal(
+  function _claimRewards(
     EnumerableMap.UintToUintMap storage rewardsMap,
     bytes32 id,
     uint32 maxEpochs
@@ -884,7 +884,7 @@ contract NFTStakingManager is
   ///
   /// @return totalRewards The total rewards to claim
   /// @return claimedEpochNumbers The epoch numbers that were claimed
-  function claimRewards(bytes32 delegationID, uint32 maxEpochs)
+  function claimDelegatorRewards(bytes32 delegationID, uint32 maxEpochs)
     external
     returns (uint256 totalRewards, uint32[] memory claimedEpochNumbers)
   {
@@ -894,7 +894,7 @@ contract NFTStakingManager is
     if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
 
     (totalRewards, claimedEpochNumbers) =
-      _claimRewardsInternal(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
+      _claimRewards(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
 
     if (
       delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
@@ -924,7 +924,7 @@ contract NFTStakingManager is
     if (validation.owner != _msgSender()) revert UnauthorizedOwner();
 
     (totalRewards, claimedEpochNumbers) =
-      _claimRewardsInternal(validation.claimableRewardsPerEpoch, validationID, maxEpochs);
+      _claimRewards(validation.claimableRewardsPerEpoch, validationID, maxEpochs);
 
     if (
       validation.claimableRewardsPerEpoch.length() == 0 && validation.endEpoch != 0
