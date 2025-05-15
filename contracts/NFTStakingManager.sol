@@ -73,7 +73,8 @@ enum DelegatorStatus {
   Unknown,
   PendingAdded,
   Active,
-  PendingRemoved
+  PendingRemoved,
+  Removed
 }
 
 /// @notice Delegator information
@@ -431,6 +432,7 @@ contract NFTStakingManager is
 
     if (validation.claimableRewardsPerEpoch.length() == 0) {
       $.validationsByOwner[validation.owner].remove(validationID);
+      delete $.validations[validationID];
     }
 
     emit CompletedValidatorRemoval(validationID);
@@ -673,11 +675,14 @@ contract NFTStakingManager is
       }
     }
 
+    delegation.status = DelegatorStatus.Removed;
+
     if (delegation.claimableRewardsPerEpoch.length() == 0) {
       $.delegationsByOwner[delegation.owner].remove(delegationID);
+      delete $.delegations[delegationID];
     }
 
-    // we never delete the delegation so that the user can claim rewards whenever
+
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
@@ -861,6 +866,7 @@ contract NFTStakingManager is
         && validation.endEpoch <= getEpochByTimestamp(block.timestamp)
     ) {
       $.validationsByOwner[validation.owner].remove(validationID);
+      delete $.validations[validationID];
     }
 
     // Send rewards last
@@ -892,6 +898,7 @@ contract NFTStakingManager is
         && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
     ) {
       $.delegationsByOwner[delegation.owner].remove(delegationID);
+      delete $.delegations[delegationID];
     }
 
     // Send rewards last
