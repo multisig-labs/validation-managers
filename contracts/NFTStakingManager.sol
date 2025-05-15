@@ -456,11 +456,6 @@ contract NFTStakingManager is
     uint256[] calldata tokenIDs
   ) public returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationID];
-
-    if (validation.owner != _msgSender()) {
-      revert UnauthorizedOwner();
-    }
 
     bool isApprovedForAll = $.licenseContract.isDelegationApprovedForAll(owner, _msgSender());
 
