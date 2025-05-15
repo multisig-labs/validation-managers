@@ -1266,12 +1266,12 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator1).length,
       1,
-      "A: Initial delegation count should be 1"
+      "Initial delegation count should be 1"
     );
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator1)[0],
       delegationID1,
-      "A: Initial delegation ID mismatch"
+      "Initial delegation ID mismatch"
     );
 
     uint32 rewardsEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
@@ -1294,12 +1294,10 @@ contract NFTStakingManagerTest is Base {
 
     vm.prank(delegator1);
     (uint256 d1TotalRewards,) = nftStakingManager.claimRewards(delegationID1, 1);
-    assertGt(d1TotalRewards, 0, "A: Should have claimed some rewards");
+    assertGt(d1TotalRewards, 0, "Should have claimed some rewards");
 
     assertEq(
-      nftStakingManager.getDelegationsByOwner(delegator1).length,
-      0,
-      "A: Delegation should be removed"
+      nftStakingManager.getDelegationsByOwner(delegator1).length, 0, "Delegation should be removed"
     );
   }
 
@@ -1316,7 +1314,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator2).length,
       1,
-      "B: Initial delegation count should be 1"
+      "Initial delegation count should be 1"
     );
 
     rewardsEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
@@ -1336,17 +1334,17 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator2).length,
       1,
-      "B: Delegation should STILL be present as rewards not claimed"
+      "Delegation should STILL be present as rewards not claimed"
     );
 
     vm.prank(delegator2);
     (uint256 d2TotalRewards,) = nftStakingManager.claimRewards(delegationID2, 1);
-    assertGt(d2TotalRewards, 0, "B: Should have claimed some rewards");
+    assertGt(d2TotalRewards, 0, "Should have claimed some rewards");
 
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator2).length,
       0,
-      "B: Delegation should be removed after claiming rewards"
+      "Delegation should be removed after claiming rewards"
     );
   }
 
@@ -1362,7 +1360,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator3).length,
       1,
-      "C: Initial delegation count should be 1"
+      "Initial delegation count should be 1"
     );
 
     rewardsEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
@@ -1373,13 +1371,13 @@ contract NFTStakingManagerTest is Base {
 
     vm.prank(delegator3);
     (uint256 d3TotalRewards,) = nftStakingManager.claimRewards(delegationID3, 1);
-    assertGt(d3TotalRewards, 0, "C: Should have claimed some rewards");
+    assertGt(d3TotalRewards, 0, "Should have claimed some rewards");
 
     // Delegation is NOT ended
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator3).length,
       1,
-      "C: Delegation should STILL be present as it's active"
+      "Delegation should STILL be present as it's active"
     );
   }
 
@@ -1494,10 +1492,6 @@ contract NFTStakingManagerTest is Base {
   function test_DelegatorRemoval_WithRewards_DoesNotRemoveFromOwnerMapping() public {
     (bytes32 validationID, /* address validatorOwner */ ) = _createValidator();
     (bytes32 delegationID, address delegatorOwner) = _createDelegation(validationID, 1);
-
-    // No need to add prepaid credits if we are testing that delegation fee is paid to validator
-    // and delegator receives rewards minus fee. If full rewards for delegator are desired for specific test,
-    // then addPrepaidCredits. For this test, it's fine either way, as long as rewards are generated.
 
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegatorOwner).length,

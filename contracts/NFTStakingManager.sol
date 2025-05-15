@@ -874,7 +874,6 @@ contract NFTStakingManager is
       emit RewardsClaimed(claimedEpochNumbers[i], id, rewardsAmounts[i]);
     }
 
-    // DO NOT SEND ETH HERE. The public functions will do it.
     return (totalRewardsToTransfer, claimedEpochNumbers);
   }
 
@@ -897,13 +896,11 @@ contract NFTStakingManager is
     (totalRewards, claimedEpochNumbers) =
       _claimRewardsInternal(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
 
-    // Conditionally remove from delegationsByOwner if all rewards claimed and delegation ended
     if (
       delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
         && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
     ) {
       $.delegationsByOwner[delegation.owner].remove(delegationID);
-      // Optionally, to free up more storage: delete $.delegations[delegationID];
     }
 
     // Send rewards last
@@ -929,13 +926,11 @@ contract NFTStakingManager is
     (totalRewards, claimedEpochNumbers) =
       _claimRewardsInternal(validation.claimableRewardsPerEpoch, validationID, maxEpochs);
 
-    // Conditionally remove from validationsByOwner if all rewards claimed and validation ended
     if (
       validation.claimableRewardsPerEpoch.length() == 0 && validation.endEpoch != 0
         && validation.endEpoch <= getEpochByTimestamp(block.timestamp)
     ) {
       $.validationsByOwner[validation.owner].remove(validationID);
-      // Optionally, to free up more storage: delete $.validations[validationID];
     }
 
     // Send rewards last
