@@ -23,7 +23,7 @@ integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
 name = "icm-contracts"
 version = "2.0.0"
 git = "https://github.com/ava-labs/icm-contracts"
-rev = "eb0afb7ff59ad4612fa3d5fd67d8b3e7e135bd06"
+rev = "validator-manager-v2.0.0"
 
 [[dependencies]]
 name = "solmate"
