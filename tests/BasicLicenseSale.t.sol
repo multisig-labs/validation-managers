@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 import { Test } from "forge-std-1.9.6/src/Test.sol";
-import { BasicNodeSale } from "../contracts/node-sale/BasicNodeSale.sol";
+import { BasicLicenseSale } from "../contracts/license-sale/BasicLicenseSale.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Base } from "./utils/Base.sol";
 
@@ -15,12 +15,12 @@ contract MockERC20 is IERC20 {
         _balances[to] += amount;
     }
 
-    function decimals() external view returns (uint8) {
-        return _decimals;
-    }
-
     function totalSupply() external pure returns (uint256) {
         return 0;
+    }
+
+    function decimals() external view returns (uint8) {
+        return _decimals;
     }
 
     function balanceOf(address account) external view returns (uint256) {
@@ -50,14 +50,14 @@ contract MockERC20 is IERC20 {
     }
 }
 
-contract BasicNodeSaleTest is Base {
-    event NodePurchased(address buyer, uint256 amount, uint256 totalCost);
-
-    BasicNodeSale public nodeSale;
+contract BasicLicenseSaleTest is Base {
+    BasicLicenseSale public licenseSale;
     MockERC20 public usdc;
     address public treasury;
     address public buyer;
     address public nonWhitelistedBuyer;
+
+    event LicensePurchased(address buyer, uint256 amount, uint256 totalCost);
 
     function setUp() public override {
         super.setUp();
@@ -68,8 +68,8 @@ contract BasicNodeSaleTest is Base {
         // Setup treasury
         treasury = getNamedActor("treasury");
         
-        // Deploy BasicNodeSale
-        nodeSale = new BasicNodeSale(address(usdc), treasury);
+        // Deploy BasicLicenseSale
+        licenseSale = new BasicLicenseSale(address(usdc), treasury);
         
         // Setup actors
         buyer = getNamedActor("buyer");
@@ -80,81 +80,81 @@ contract BasicNodeSaleTest is Base {
         usdc.mint(nonWhitelistedBuyer, 1000000 * 10**6); // 1M USDC
         
         // Start sales and whitelist buyer
-        vm.startPrank(nodeSale.owner());
-        nodeSale.startNodeSales();
-        nodeSale.addToWhitelist(buyer);
+        vm.startPrank(licenseSale.owner());
+        licenseSale.startLicenseSales();
+        licenseSale.addToWhitelist(buyer);
         vm.stopPrank();
     }
 
     function test_InitialState() public {
-        assertEq(address(nodeSale.usdc()), address(usdc));
-        assertEq(nodeSale.treasury(), treasury);
-        assertEq(nodeSale.price(), 10_000); // 0.01 USDC
-        assertEq(nodeSale.maxNodes(), 250);
-        assertEq(nodeSale.maxTotalSupply(), 1000);
-        assertEq(nodeSale.supply(), 0);
-        assertTrue(nodeSale.salesActive());
-        assertFalse(nodeSale.isWhitelistEnabled());
+        assertEq(address(licenseSale.usdc()), address(usdc));
+        assertEq(licenseSale.treasury(), treasury);
+        assertEq(licenseSale.price(), 10_000); // 0.01 USDC
+        assertEq(licenseSale.maxLicenses(), 250);
+        assertEq(licenseSale.maxTotalSupply(), 1000);
+        assertEq(licenseSale.supply(), 0);
+        assertTrue(licenseSale.salesActive());
+        assertFalse(licenseSale.isWhitelistEnabled());
     }
 
-    function test_BuyNode() public {
+    function test_BuyLicense() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 10_000);
+        usdc.approve(address(licenseSale), 10_000);
         
-        // Buy node
+        // Buy license
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(buyer, 1, 10_000);
-        nodeSale.buy(1);
+        emit LicensePurchased(buyer, 1, 10_000);
+        licenseSale.buy(1);
         
         // Verify
-        assertEq(nodeSale.nodesPurchased(buyer), 1);
-        assertEq(nodeSale.supply(), 1);
-        assertEq(usdc.balanceOf(address(nodeSale)), 10_000);
+        assertEq(licenseSale.licensesPurchased(buyer), 1);
+        assertEq(licenseSale.supply(), 1);
+        assertEq(usdc.balanceOf(address(licenseSale)), 10_000);
         vm.stopPrank();
     }
 
-    function test_BuyNodeWithoutWhitelist() public {
+    function test_BuyLicenseWithoutWhitelist() public {
         // Setup
         vm.startPrank(nonWhitelistedBuyer);
-        usdc.approve(address(nodeSale), 10_000);
+        usdc.approve(address(licenseSale), 10_000);
         
         // Should succeed since whitelist is disabled by default
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(nonWhitelistedBuyer, 1, 10_000);
-        nodeSale.buy(1);
+        emit LicensePurchased(nonWhitelistedBuyer, 1, 10_000);
+        licenseSale.buy(1);
         
         // Enable whitelist
         vm.stopPrank();
-        vm.startPrank(nodeSale.owner());
-        nodeSale.setWhitelistEnabled(true);
+        vm.startPrank(licenseSale.owner());
+        licenseSale.setWhitelistEnabled(true);
         
         // Should fail now
         vm.stopPrank();
         vm.startPrank(nonWhitelistedBuyer);
-        vm.expectRevert(BasicNodeSale.NotWhitelisted.selector);
-        nodeSale.buy(1);
+        vm.expectRevert(BasicLicenseSale.NotWhitelisted.selector);
+        licenseSale.buy(1);
         
         vm.stopPrank();
     }
 
-    function test_BuyMaxNodes() public {
+    function test_BuyMaxLicenses() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 250 * 10_000);
+        usdc.approve(address(licenseSale), 250 * 10_000);
         
-        // Buy max nodes
+        // Buy max licenses
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(buyer, 250, 250 * 10_000);
-        nodeSale.buy(250);
+        emit LicensePurchased(buyer, 250, 250 * 10_000);
+        licenseSale.buy(250);
         
         // Verify
-        assertEq(nodeSale.nodesPurchased(buyer), 250);
-        assertEq(nodeSale.supply(), 250);
+        assertEq(licenseSale.licensesPurchased(buyer), 250);
+        assertEq(licenseSale.supply(), 250);
         
         // Try to buy more
-        vm.expectRevert(BasicNodeSale.ExceedsMaxNodes.selector);
-        nodeSale.buy(1);
+        vm.expectRevert(BasicLicenseSale.ExceedsMaxLicenses.selector);
+        licenseSale.buy(1);
         
         vm.stopPrank();
     }
@@ -162,106 +162,106 @@ contract BasicNodeSaleTest is Base {
     function test_Withdraw() public {
         // Setup
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 10_000);
+        usdc.approve(address(licenseSale), 10_000);
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(buyer, 1, 10_000);
-        nodeSale.buy(1);
+        emit LicensePurchased(buyer, 1, 10_000);
+        licenseSale.buy(1);
         vm.stopPrank();
         
         // Withdraw
-        vm.prank(nodeSale.owner());
-        nodeSale.withdrawToTreasury();
+        vm.prank(licenseSale.owner());
+        licenseSale.withdrawToTreasury();
         
         // Verify
-        assertEq(usdc.balanceOf(address(nodeSale)), 0);
+        assertEq(usdc.balanceOf(address(licenseSale)), 0);
         assertEq(usdc.balanceOf(treasury), 10_000);
     }
 
     function test_UpdatePrice() public {
         // Setup
-        vm.prank(nodeSale.owner());
-        nodeSale.setNodePrice(20_000);
+        vm.prank(licenseSale.owner());
+        licenseSale.setLicensePrice(20_000);
         
         // Verify
-        assertEq(nodeSale.price(), 20_000);
+        assertEq(licenseSale.price(), 20_000);
         
         // Buy with new price
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 20_000);
+        usdc.approve(address(licenseSale), 20_000);
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(buyer, 1, 20_000);
-        nodeSale.buy(1);
+        emit LicensePurchased(buyer, 1, 20_000);
+        licenseSale.buy(1);
         
         // Verify
-        assertEq(usdc.balanceOf(address(nodeSale)), 20_000);
+        assertEq(usdc.balanceOf(address(licenseSale)), 20_000);
         vm.stopPrank();
     }
 
-    function test_UpdateMaxNodes() public {
+    function test_UpdateMaxLicenses() public {
         // Setup
-        vm.prank(nodeSale.owner());
-        nodeSale.setMaxNodesPerAddress(50);
+        vm.prank(licenseSale.owner());
+        licenseSale.setMaxLicensesPerAddress(50);
         
         // Verify
-        assertEq(nodeSale.maxNodes(), 50);
+        assertEq(licenseSale.maxLicenses(), 50);
         
-        // Buy more nodes
+        // Buy more licenses
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 50 * 10_000);
+        usdc.approve(address(licenseSale), 50 * 10_000);
         vm.expectEmit(true, true, true, true);
-        emit NodePurchased(buyer, 50, 50 * 10_000);
-        nodeSale.buy(50);
+        emit LicensePurchased(buyer, 50, 50 * 10_000);
+        licenseSale.buy(50);
         
         // Verify
-        assertEq(nodeSale.nodesPurchased(buyer), 50);
-        assertEq(nodeSale.supply(), 50);
+        assertEq(licenseSale.licensesPurchased(buyer), 50);
+        assertEq(licenseSale.supply(), 50);
         vm.stopPrank();
     }
 
     function test_WhitelistManagement() public {
         // Add to whitelist
-        vm.prank(nodeSale.owner());
-        nodeSale.addToWhitelist(buyer);
-        assertTrue(nodeSale.whitelist(buyer));
+        vm.prank(licenseSale.owner());
+        licenseSale.addToWhitelist(buyer);
+        assertTrue(licenseSale.whitelist(buyer));
         
         // Remove from whitelist
-        vm.prank(nodeSale.owner());
-        nodeSale.removeFromWhitelist(buyer);
-        assertFalse(nodeSale.whitelist(buyer));
+        vm.prank(licenseSale.owner());
+        licenseSale.removeFromWhitelist(buyer);
+        assertFalse(licenseSale.whitelist(buyer));
     }
 
     function test_SalesStatus() public {
         // Stop sales
-        vm.prank(nodeSale.owner());
-        nodeSale.stopNodeSales();
-        assertFalse(nodeSale.salesActive());
+        vm.prank(licenseSale.owner());
+        licenseSale.stopLicenseSales();
+        assertFalse(licenseSale.salesActive());
         
         // Try to buy
         vm.startPrank(buyer);
-        usdc.approve(address(nodeSale), 10_000);
-        vm.expectRevert(BasicNodeSale.SalesNotActive.selector);
-        nodeSale.buy(1);
+        usdc.approve(address(licenseSale), 10_000);
+        vm.expectRevert(BasicLicenseSale.SalesNotActive.selector);
+        licenseSale.buy(1);
         vm.stopPrank();
         
         // Start sales
-        vm.prank(nodeSale.owner());
-        nodeSale.startNodeSales();
-        assertTrue(nodeSale.salesActive());
+        vm.prank(licenseSale.owner());
+        licenseSale.startLicenseSales();
+        assertTrue(licenseSale.salesActive());
         
         // Buy should work now
         vm.startPrank(buyer);
-        nodeSale.buy(1);
-        assertEq(nodeSale.nodesPurchased(buyer), 1);
+        licenseSale.buy(1);
+        assertEq(licenseSale.licensesPurchased(buyer), 1);
         vm.stopPrank();
     }
 
     function test_UpdateMaxTotalSupply() public {
         // Setup
-        vm.prank(nodeSale.owner());
-        nodeSale.setMaxTotalSupply(2000);
+        vm.prank(licenseSale.owner());
+        licenseSale.setMaxTotalSupply(2000);
         
         // Verify
-        assertEq(nodeSale.maxTotalSupply(), 2000);
+        assertEq(licenseSale.maxTotalSupply(), 2000);
     }
 
     function test_ExceedsMaxTotalSupply() public {
@@ -275,19 +275,19 @@ contract BasicNodeSaleTest is Base {
         // Buy up to max total supply
         for(uint i = 0; i < 4; i++) {
             vm.startPrank(testBuyers[i]);
-            usdc.approve(address(nodeSale), 250 * 10_000);
-            nodeSale.buy(250); // Each buyer buys max nodes
+            usdc.approve(address(licenseSale), 250 * 10_000);
+            licenseSale.buy(250); // Each buyer buys max licenses
             vm.stopPrank();
         }
 
         // Last buyer tries to buy more than remaining supply
         vm.startPrank(testBuyers[4]);
-        usdc.approve(address(nodeSale), 250 * 10_000);
-        vm.expectRevert(BasicNodeSale.ExceedsMaxTotalSupply.selector);
-        nodeSale.buy(250); // This would exceed max total supply
+        usdc.approve(address(licenseSale), 250 * 10_000);
+        vm.expectRevert(BasicLicenseSale.ExceedsMaxTotalSupply.selector);
+        licenseSale.buy(250); // This would exceed max total supply
         vm.stopPrank();
 
         // Verify total supply
-        assertEq(nodeSale.supply(), 1000);
+        assertEq(licenseSale.supply(), 1000);
     }
 } 

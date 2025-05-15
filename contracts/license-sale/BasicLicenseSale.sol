@@ -6,10 +6,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/// @title BasicNodeSale
-/// @notice Contract for managing the sale of nodes with USDC as payment token
+/// @title BasicLicenseSale
+/// @notice Contract for managing the sale of licenses with USDC as payment token
 /// @dev Implements whitelist functionality and uses USDC for payments
-contract BasicNodeSale is Ownable, ReentrancyGuard {
+contract BasicLicenseSale is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     /// @notice Treasury address where collected funds are sent
@@ -18,16 +18,16 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @notice USDC token contract address
     IERC20 public immutable usdc;
     
-    /// @notice Price per node in USDC (6 decimals)
+    /// @notice Price per license in USDC (6 decimals)
     uint256 public price = 10_000; // 0.01 USDC (1 cent)
     
-    /// @notice Maximum number of nodes a single address can purchase
-    uint256 public maxNodes = 250;
+    /// @notice Maximum number of licenses a single address can purchase
+    uint256 public maxLicenses = 250;
     
-    /// @notice Maximum total number of nodes that can be sold
+    /// @notice Maximum total number of licenses that can be sold
     uint256 public maxTotalSupply = 1000;
     
-    /// @notice Total number of nodes sold
+    /// @notice Total number of licenses sold
     uint256 public supply;
     
     /// @notice Flag indicating if sales are currently active
@@ -36,20 +36,20 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @notice Flag indicating if whitelist functionality is enabled
     bool public isWhitelistEnabled = false;
 
-    /// @notice List of all addresses that have purchased nodes
+    /// @notice List of all addresses that have purchased licenses
     address[] public buyers;
 
     /// @notice Mapping of addresses to their whitelist status
     mapping(address => bool) public whitelist;
     
-    /// @notice Mapping of addresses to number of nodes purchased
-    mapping(address => uint256) public nodesPurchased;
+    /// @notice Mapping of addresses to number of licenses purchased
+    mapping(address => uint256) public licensesPurchased;
 
-    /// @notice Emitted when a node is purchased
+    /// @notice Emitted when a license is purchased
     /// @param buyer Address of the buyer
-    /// @param amount Number of nodes purchased
+    /// @param amount Number of licenses purchased
     /// @param totalCost Total cost paid in USDC
-    event NodePurchased(address buyer, uint256 amount, uint256 totalCost);
+    event LicensePurchased(address buyer, uint256 amount, uint256 totalCost);
     
     /// @notice Emitted when an address is added to whitelist
     /// @param user Address added to whitelist
@@ -59,8 +59,8 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @param user Address removed from whitelist
     event WhitelistRemoved(address user);
     
-    /// @notice Emitted when the node price is updated
-    /// @param newPrice New price per node
+    /// @notice Emitted when the license price is updated
+    /// @param newPrice New price per license
     event PriceUpdated(uint256 newPrice);
     
     /// @notice Emitted when sales status is changed
@@ -71,9 +71,9 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     /// @param isEnabled New whitelist status
     event WhitelistStatusChanged(bool isEnabled);
     
-    /// @notice Emitted when maximum nodes per address is updated
-    /// @param newMaxNodes New maximum nodes limit
-    event MaxNodesUpdated(uint256 newMaxNodes);
+    /// @notice Emitted when maximum licenses per address is updated
+    /// @param newMaxLicenses New maximum licenses limit
+    event MaxLicensesUpdated(uint256 newMaxLicenses);
 
     /// @notice Emitted when maximum total supply is updated
     /// @param newMaxTotalSupply New maximum total supply limit
@@ -84,7 +84,7 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
     error InvalidTreasuryAddress();
     error SalesNotActive();
     error NotWhitelisted();
-    error ExceedsMaxNodes();
+    error ExceedsMaxLicenses();
     error ExceedsMaxTotalSupply();
     error InsufficientUSDCAllowance();
     error InsufficientUSDCBalance();
@@ -99,27 +99,27 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         treasury = treasuryAddress;
     }
 
-    /// @notice Purchase nodes using USDC
+    /// @notice Purchase licenses using USDC
     /// @dev Checks for whitelist if enabled, verifies USDC allowance and balance
-    /// @param nodeAmount Number of nodes to purchase
-    function buy(uint256 nodeAmount) external nonReentrant {
+    /// @param licenseAmount Number of licenses to purchase
+    function buy(uint256 licenseAmount) external nonReentrant {
         if (!salesActive) revert SalesNotActive();
         if (isWhitelistEnabled && !whitelist[msg.sender]) revert NotWhitelisted();
-        if (nodesPurchased[msg.sender] + nodeAmount > maxNodes) revert ExceedsMaxNodes();
-        if (supply + nodeAmount > maxTotalSupply) revert ExceedsMaxTotalSupply();
+        if (licensesPurchased[msg.sender] + licenseAmount > maxLicenses) revert ExceedsMaxLicenses();
+        if (supply + licenseAmount > maxTotalSupply) revert ExceedsMaxTotalSupply();
         
-        uint256 totalPrice = price * nodeAmount;
+        uint256 totalPrice = price * licenseAmount;
         if (usdc.allowance(msg.sender, address(this)) < totalPrice) revert InsufficientUSDCAllowance();
         if (usdc.balanceOf(msg.sender) < totalPrice) revert InsufficientUSDCBalance();
         
         usdc.safeTransferFrom(msg.sender, address(this), totalPrice);
         
-        if (nodesPurchased[msg.sender] == 0) {
+        if (licensesPurchased[msg.sender] == 0) {
             buyers.push(msg.sender);
         }
-        nodesPurchased[msg.sender] += nodeAmount;
-        supply += nodeAmount;
-        emit NodePurchased(msg.sender, nodeAmount, totalPrice);
+        licensesPurchased[msg.sender] += licenseAmount;
+        supply += licenseAmount;
+        emit LicensePurchased(msg.sender, licenseAmount, totalPrice);
     }
 
     /// @notice Enable or disable whitelist functionality
@@ -130,10 +130,10 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         emit WhitelistStatusChanged(enabled);
     }
     
-    /// @notice Update the price per node
+    /// @notice Update the price per license
     /// @dev Only callable by owner
-    /// @param newPrice New price per node in USDC (6 decimals)
-    function setNodePrice(uint256 newPrice) external onlyOwner {
+    /// @param newPrice New price per license in USDC (6 decimals)
+    function setLicensePrice(uint256 newPrice) external onlyOwner {
         price = newPrice;
         emit PriceUpdated(newPrice);
     }
@@ -154,26 +154,26 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         emit WhitelistRemoved(user);
     }
     
-    /// @notice Stop node sales
+    /// @notice Stop license sales
     /// @dev Only callable by owner
-    function stopNodeSales() external onlyOwner {
+    function stopLicenseSales() external onlyOwner {
         salesActive = false;
         emit SalesStatusChanged(false);
     }
     
-    /// @notice Start node sales
+    /// @notice Start license sales
     /// @dev Only callable by owner
-    function startNodeSales() external onlyOwner {
+    function startLicenseSales() external onlyOwner {
         salesActive = true;
         emit SalesStatusChanged(true);
     }
 
-    /// @notice Update maximum nodes per address
+    /// @notice Update maximum licenses per address
     /// @dev Only callable by owner
-    /// @param newMaxNodes New maximum nodes limit
-    function setMaxNodesPerAddress(uint256 newMaxNodes) external onlyOwner {
-        maxNodes = newMaxNodes;
-        emit MaxNodesUpdated(newMaxNodes);
+    /// @param newMaxLicenses New maximum licenses limit
+    function setMaxLicensesPerAddress(uint256 newMaxLicenses) external onlyOwner {
+        maxLicenses = newMaxLicenses;
+        emit MaxLicensesUpdated(newMaxLicenses);
     }
 
     /// @notice Withdraw all collected USDC to treasury
@@ -185,22 +185,22 @@ contract BasicNodeSale is Ownable, ReentrancyGuard {
         }
     }
 
-    /// @notice Get list of all buyers and their node counts
-    /// @return Array of buyer addresses
-    /// @return Array of corresponding node counts
-    function getAllBuyers() external view returns (address[] memory, uint256[] memory) {
-        uint256[] memory counts = new uint256[](buyers.length);
-        for (uint i; i < buyers.length; i++) {
-            counts[i] = nodesPurchased[buyers[i]];
-        }
-        return (buyers, counts);
-    }
-
     /// @notice Update maximum total supply
     /// @dev Only callable by owner
     /// @param newMaxTotalSupply New maximum total supply limit
     function setMaxTotalSupply(uint256 newMaxTotalSupply) external onlyOwner {
         maxTotalSupply = newMaxTotalSupply;
         emit MaxTotalSupplyUpdated(newMaxTotalSupply);
+    }
+
+    /// @notice Get list of all buyers and their license counts
+    /// @return Array of buyer addresses
+    /// @return Array of corresponding license counts
+    function getAllBuyers() external view returns (address[] memory, uint256[] memory) {
+        uint256[] memory counts = new uint256[](buyers.length);
+        for (uint i; i < buyers.length; i++) {
+            counts[i] = licensesPurchased[buyers[i]];
+        }
+        return (buyers, counts);
     }
 }
