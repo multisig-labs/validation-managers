@@ -691,7 +691,7 @@ contract NFTStakingManager is
       delete $.delegations[delegationID];
     }
 
-    // we never delete the delegation so that the user can claim rewards whenever
+
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
@@ -1101,7 +1101,7 @@ contract NFTStakingManager is
     }
     return rewards;
   }
-
+  
   /// @notice Gets tokenIds that have been minted rewards for a given epoch
   ///
   /// @param epoch The rewards epoch to fetch tokenIds
