@@ -439,6 +439,11 @@ contract NFTStakingManager is
 
     _unlockHardwareToken(validation.hardwareTokenID);
 
+    if (validation.claimableRewardsPerEpoch.length() == 0) {
+      $.validationsByOwner[validation.owner].remove(validationID);
+      delete $.validations[validationID];
+    }
+
     emit CompletedValidatorRemoval(validationID);
 
     return validationID;

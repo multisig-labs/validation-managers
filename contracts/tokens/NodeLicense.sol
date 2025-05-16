@@ -11,8 +11,6 @@ import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
-
 
 interface INFTStakingManager {
   function getTokenLockedBy(uint256 tokenId) external view returns (bytes32);
