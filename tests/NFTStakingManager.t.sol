@@ -1185,6 +1185,22 @@ contract NFTStakingManagerTest is Base {
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
   }
+  
+  function test_getRewardsMintedForEpoch() public {
+    (bytes32 validationID, ) = _createValidator();
+    _createDelegation(validationID, 1);
+    
+    uint32 epoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    _warpToGracePeriod(epoch);
+    _processUptimeProof(validationID, EPOCH_DURATION);
+    _warpAfterGracePeriod(epoch);
+
+    _mintOneReward(validationID, epoch);
+
+    uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
+    assertEq(tokenIDs.length, 1);
+  }
+  
 
   ///
   /// NONCE TESTS

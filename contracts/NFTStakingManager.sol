@@ -1077,6 +1077,18 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.delegations[delegationID].claimableRewardsPerEpoch.get(uint256(epoch));
   }
+  
+  /// @notice Gets tokenIds that have been minted rewards for a given epoch
+  ///
+  /// @param epoch The rewards epoch to fetch tokenIds
+  ///
+  /// @return tokenIds the tokenIds that have been minted rewards
+  function getRewardsMintedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.epochs[epoch].rewardsMintedFor.values();
+  }
+
+  // EnumerableSet.UintSet rewardsMintedFor; // which tokenids have rewards been minted for
 
   /// @notice Gets the current settings for the NFT Staking Manager
   ///
