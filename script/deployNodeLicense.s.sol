@@ -8,7 +8,9 @@ import { console } from "forge-std-1.9.6/src/console.sol";
 import { NodeLicense, NodeLicenseSettings } from "../contracts/tokens/NodeLicense.sol";
 
 contract DeployNodeLicense is Script {
-  address public nftStakingManager = 0x0Feedc0de0000000000000000000000000000000;
+  // Deploy this contract with nftStakingManager = zero addr, then after you deploy NFTStakingManager
+  // you can call setNFTStakingManager with the deployed address
+  address public nftStakingManager = 0x0000000000000000000000000000000000000000;
 
   function run() external {
     vm.startBroadcast();
