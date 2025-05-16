@@ -283,12 +283,13 @@ contract NodeLicenseTest is Base {
     vm.startPrank(user1);
     vm.expectRevert(
       abi.encodeWithSelector(
-        IAccessControl.AccessControlUnauthorizedAccount.selector, user1, nodeLicense.DEFAULT_ADMIN_ROLE()
+        IAccessControl.AccessControlUnauthorizedAccount.selector,
+        user1,
+        nodeLicense.DEFAULT_ADMIN_ROLE()
       )
     );
     nodeLicense.setUnlockTime(newUnlockTime);
     vm.stopPrank();
-
 
     // Verify unlock time was not changed
     assertEq(nodeLicense.getUnlockTime(), 0);
@@ -372,17 +373,19 @@ contract NodeLicenseTest is Base {
     );
     nodeLicense.getDelegationApproval(nonExistentTokenId);
   }
-  
+
   function test_RemoveDelegaation_NonExistantDelegation() public {
     address operator = makeAddr("operator");
 
     vm.prank(minter);
     nodeLicense.mint(user1);
-    
+
     vm.prank(user1);
     nodeLicense.setDelegationApprovalForAll(operator, false);
-    
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator), "operator is not approved for user1");
+
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator), "operator is not approved for user1"
+    );
   }
 
   function test_SetDelegationApprovalForAll_And_IsDelegationApprovedForAll() public {
@@ -391,8 +394,14 @@ contract NodeLicenseTest is Base {
     address operator3 = makeAddr("operator3");
 
     // Initially, no operators are approved for user1
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator1), "Initially operator1 not approved for user1");
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator2), "Initially operator2 not approved for user1");
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator1),
+      "Initially operator1 not approved for user1"
+    );
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator2),
+      "Initially operator2 not approved for user1"
+    );
     address[] memory initialOperators = nodeLicense.getDelegateOperatorsForOwner(user1);
     assertEq(initialOperators.length, 0, "Initially no operators for user1");
 
@@ -402,7 +411,10 @@ contract NodeLicenseTest is Base {
     emit NodeLicense.DelegateApprovalForAll(user1, operator1, true);
     nodeLicense.setDelegationApprovalForAll(operator1, true);
 
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator1), "operator1 should be approved for user1");
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator1),
+      "operator1 should be approved for user1"
+    );
     address[] memory operatorsAfterOp1 = nodeLicense.getDelegateOperatorsForOwner(user1);
     assertEq(operatorsAfterOp1.length, 1, "Should have 1 operator after approving operator1");
     assertEq(operatorsAfterOp1[0], operator1, "The operator should be operator1");
@@ -413,12 +425,22 @@ contract NodeLicenseTest is Base {
     emit NodeLicense.DelegateApprovalForAll(user1, operator2, true);
     nodeLicense.setDelegationApprovalForAll(operator2, true);
 
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator1), "operator1 should still be approved for user1");
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should now be approved for user1");
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator1),
+      "operator1 should still be approved for user1"
+    );
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator2),
+      "operator2 should now be approved for user1"
+    );
     address[] memory operatorsAfterOp2 = nodeLicense.getDelegateOperatorsForOwner(user1);
     assertEq(operatorsAfterOp2.length, 2, "Should have 2 operators after approving operator2");
     // Note: EnumerableSet does not guarantee order, so we check for presence
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator1) && nodeLicense.isDelegationApprovedForAll(user1, operator2), "Both operators should be in the set");
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator1)
+        && nodeLicense.isDelegationApprovedForAll(user1, operator2),
+      "Both operators should be in the set"
+    );
 
     // user1 revokes operator1
     vm.prank(user1);
@@ -426,8 +448,13 @@ contract NodeLicenseTest is Base {
     emit NodeLicense.DelegateApprovalForAll(user1, operator1, false);
     nodeLicense.setDelegationApprovalForAll(operator1, false);
 
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator1), "operator1 should NOT be approved after revocation");
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should still be approved");
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator1),
+      "operator1 should NOT be approved after revocation"
+    );
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should still be approved"
+    );
     address[] memory operatorsAfterOp1Revoke = nodeLicense.getDelegateOperatorsForOwner(user1);
     assertEq(operatorsAfterOp1Revoke.length, 1, "Should have 1 operator after revoking operator1");
     assertEq(operatorsAfterOp1Revoke[0], operator2, "The remaining operator should be operator2");
@@ -435,27 +462,40 @@ contract NodeLicenseTest is Base {
     // user1 approves operator3 (to test order with operator2 still present)
     vm.prank(user1);
     nodeLicense.setDelegationApprovalForAll(operator3, true);
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should be approved");
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should still be approved");
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should be approved"
+    );
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should still be approved"
+    );
     assertEq(nodeLicense.getDelegateOperatorsForOwner(user1).length, 2, "Should have 2 operators");
 
     // user1 revokes operator2
     vm.prank(user1);
     nodeLicense.setDelegationApprovalForAll(operator2, false);
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should be revoked");
-    assertTrue(nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should still be approved");
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator2), "operator2 should be revoked"
+    );
+    assertTrue(
+      nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should still be approved"
+    );
     address[] memory operatorsAfterOp2Revoke = nodeLicense.getDelegateOperatorsForOwner(user1);
     assertEq(operatorsAfterOp2Revoke.length, 1, "Should have 1 operator after revoking operator2");
     assertEq(operatorsAfterOp2Revoke[0], operator3, "The remaining operator should be operator3");
-    
+
     // Revoke last operator (operator3)
     vm.prank(user1);
     nodeLicense.setDelegationApprovalForAll(operator3, false);
-    assertFalse(nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should be revoked");
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(user1, operator3), "operator3 should be revoked"
+    );
     assertEq(nodeLicense.getDelegateOperatorsForOwner(user1).length, 0, "Should have 0 operators");
 
     // Check approvals for a different owner (no interference)
-    assertFalse(nodeLicense.isDelegationApprovedForAll(operator1, operator2), "operator1 should not have approved operator2 for itself");
+    assertFalse(
+      nodeLicense.isDelegationApprovedForAll(operator1, operator2),
+      "operator1 should not have approved operator2 for itself"
+    );
   }
 
   function test_SetDelegationApprovalForAll_RevertOnZeroAddressOperator() public {
@@ -474,7 +514,11 @@ contract NodeLicenseTest is Base {
     // Initially, lock the token with the mockStakingManager
     bytes32 lockId = keccak256("test-lock-for-zero-address-test");
     // Ensure mockStakingManager is the current one from setUp
-    assertEq(nodeLicense.getNFTStakingManager(), address(mockStakingManager), "Initial staking manager mismatch");
+    assertEq(
+      nodeLicense.getNFTStakingManager(),
+      address(mockStakingManager),
+      "Initial staking manager mismatch"
+    );
     vm.prank(address(mockStakingManager)); // Staking manager itself locks the token
     mockStakingManager.setTokenLocked(tokenId, lockId);
 

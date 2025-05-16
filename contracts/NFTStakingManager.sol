@@ -16,15 +16,15 @@ import { UUPSUpgradeable } from
 import { ContextUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/utils/ContextUpgradeable.sol";
 
+import { ValidatorManager } from
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
+import { ValidatorMessages } from
+  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorMessages.sol";
 import {
   PChainOwner,
   Validator,
   ValidatorStatus
 } from "icm-contracts-2.0.0/contracts/validator-manager/interfaces/IACP99Manager.sol";
-import { ValidatorManager } from
-  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
-import { ValidatorMessages } from
-  "icm-contracts-2.0.0/contracts/validator-manager/ValidatorMessages.sol";
 
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 import { NodeLicense } from "./tokens/NodeLicense.sol";
@@ -73,7 +73,8 @@ enum DelegatorStatus {
   Unknown,
   PendingAdded,
   Active,
-  PendingRemoved
+  PendingRemoved,
+  Removed
 }
 
 /// @notice Delegator information
@@ -168,9 +169,11 @@ contract NFTStakingManager is
     uint256 epochRewards;
     // Validation state
     EnumerableSet.Bytes32Set validationIDs;
+    mapping(address => EnumerableSet.Bytes32Set) validationsByOwner;
     mapping(bytes32 validationID => ValidationInfo) validations;
     mapping(uint256 hardwareTokenID => bytes32 validationID) hardwareTokenLockedBy;
     // Delegation state
+    mapping(address => EnumerableSet.Bytes32Set) delegationsByOwner;
     mapping(bytes32 delegationID => DelegationInfo) delegations;
     mapping(uint256 nodeLicenseTokenID => bytes32 delegationID) tokenLockedBy;
     mapping(address hardwareOperator => EnumerableMap.AddressToUintMap) prepaidCredits;
@@ -374,6 +377,8 @@ contract NFTStakingManager is
     validation.lastSubmissionTime = getEpochEndTime(getEpochByTimestamp(block.timestamp) - 1);
     validation.delegationFeeBips = delegationFeeBips;
 
+    $.validationsByOwner[_msgSender()].add(validationID);
+
     // The blsPoP is required to complete the validator registration on the P-Chain, so emit it here
     emit InitiatedValidatorRegistration(validationID, validation.hardwareTokenID, blsPoP);
 
@@ -427,22 +432,14 @@ contract NFTStakingManager is
 
     _unlockHardwareToken(validation.hardwareTokenID);
 
+    if (validation.claimableRewardsPerEpoch.length() == 0) {
+      $.validationsByOwner[validation.owner].remove(validationID);
+      delete $.validations[validationID];
+    }
+
     emit CompletedValidatorRemoval(validationID);
 
     return validationID;
-  }
-
-  /// @notice callable by the delagtor to stake node licenses
-  ///
-  /// @param validationID the validation id of the validator
-  /// @param tokenIDs the token ids of the licenses to stake
-  ///
-  /// @return the delegation id
-  function initiateDelegatorRegistration(bytes32 validationID, uint256[] calldata tokenIDs)
-    public
-    returns (bytes32)
-  {
-    return _initiateDelegatorRegistration(validationID, _msgSender(), tokenIDs);
   }
 
   /// @notice callable by the validation owner to stake node licenses on behalf of the delagtor
@@ -456,7 +453,7 @@ contract NFTStakingManager is
     bytes32 validationID,
     address owner,
     uint256[] calldata tokenIDs
-  ) public returns (bytes32) {
+  ) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     bool isApprovedForAll = $.licenseContract.isDelegationApprovedForAll(owner, _msgSender());
@@ -471,6 +468,19 @@ contract NFTStakingManager is
     }
 
     return _initiateDelegatorRegistration(validationID, owner, tokenIDs);
+  }
+
+  /// @notice callable by the delagtor to stake node licenses
+  ///
+  /// @param validationID the validation id of the validator
+  /// @param tokenIDs the token ids of the licenses to stake
+  ///
+  /// @return the delegation id
+  function initiateDelegatorRegistration(bytes32 validationID, uint256[] calldata tokenIDs)
+    public
+    returns (bytes32)
+  {
+    return _initiateDelegatorRegistration(validationID, _msgSender(), tokenIDs);
   }
 
   /// @notice internal function to initiate a delegation
@@ -531,6 +541,8 @@ contract NFTStakingManager is
     newDelegation.validationID = validationID;
     newDelegation.startingNonce = nonce;
 
+    $.delegationsByOwner[owner].add(delegationID);
+
     emit InitiatedDelegatorRegistration(validationID, delegationID, tokenIDs);
     return delegationID;
   }
@@ -542,7 +554,7 @@ contract NFTStakingManager is
   ///
   /// @param delegationID the id of the delegation to complete
   /// @param messageIndex the index of the warp message to complete the delegation
-  function completeDelegatorRegistration(bytes32 delegationID, uint32 messageIndex) public {
+  function completeDelegatorRegistration(bytes32 delegationID, uint32 messageIndex) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     DelegationInfo storage delegation = $.delegations[delegationID];
@@ -583,7 +595,7 @@ contract NFTStakingManager is
   /// @notice Initiates removal of one or more delegations
   ///
   /// @param delegationIDs The ids of the delegations to remove
-  function initiateDelegatorRemoval(bytes32[] calldata delegationIDs) public {
+  function initiateDelegatorRemoval(bytes32[] calldata delegationIDs) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     for (uint256 i = 0; i < delegationIDs.length; i++) {
@@ -665,7 +677,14 @@ contract NFTStakingManager is
       }
     }
 
-    // we never delete the delegation so that the user can claim rewards whenever
+    delegation.status = DelegatorStatus.Removed;
+
+    if (delegation.claimableRewardsPerEpoch.length() == 0) {
+      $.delegationsByOwner[delegation.owner].remove(delegationID);
+      delete $.delegations[delegationID];
+    }
+
+
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
@@ -691,7 +710,7 @@ contract NFTStakingManager is
   ///      epochs and check that the uptime is sufficient for the current epoch.
   ///
   /// @param messageIndex The index of the warp message that contains the proof
-  function processProof(uint32 messageIndex) public {
+  function processProof(uint32 messageIndex) external {
     (bytes32 validationID, uint64 uptimeSeconds) =
       ValidatorMessages.unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex).payload);
 
@@ -815,7 +834,7 @@ contract NFTStakingManager is
       delegation.owner, creditSeconds - prepaidTokenCount * $.epochDuration
     );
 
-    uint256 rewardsPerLicense = calculateRewardsPerLicense(epoch);
+    uint256 rewardsPerLicense = _calculateRewardsPerLicense(epoch);
     uint256 totalRewards = delegation.tokenIDs.length * rewardsPerLicense;
     uint256 delegationFee = delegationFeeTokenCount * rewardsPerLicense
       * validation.delegationFeeBips / BIPS_CONVERSION_FACTOR;
@@ -830,33 +849,95 @@ contract NFTStakingManager is
     return totalRewards;
   }
 
+  /// @notice Claims rewards for a validator
+  ///
+  /// @param validationID The id of the validator to claim rewards for
+  /// @param maxEpochs The maximum number of epochs to claim
+  ///
+  /// @return totalRewards The total rewards to claim
+  /// @return claimedEpochNumbers The epoch numbers that were claimed
+  function claimValidatorRewards(bytes32 validationID, uint32 maxEpochs)
+    external
+    returns (uint256 totalRewards, uint32[] memory claimedEpochNumbers)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    ValidationInfo storage validation = $.validations[validationID];
+    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
+
+    (totalRewards, claimedEpochNumbers) =
+      _claimRewards(validation.claimableRewardsPerEpoch, validationID, maxEpochs);
+
+    if (
+      validation.claimableRewardsPerEpoch.length() == 0 && validation.endEpoch != 0
+        && validation.endEpoch <= getEpochByTimestamp(block.timestamp)
+    ) {
+      $.validationsByOwner[validation.owner].remove(validationID);
+      delete $.validations[validationID];
+    }
+
+    // Send rewards last
+    payable(validation.owner).sendValue(totalRewards);
+    return (totalRewards, claimedEpochNumbers);
+  }
+
+  /// @notice Claims rewards for a delegation
+  ///
+  /// @param delegationID The id of the delegation to claim
+  /// @param maxEpochs The maximum number of epochs to claim
+  ///
+  /// @return totalRewards The total rewards to claim
+  /// @return claimedEpochNumbers The epoch numbers that were claimed
+  function claimDelegatorRewards(bytes32 delegationID, uint32 maxEpochs)
+    external
+    returns (uint256 totalRewards, uint32[] memory claimedEpochNumbers)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    DelegationInfo storage delegation = $.delegations[delegationID];
+
+    if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
+
+    (totalRewards, claimedEpochNumbers) =
+      _claimRewards(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
+
+    if (
+      delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
+        && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
+    ) {
+      $.delegationsByOwner[delegation.owner].remove(delegationID);
+      delete $.delegations[delegationID];
+    }
+
+    // Send rewards last
+    payable(delegation.owner).sendValue(totalRewards);
+    return (totalRewards, claimedEpochNumbers);
+  }
+
   /// @notice Logic to claim rewards for a validator or delegator
   ///
-  /// @param owner The owner of the validator or delegator
   /// @param rewardsMap The map of rewards to claim
   /// @param id The id of the validator or delegator
   /// @param maxEpochs The maximum number of epochs to claim rewards for
   ///
-  /// @return totalRewards The total rewards to claim
+  /// @return totalRewardsToTransfer The total rewards to claim
+  /// @return claimedEpochNumbers The epoch numbers that were claimed
   function _claimRewards(
-    address owner,
     EnumerableMap.UintToUintMap storage rewardsMap,
     bytes32 id,
     uint32 maxEpochs
-  ) internal returns (uint256, uint32[] memory) {
+  ) internal returns (uint256 totalRewardsToTransfer, uint32[] memory claimedEpochNumbers) {
     if (maxEpochs > rewardsMap.length()) {
       maxEpochs = uint32(rewardsMap.length());
     }
 
-    uint256 totalRewards = 0;
-    uint32[] memory claimedEpochNumbers = new uint32[](maxEpochs);
-    uint256[] memory rewardsAmounts = new uint256[](maxEpochs);
+    totalRewardsToTransfer = 0;
+    claimedEpochNumbers = new uint32[](maxEpochs);
+    uint256[] memory rewardsAmounts = new uint256[](maxEpochs); // To store amounts for individual events
 
     for (uint32 i = 0; i < maxEpochs; i++) {
       (uint256 epochNumber, uint256 rewards) = rewardsMap.at(0);
       // State changes
       claimedEpochNumbers[i] = uint32(epochNumber);
-      totalRewards += rewards;
+      totalRewardsToTransfer += rewards;
       rewardsAmounts[i] = rewards;
       // this remove updates the array indicies. so always remove item 0
       rewardsMap.remove(epochNumber);
@@ -867,73 +948,12 @@ contract NFTStakingManager is
       emit RewardsClaimed(claimedEpochNumbers[i], id, rewardsAmounts[i]);
     }
 
-    payable(owner).sendValue(totalRewards);
-    return (totalRewards, claimedEpochNumbers);
-  }
-
-  /// @notice Claims rewards for a delegation
-  ///
-  /// @param delegationID The id of the delegation to claim
-  /// @param maxEpochs The maximum number of epochs to claim
-  ///
-  /// @return totalRewards The total rewards to claim
-  function claimRewards(bytes32 delegationID, uint32 maxEpochs)
-    external
-    returns (uint256, uint32[] memory)
-  {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage delegation = $.delegations[delegationID];
-
-    if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
-
-    return
-      _claimRewards(delegation.owner, delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
-  }
-
-  /// @notice Claims rewards for a validator
-  ///
-  /// @param validationID The id of the validator to claim rewards for
-  /// @param maxEpochs The maximum number of epochs to claim
-  ///
-  /// @return totalRewards The total rewards to claim
-  function claimValidatorRewards(bytes32 validationID, uint32 maxEpochs)
-    external
-    returns (uint256, uint32[] memory)
-  {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationID];
-    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
-
-    return
-      _claimRewards(validation.owner, validation.claimableRewardsPerEpoch, validationID, maxEpochs);
+    return (totalRewardsToTransfer, claimedEpochNumbers);
   }
 
   ///
   /// ADMIN FUNCTIONS
   ///
-  /// @notice Gets the current settings for the NFT Staking Manager
-  ///
-  /// @return settings The current settings for the NFT Staking Manager
-  function getSettings() external view returns (NFTStakingManagerSettings memory) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
-      bypassUptimeCheck: $.bypassUptimeCheck,
-      uptimePercentageBips: $.uptimePercentageBips,
-      maxLicensesPerValidator: $.maxLicensesPerValidator,
-      initialEpochTimestamp: $.initialEpochTimestamp,
-      epochDuration: $.epochDuration,
-      gracePeriod: $.gracePeriod,
-      minDelegationEpochs: $.minDelegationEpochs,
-      licenseWeight: $.licenseWeight,
-      hardwareLicenseWeight: $.hardwareLicenseWeight,
-      validatorManager: address($.manager),
-      license: address($.licenseContract),
-      hardwareLicense: address($.hardwareLicenseContract),
-      epochRewards: $.epochRewards,
-      admin: defaultAdmin()
-    });
-    return settings;
-  }
 
   /// @notice Sets the bypass uptime check flag
   ///
@@ -943,14 +963,53 @@ contract NFTStakingManager is
     $.bypassUptimeCheck = bypass;
   }
 
-  /// @notice Calculates the rewards per license for an epoch
   ///
-  /// @param epochNumber The epoch to calculate rewards for
+  /// VIEW FUNCTIONS
   ///
-  /// @return rewardsPerLicense The rewards per license for the epoch
-  function calculateRewardsPerLicense(uint32 epochNumber) public view returns (uint256) {
+
+  /// @notice Gets the delegations for a validation
+  ///
+  /// @param validationID The id of the validation to get the delegations for
+  ///
+  /// @return delegationIDs The delegations for the validation
+  function getDelegations(bytes32 validationID) external view returns (bytes32[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochRewards / $.epochs[epochNumber].totalStakedLicenses;
+    ValidationInfo storage validation = $.validations[validationID];
+    return validation.delegationIDs.values();
+  }
+
+  /// @notice Gets the delegations for a given owner
+  ///
+  /// @param owner The owner address
+  ///
+  /// @return delegationIDs The delegation IDs for the owner
+  function getDelegationsByOwner(address owner) external view returns (bytes32[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.delegationsByOwner[owner].values();
+  }
+
+  /// @notice Gets the delegation info for a delegation
+  ///
+  /// @param delegationID The id of the delegation to get the info for
+  ///
+  /// @return delegationInfo The info for the delegation
+  function getDelegationInfoView(bytes32 delegationID)
+    external
+    view
+    returns (DelegationInfoView memory)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    DelegationInfo storage delegation = $.delegations[delegationID];
+    return DelegationInfoView({
+      status: delegation.status,
+      owner: delegation.owner,
+      validationID: delegation.validationID,
+      startEpoch: delegation.startEpoch,
+      endEpoch: delegation.endEpoch,
+      startingNonce: delegation.startingNonce,
+      endingNonce: delegation.endingNonce,
+      tokenIDs: delegation.tokenIDs
+    });
   }
 
   /// @notice Gets the epoch number for a given timestamp
@@ -985,16 +1044,6 @@ contract NFTStakingManager is
     return EpochInfoView({ totalStakedLicenses: $.epochs[epoch].totalStakedLicenses });
   }
 
-  /// @notice Gets the token locked by for a given token ID
-  ///
-  /// @param tokenID The token ID to get the locked by for
-  ///
-  /// @return lockedBy The address that the token is locked by
-  function getTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.tokenLockedBy[tokenID];
-  }
-
   /// @notice Gets the hardware token locked by for a given token ID
   ///
   /// @param tokenID The token ID to get the locked by for
@@ -1003,14 +1052,6 @@ contract NFTStakingManager is
   function getHardwareTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.hardwareTokenLockedBy[tokenID];
-  }
-
-  /// @notice Gets the validation IDs
-  ///
-  /// @return validationIDs The validation IDs
-  function getValidationIDs() external view returns (bytes32[] memory) {
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.validationIDs.values();
   }
 
   /// @notice Gets the prepaid credits for a hardware operator and license holder
@@ -1032,39 +1073,79 @@ contract NFTStakingManager is
     return creditSeconds;
   }
 
-  /// @notice Gets the delegations for a validation
+  /// @notice Gets the rewards for a delegation for a given epoch
   ///
-  /// @param validationID The id of the validation to get the delegations for
+  /// @param delegationID The id of the delegation to get the rewards for
+  /// @param epoch The epoch to get the rewards for
   ///
-  /// @return delegationIDs The delegations for the validation
-  function getDelegations(bytes32 validationID) external view returns (bytes32[] memory) {
+  /// @return rewards The rewards for the delegation for the given epoch
+  function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    ValidationInfo storage validation = $.validations[validationID];
-    return validation.delegationIDs.values();
+    return $.delegations[delegationID].claimableRewardsPerEpoch.get(uint256(epoch));
+  }
+  
+  /// @notice Gets tokenIds that have been minted rewards for a given epoch
+  ///
+  /// @param epoch The rewards epoch to fetch tokenIds
+  ///
+  /// @return tokenIds the tokenIds that have been minted rewards
+  function getRewardsMintedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.epochs[epoch].rewardsMintedFor.values();
   }
 
-  /// @notice Gets the delegation info for a delegation
+  // EnumerableSet.UintSet rewardsMintedFor; // which tokenids have rewards been minted for
+
+  /// @notice Gets the current settings for the NFT Staking Manager
   ///
-  /// @param delegationID The id of the delegation to get the info for
-  ///
-  /// @return delegationInfo The info for the delegation
-  function getDelegationInfoView(bytes32 delegationID)
-    external
-    view
-    returns (DelegationInfoView memory)
-  {
+  /// @return settings The current settings for the NFT Staking Manager
+  function getSettings() external view returns (NFTStakingManagerSettings memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    DelegationInfo storage delegation = $.delegations[delegationID];
-    return DelegationInfoView({
-      status: delegation.status,
-      owner: delegation.owner,
-      validationID: delegation.validationID,
-      startEpoch: delegation.startEpoch,
-      endEpoch: delegation.endEpoch,
-      startingNonce: delegation.startingNonce,
-      endingNonce: delegation.endingNonce,
-      tokenIDs: delegation.tokenIDs
+    NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
+      bypassUptimeCheck: $.bypassUptimeCheck,
+      uptimePercentageBips: $.uptimePercentageBips,
+      maxLicensesPerValidator: $.maxLicensesPerValidator,
+      initialEpochTimestamp: $.initialEpochTimestamp,
+      epochDuration: $.epochDuration,
+      gracePeriod: $.gracePeriod,
+      minDelegationEpochs: $.minDelegationEpochs,
+      licenseWeight: $.licenseWeight,
+      hardwareLicenseWeight: $.hardwareLicenseWeight,
+      validatorManager: address($.manager),
+      license: address($.licenseContract),
+      hardwareLicense: address($.hardwareLicenseContract),
+      epochRewards: $.epochRewards,
+      admin: defaultAdmin()
     });
+    return settings;
+  }
+
+  /// @notice Gets the token locked by for a given token ID
+  ///
+  /// @param tokenID The token ID to get the locked by for
+  ///
+  /// @return lockedBy The address that the token is locked by
+  function getTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.tokenLockedBy[tokenID];
+  }
+
+  /// @notice Gets the validation IDs
+  ///
+  /// @return validationIDs The validation IDs
+  function getValidationIDs() external view returns (bytes32[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.validationIDs.values();
+  }
+
+  /// @notice Gets the validations for a given owner
+  ///
+  /// @param owner The owner address
+  ///
+  /// @return validationIDs The validation IDs for the owner
+  function getValidationsByOwner(address owner) external view returns (bytes32[] memory) {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    return $.validationsByOwner[owner].values();
   }
 
   /// @notice Gets the validation info for a validation
@@ -1092,30 +1173,14 @@ contract NFTStakingManager is
     });
   }
 
-  /// @notice Gets the rewards for a delegation for a given epoch
+  /// @notice Calculates the rewards per license for an epoch
   ///
-  /// @param delegationID The id of the delegation to get the rewards for
-  /// @param epoch The epoch to get the rewards for
+  /// @param epochNumber The epoch to calculate rewards for
   ///
-  /// @return rewards The rewards for the delegation for the given epoch
-  function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
+  /// @return rewardsPerLicense The rewards per license for the epoch
+  function _calculateRewardsPerLicense(uint32 epochNumber) internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bool success, uint256 rewards) =
-      $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
-    if (!success) {
-      return 0;
-    }
-    return rewards;
-  }
-
-  /// @notice Gets the key for a given epoch and token ID
-  ///
-  /// @param epochNumber The epoch number
-  /// @param tokenID The token ID
-  ///
-  /// @return key The key for the given epoch and token ID
-  function _getKey(uint32 epochNumber, uint256 tokenID) internal pure returns (bytes32) {
-    return keccak256(abi.encode(epochNumber, tokenID));
+    return $.epochRewards / $.epochs[epochNumber].totalStakedLicenses;
   }
 
   /// @notice Gets the expected uptime for a given epoch
@@ -1124,16 +1189,6 @@ contract NFTStakingManager is
   function _expectedUptime() internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochDuration * $.uptimePercentageBips / BIPS_CONVERSION_FACTOR;
-  }
-
-  /// @notice Gets the NFT Staking Manager storage
-  ///
-  /// @return $ The NFT Staking Manager storage
-  function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
-    // solhint-disable-next-line no-inline-assembly
-    assembly {
-      $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
-    }
   }
 
   /// @notice Locks tokens for a delegation
@@ -1184,6 +1239,16 @@ contract NFTStakingManager is
   function _unlockHardwareToken(uint256 tokenID) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     $.hardwareTokenLockedBy[tokenID] = bytes32(0);
+  }
+
+  /// @notice Gets the NFT Staking Manager storage
+  ///
+  /// @return $ The NFT Staking Manager storage
+  function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
+    // solhint-disable-next-line no-inline-assembly
+    assembly {
+      $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
+    }
   }
 
   /// @notice Gets a P-Chain warp message
