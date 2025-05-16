@@ -1180,7 +1180,11 @@ contract NFTStakingManager is
   /// @return rewardsPerLicense The rewards per license for the epoch
   function _calculateRewardsPerLicense(uint32 epochNumber) internal view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochRewards / $.epochs[epochNumber].totalStakedLicenses;
+    uint256 totalStakedLicenses = $.epochs[epochNumber].totalStakedLicenses;
+    if (totalStakedLicenses == 0) {
+      return 0;
+    }
+    return $.epochRewards / totalStakedLicenses;
   }
 
   /// @notice Gets the expected uptime for a given epoch
