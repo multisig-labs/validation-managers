@@ -47,6 +47,7 @@ struct ValidationInfo {
   uint32 licenseCount;
   uint32 lastUptimeSeconds;
   uint32 lastSubmissionTime;
+  uint32 lastSubmissionEpoch;
   uint32 delegationFeeBips;
   address owner;
   uint256 hardwareTokenID;
@@ -260,6 +261,7 @@ contract NFTStakingManager is
   error InvalidDelegatorStatus(DelegatorStatus status);
   error InvalidValidatorStatus(ValidatorStatus status);
   error UnexpectedValidationID(bytes32 expectedValidationID, bytes32 actualValidationID);
+  error UptimeAlreadySubmitted();
 
   /// @notice disable initializers if constructed directly
   constructor() {
@@ -711,7 +713,11 @@ contract NFTStakingManager is
     }
 
     ValidationInfo storage validation = $.validations[validationID];
-
+    
+    if (validation.lastSubmissionEpoch == epoch) {
+      revert UptimeAlreadySubmitted();
+    }
+    
     if (!$.bypassUptimeCheck) {
       uint32 lastSubmissionTime = validation.lastSubmissionTime;
       uint32 lastUptimeSeconds = validation.lastUptimeSeconds;
@@ -727,6 +733,8 @@ contract NFTStakingManager is
         return;
       }
     }
+    
+    validation.lastSubmissionEpoch = epoch;
 
     EpochInfo storage epochInfo = $.epochs[epoch];
     epochInfo.totalStakedLicenses += validation.licenseCount;
