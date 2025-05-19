@@ -102,6 +102,64 @@ contract NFTStakingManagerTest is Base {
     vm.etch(0x0200000000000000000000000000000000000001, address(nativeMinter).code);
   }
 
+  //
+  // INITIALIZATION
+  //
+  function test_initialization_defaultSettings() public {
+    NFTStakingManagerSettings memory expectedSettings = _defaultNFTStakingManagerSettings(
+      address(validatorManager), address(nft), address(hardwareNft)
+    );
+
+    NFTStakingManagerSettings memory actualSettings = nftStakingManager.getSettings();
+
+    assertEq(actualSettings.admin, expectedSettings.admin, "admin mismatch");
+    assertEq(
+      actualSettings.validatorManager,
+      expectedSettings.validatorManager,
+      "validatorManager mismatch"
+    );
+    assertEq(actualSettings.license, expectedSettings.license, "license mismatch");
+    assertEq(
+      actualSettings.hardwareLicense,
+      expectedSettings.hardwareLicense,
+      "hardwareLicense mismatch"
+    );
+    assertEq(
+      actualSettings.initialEpochTimestamp,
+      expectedSettings.initialEpochTimestamp,
+      "initialEpochTimestamp mismatch"
+    );
+    assertEq(actualSettings.epochDuration, expectedSettings.epochDuration, "epochDuration mismatch");
+    assertEq(actualSettings.licenseWeight, expectedSettings.licenseWeight, "licenseWeight mismatch");
+    assertEq(
+      actualSettings.hardwareLicenseWeight,
+      expectedSettings.hardwareLicenseWeight,
+      "hardwareLicenseWeight mismatch"
+    );
+    assertEq(actualSettings.epochRewards, expectedSettings.epochRewards, "epochRewards mismatch");
+    assertEq(
+      actualSettings.maxLicensesPerValidator,
+      expectedSettings.maxLicensesPerValidator,
+      "maxLicensesPerValidator mismatch"
+    );
+    assertEq(actualSettings.gracePeriod, expectedSettings.gracePeriod, "gracePeriod mismatch");
+    assertEq(
+      actualSettings.uptimePercentageBips,
+      expectedSettings.uptimePercentageBips,
+      "uptimePercentageBips mismatch"
+    );
+    assertEq(
+      actualSettings.bypassUptimeCheck,
+      expectedSettings.bypassUptimeCheck,
+      "bypassUptimeCheck mismatch"
+    );
+    assertEq(
+      actualSettings.minDelegationEpochs,
+      expectedSettings.minDelegationEpochs,
+      "minDelegationEpochs mismatch"
+    );
+  }
+
   function _defaultNFTStakingManagerSettings(
     address validatorManager_,
     address license_,
