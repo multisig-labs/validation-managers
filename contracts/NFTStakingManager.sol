@@ -824,7 +824,8 @@ contract NFTStakingManager is
     uint256 delegationFee = delegationFeeTokenCount * rewardsPerLicense
       * validation.delegationFeeBips / BIPS_CONVERSION_FACTOR;
 
-    validation.claimableRewardsPerEpoch.set(uint256(epoch), delegationFee);
+    (, uint256 claimableRewards) = validation.claimableRewardsPerEpoch.tryGet(uint256(epoch));
+    validation.claimableRewardsPerEpoch.set(uint256(epoch), claimableRewards + delegationFee);
 
     delegation.claimableRewardsPerEpoch.set(uint256(epoch), totalRewards - delegationFee);
 
