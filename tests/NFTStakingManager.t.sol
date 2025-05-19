@@ -77,7 +77,8 @@ contract NFTStakingManagerTest is Base {
           minter: address(this),
           nftStakingManager: address(nftStakingManager),
           baseTokenURI: "https://example.com/nft/",
-          unlockTime: 0
+          unlockTime: 0,
+          defaultAdminDelay: 0
         })
       )
     );

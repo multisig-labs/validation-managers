@@ -33,7 +33,8 @@ contract NodeLicenseTest is Base {
       name: "Node License",
       symbol: "NODE",
       baseTokenURI: "https://example.com/token/",
-      unlockTime: 0
+      unlockTime: 0,
+      defaultAdminDelay: 0
     });
 
     // Deploy the implementation contract
@@ -148,7 +149,8 @@ contract NodeLicenseTest is Base {
       name: "Node License",
       symbol: "NODE",
       baseTokenURI: "https://example.com/token/",
-      unlockTime: uint32(block.timestamp + 1 days)
+      unlockTime: uint32(block.timestamp + 1 days),
+      defaultAdminDelay: 0
     });
 
     // Deploy the implementation contract
@@ -282,5 +284,32 @@ contract NodeLicenseTest is Base {
 
     // Verify unlock time was not changed
     assertEq(nodeLicense.getUnlockTime(), 0);
+  }
+
+  function test_TransferClearsApprovals() public {
+    vm.prank(minter);
+    uint256 tokenId = nodeLicense.mint(user1);
+
+    // User1 approves user2 for the token
+    vm.prank(user1);
+    nodeLicense.approve(user2, tokenId);
+    assertEq(nodeLicense.getApproved(tokenId), user2, "User2 should be approved before transfer");
+
+    // User1 approves user2 for delegation
+    vm.prank(user1);
+    nodeLicense.approveDelegation(user2, tokenId);
+    assertEq(nodeLicense.getDelegationApproval(tokenId), user2, "User2 should be delegation approved before transfer");
+
+    // User1 transfers the token to user2
+    vm.prank(user1);
+    nodeLicense.transferFrom(user1, user2, tokenId);
+
+    // Verify approvals are cleared
+    assertEq(nodeLicense.getApproved(tokenId), address(0), "Standard approval should be cleared after transfer");
+    // Delegation approval is cleared by _update calling _approveDelegation(address(0), tokenId, address(0))
+    // but getDelegationApproval requires the caller to be the owner, which is now user2.
+    // So we check it as user2.
+    vm.prank(user2);
+    assertEq(nodeLicense.getDelegationApproval(tokenId), address(0), "Delegation approval should be cleared after transfer");
   }
 }

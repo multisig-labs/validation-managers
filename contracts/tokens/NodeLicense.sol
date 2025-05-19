@@ -61,6 +61,7 @@ struct NodeLicenseSettings {
   string symbol;
   string baseTokenURI;
   uint32 unlockTime;
+  uint48 defaultAdminDelay;
 }
 
 contract NodeLicense is
@@ -101,9 +102,9 @@ contract NodeLicense is
     __ERC721_init(settings.name, settings.symbol);
     __AccessControl_init();
     __UUPSUpgradeable_init();
+    __AccessControlDefaultAdminRules_init(settings.defaultAdminDelay, settings.admin);
 
     _nextTokenId = 1;
-    _grantRole(DEFAULT_ADMIN_ROLE, settings.admin);
     _grantRole(MINTER_ROLE, settings.minter);
     _baseTokenURI = settings.baseTokenURI;
     _lockedUntil = settings.unlockTime;
@@ -232,6 +233,9 @@ contract NodeLicense is
         revert LicenseStakedError();
       }
     }
+    
+    // Clear approvals
+    _approveDelegation(address(0), tokenId, address(0));
 
     return super._update(to, tokenId, auth);
   }
