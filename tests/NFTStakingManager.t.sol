@@ -749,34 +749,21 @@ contract NFTStakingManagerTest is Base {
     (bytes32 validationID, address validator) = _createValidator();
     _createDelegation(validationID, 1); // Create a delegation so there's something to process
 
-    // Get the first epoch number where the validator and delegation are active
-    // _createValidator and _createDelegation complete registrations, making them active in the current epoch (epoch 1 by default if block.timestamp is at initial)
     uint32 epochToTest = nftStakingManager.getEpochByTimestamp(block.timestamp);
 
-    // Ensure validator has prepaid credits if fees are relevant, though not strictly for this test's purpose
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(getActor("Delegator1"), uint32(EPOCH_DURATION * 2));
 
-    // Move to the grace period of the target epoch
     _warpToGracePeriod(epochToTest);
 
-    // Prepare uptime message for the first call
     uint256 uptimeForEpoch = uint256(EPOCH_DURATION) * 90 / 100; // 90% uptime
     bytes memory uptimeMessage1 =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch));
 
-    // Mock and make the first call to processProof - should succeed
     _mockGetUptimeWarpMessage(uptimeMessage1, true, uint32(0)); // Using message index 0
     nftStakingManager.processProof(uint32(0));
 
-    // Attempt the second call to processProof for the SAME epoch
-    // Warp time a little, but stay within the grace period
-    vm.warp(block.timestamp + 10); // Still within grace period
-
-    // It's important that getEpochByTimestamp(block.timestamp) - 1 still resolves to epochToTest
-    // block.timestamp is now getEpochEndTime(epochToTest) + GRACE_PERIOD / 2 + 10
-    // getEpochByTimestamp for this new time should be epochToTest + 1
-    // so getEpochByTimestamp(block.timestamp) - 1 should correctly be epochToTest
+    vm.warp(block.timestamp + 10);
 
     bytes memory uptimeMessage2 =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch)); // Can be the same or different valid message
