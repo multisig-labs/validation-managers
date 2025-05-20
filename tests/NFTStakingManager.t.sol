@@ -252,7 +252,7 @@ contract NFTStakingManagerTest is Base {
 
     // we need to prepay for these too
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, uint32(1 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator, uint32(1 days));
 
     vm.startPrank(delegator);
     bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
@@ -624,7 +624,7 @@ contract NFTStakingManagerTest is Base {
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
+    nftStakingManager.addPrepaidCredits(validator, delegator, uint32(epochDuration * 2));
 
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(epoch1UptimeSeconds));
@@ -706,7 +706,7 @@ contract NFTStakingManagerTest is Base {
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, uint32(epochDuration * 2));
+    nftStakingManager.addPrepaidCredits(validator, delegator, uint32(epochDuration * 2));
 
     uint256 epoch1InGracePeriod = startTime + epochDuration + GRACE_PERIOD / 2;
     uint256 epoch1AfterGracePeriod = startTime + epochDuration + GRACE_PERIOD + 1;
@@ -759,7 +759,7 @@ contract NFTStakingManagerTest is Base {
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, 1 days);
+    nftStakingManager.addPrepaidCredits(validator, delegator, 1 days);
 
     vm.warp(block.timestamp + 1 days + 1 seconds);
     bytes memory uptimeMessage =
@@ -778,7 +778,7 @@ contract NFTStakingManagerTest is Base {
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 10);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, 10 days);
+    nftStakingManager.addPrepaidCredits(validator, delegator, 10 days);
 
     vm.warp(block.timestamp + 1 days + 1 seconds);
     bytes memory uptimeMessage =
@@ -797,7 +797,7 @@ contract NFTStakingManagerTest is Base {
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 10);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, 5 days);
+    nftStakingManager.addPrepaidCredits(validator, delegator, 5 days);
 
     vm.warp(block.timestamp + 1 days + 1 seconds);
     bytes memory uptimeMessage =
@@ -826,9 +826,9 @@ contract NFTStakingManagerTest is Base {
 
     // Record prepayments for all tokens
     vm.startPrank(validator);
-    nftStakingManager.addPrepaidCredits(delegator1, uint32(1 days));
-    nftStakingManager.addPrepaidCredits(delegator2, uint32(2 days));
-    nftStakingManager.addPrepaidCredits(delegator3, uint32(3 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator1, uint32(1 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator2, uint32(2 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator3, uint32(3 days));
     vm.stopPrank();
 
     // Create delegations with different token amounts
@@ -891,7 +891,7 @@ contract NFTStakingManagerTest is Base {
     {
       // Hardware provider adds prepaid credits for the delegator
       vm.prank(hardwareProvider);
-      nftStakingManager.addPrepaidCredits(delegator, uint32(5 * EPOCH_DURATION)); // Prepay for 5 days
+      nftStakingManager.addPrepaidCredits(hardwareProvider, delegator, uint32(5 * EPOCH_DURATION)); // Prepay for 5 days
 
       // Delegator registers with first validator
       bytes32 delegationID1 = _createDelegation(validationID1, delegator, tokenIDs);
@@ -1167,7 +1167,7 @@ contract NFTStakingManagerTest is Base {
 
     // Add prepaid credits
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(delegator, uint32(2 * EPOCH_DURATION));
+    nftStakingManager.addPrepaidCredits(validator, delegator, uint32(2 * EPOCH_DURATION));
 
     // Process proof and mint rewards for two epochs
     for (uint32 i = 1; i <= 2; i++) {
@@ -1207,8 +1207,8 @@ contract NFTStakingManagerTest is Base {
 
     // Add prepaid credits
     vm.startPrank(validator);
-    nftStakingManager.addPrepaidCredits(delegator1, uint32(1 days));
-    nftStakingManager.addPrepaidCredits(delegator2, uint32(1 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator1, uint32(1 days));
+    nftStakingManager.addPrepaidCredits(validator, delegator2, uint32(1 days));
     vm.stopPrank();
 
     // First delegator initiates registration, should get a lower nonce number
