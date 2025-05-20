@@ -679,11 +679,10 @@ contract NFTStakingManager is
   ///
   /// @param licenseHolder The address of the license holder
   /// @param creditSeconds The number of credit seconds to add
-  function addPrepaidCredits(address licenseHolder, uint32 creditSeconds)
+  function addPrepaidCredits(address hardwareOperator, address licenseHolder, uint32 creditSeconds)
     external
     onlyRole(PREPAYMENT_ROLE)
   {
-    address hardwareOperator = _msgSender();
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     (, uint256 currentCredits) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
     $.prepaidCredits[hardwareOperator].set(licenseHolder, currentCredits + creditSeconds);
