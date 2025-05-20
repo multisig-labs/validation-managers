@@ -34,7 +34,7 @@ contract DeployNodeAsAService is Script {
 
     console.log("\nVerification commands:");
     console.log("forge verify-contract", address(impl), "contracts/NodeAsAService.sol:NodeAsAService --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/43113/etherscan' --etherscan-api-key 'verifyContract' --num-of-optimizations 200 --compiler-version v0.8.25");
-    console.log("forge verify-contract", address(proxy), "dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/43113/etherscan' --etherscan-api-key 'verifyContract' --num-of-optimizations 200 --compiler-version v0.8.25 --constructor-args $(cast abi-encode \"constructor(address,bytes)\"", address(impl), initData, ")");
+    console.log("forge verify-contract", address(proxy), "dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy --verifier-url 'https://api.routescan.io/v2/network/testnet/evm/43113/etherscan' --etherscan-api-key 'verifyContract' --num-of-optimizations 200 --compiler-version v0.8.25 --constructor-args $(cast abi-encode 'constructor(address,bytes)' address(impl) initData)");
 
     vm.stopBroadcast();
   }
