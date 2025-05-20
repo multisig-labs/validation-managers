@@ -120,9 +120,7 @@ contract NFTStakingManagerTest is Base {
     );
     assertEq(actualSettings.license, expectedSettings.license, "license mismatch");
     assertEq(
-      actualSettings.hardwareLicense,
-      expectedSettings.hardwareLicense,
-      "hardwareLicense mismatch"
+      actualSettings.hardwareLicense, expectedSettings.hardwareLicense, "hardwareLicense mismatch"
     );
     assertEq(
       actualSettings.initialEpochTimestamp,
