@@ -682,19 +682,32 @@ contract NFTStakingManagerTest is Base {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
 
-    (bytes32 validationID,) = _createValidator();
-    _createDelegation(validationID, 1);
+    (bytes32 validationID, ) = _createValidator();
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
-    // Move to the grace period of the first epoch
-    vm.warp(startTime + epochDuration + GRACE_PERIOD / 2);
-
+    
+    uint32 epoch = nftStakingManager.getEpochByTimestamp(startTime);
     uint256 insufficientUptime = epochDuration * 70 / 100;
 
+
+    // Process proof with insufficient uptime
+    _warpToGracePeriod(epoch);
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(insufficientUptime));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    vm.expectRevert(NFTStakingManager.InsufficientUptime.selector);
     nftStakingManager.processProof(uint32(0));
+
+    
+    // Verify that the uptime and submissiontime were set properly
+    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.lastUptimeSeconds, insufficientUptime);
+    assertEq(validation.lastSubmissionTime, block.timestamp);
+    
+    // Verify that the delegation did not receive rewards
+    _warpAfterGracePeriod(epoch);
+    _mintOneReward(validationID, 1);
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, 1);
+    assertEq(rewards, 0);
   }
 
   function test_processProof_missUptime() public {
