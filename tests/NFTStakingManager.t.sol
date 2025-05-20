@@ -1287,7 +1287,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
   }
-  
+
   function test_getRewardsMintedForEpoch() public {
     (bytes32 validationID,) = _createValidator();
     _createDelegation(validationID, 1);
@@ -1302,7 +1302,6 @@ contract NFTStakingManagerTest is Base {
     uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
     assertEq(tokenIDs.length, 1);
   }
-  
 
   ///
   /// NONCE TESTS

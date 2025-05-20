@@ -15,7 +15,6 @@ import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ContextUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/utils/ContextUpgradeable.sol";
-
 import { ValidatorManager } from
   "icm-contracts-2.0.0/contracts/validator-manager/ValidatorManager.sol";
 import { ValidatorMessages } from
@@ -134,9 +133,9 @@ interface INativeMinter {
 /// @author MultisigLabs (https://github.com/multisig-labs/validation-managers)
 contract NFTStakingManager is
   Initializable,
-  UUPSUpgradeable,
   ContextUpgradeable,
-  AccessControlDefaultAdminRulesUpgradeable
+  AccessControlDefaultAdminRulesUpgradeable,
+  UUPSUpgradeable
 {
   ///
   /// LIBRARIES
@@ -271,9 +270,8 @@ contract NFTStakingManager is
   }
 
   /// @notice Initializes NFTStakingManager with necessary parameters and settings
-  function initialize(NFTStakingManagerSettings calldata settings) external initializer {
+  function initialize(NFTStakingManagerSettings calldata settings) public initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
-    ContextUpgradeable.__Context_init();
     AccessControlDefaultAdminRulesUpgradeable.__AccessControlDefaultAdminRules_init(
       0, settings.admin
     );
@@ -691,7 +689,6 @@ contract NFTStakingManager is
       delete $.delegations[delegationID];
     }
 
-
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
@@ -1101,7 +1098,7 @@ contract NFTStakingManager is
     }
     return rewards;
   }
-  
+
   /// @notice Gets tokenIds that have been minted rewards for a given epoch
   ///
   /// @param epoch The rewards epoch to fetch tokenIds
