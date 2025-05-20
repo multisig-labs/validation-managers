@@ -1097,6 +1097,66 @@ contract NFTStakingManagerTest is Base {
     assertEq(claimedEpochNumbers.length, 1);
   }
 
+  function test_claimValidatorRewards_multipleDelegations_summedFees() public {
+    // 1. Create validator
+    (bytes32 validationID, address validator) = _createValidator();
+
+    // 2. Create multiple delegators and delegations WITHOUT prepaid credits
+    // Using unique names for actors in this test to avoid potential clashes.
+    address delegator1 = getActor("Delegator1_MultiFeeTest");
+    address delegator2 = getActor("Delegator2_MultiFeeTest");
+
+    uint256 numLicenses1 = 2;
+    uint256 numLicenses2 = 3;
+
+    // These calls to _createDelegation will register and complete the delegations.
+    // We are intentionally NOT calling addPrepaidCredits for delegator1 or delegator2.
+    _createDelegation(validationID, delegator1, numLicenses1);
+    _createDelegation(validationID, delegator2, numLicenses2);
+
+    uint32 epochToTest = 1; // Test rewards for the first epoch after setup
+
+    // 3. Process proof and mint rewards for the epoch
+    _warpToGracePeriod(epochToTest);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100); // Sufficient uptime
+    _warpAfterGracePeriod(epochToTest);
+    _mintOneReward(validationID, epochToTest);
+
+    // 4. Validator claims rewards
+    vm.startPrank(validator);
+    (uint256 totalClaimedRewards,) = nftStakingManager.claimValidatorRewards(validationID, 1); // Claim for 1 epoch
+    vm.stopPrank();
+
+    // 5. Calculate expected total fees
+    // Total licenses staked in this epoch for this validator by these two delegators
+    uint256 totalStakedLicensesInEpochByTheseDelegators = numLicenses1 + numLicenses2;
+
+    EpochInfoView memory epochInfo = nftStakingManager.getEpochInfoView(epochToTest);
+
+    assertEq(
+      epochInfo.totalStakedLicenses,
+      totalStakedLicensesInEpochByTheseDelegators,
+      "Mismatch in expected total staked licenses for the epoch"
+    );
+
+    uint256 rewardsPerLicense = epochRewards / epochInfo.totalStakedLicenses;
+
+    uint256 rewardsDelegation1 = numLicenses1 * rewardsPerLicense;
+    uint256 feeDelegation1 = rewardsDelegation1 * DELEGATION_FEE_BIPS / BIPS_CONVERSION_FACTOR;
+
+    uint256 rewardsDelegation2 = numLicenses2 * rewardsPerLicense;
+    uint256 feeDelegation2 = rewardsDelegation2 * DELEGATION_FEE_BIPS / BIPS_CONVERSION_FACTOR;
+
+    uint256 expectedTotalValidatorFees = feeDelegation1 + feeDelegation2;
+
+    // 6. Assert claimed rewards match expected total fees
+    assertEq(
+      totalClaimedRewards,
+      expectedTotalValidatorFees,
+      "Validator rewards should be the sum of all delegation fees"
+    );
+  }
+
   function test_claimDelegatorRewards_success() public {
     // Create validator and delegator
     (bytes32 validationID, address validator) = _createValidator();
