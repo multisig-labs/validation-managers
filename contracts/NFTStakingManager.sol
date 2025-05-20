@@ -27,7 +27,6 @@ import {
 
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 import { NodeLicense } from "./tokens/NodeLicense.sol";
-import { ERC2771ContextStorage } from "./utils/ERC2771ContextStorage.sol";
 
 /// @notice Information about each rewards epoch
 struct EpochInfo {
@@ -135,7 +134,6 @@ interface INativeMinter {
 contract NFTStakingManager is
   Initializable,
   ContextUpgradeable,
-  ERC2771ContextStorage,
   AccessControlDefaultAdminRulesUpgradeable,
   UUPSUpgradeable
 {
@@ -272,7 +270,7 @@ contract NFTStakingManager is
   }
 
   /// @notice Initializes NFTStakingManager with necessary parameters and settings
-  function initialize(NFTStakingManagerSettings calldata settings) external initializer {
+  function initialize(NFTStakingManagerSettings calldata settings) public initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
     AccessControlDefaultAdminRulesUpgradeable.__AccessControlDefaultAdminRules_init(
       0, settings.admin
@@ -1287,34 +1285,6 @@ contract NFTStakingManager is
     }
 
     return warpMessage;
-  }
-
-  function _msgSender()
-    internal
-    view
-    override (ContextUpgradeable, ERC2771ContextStorage)
-    returns (address)
-  {
-    return super._msgSender(); // This will call the ERC2771ContextStorage version if linearized correctly
-  }
-
-  function _msgData()
-    internal
-    view
-    override (ContextUpgradeable, ERC2771ContextStorage)
-    returns (bytes calldata)
-  {
-    return super._msgData(); // This will call the ERC2771ContextStorage version if linearized correctly
-  }
-
-  function _contextSuffixLength()
-    internal
-    view
-    virtual
-    override (ContextUpgradeable, ERC2771ContextStorage)
-    returns (uint256)
-  {
-    return 0;
   }
 
   /// @notice Authorizes upgrade to DEFAULT_ADMIN_ROLE

@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { ERC2771ContextUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.3.0/metatx/ERC2771ContextUpgradeable.sol";
-
 // https://github.com/OpenZeppelin/openzeppelin-contracts/issues/4791#issuecomment-1849977413
 
-abstract contract ERC2771ContextStorage is ERC2771ContextUpgradeable(address(0)) {
+abstract contract ERC2771ContextStorage {
   bytes32 public constant ERC2771_CONTEXT_STORAGE_POSITION = keccak256("erc2771.context.storage");
 
   // @dev Set the trusted forwarder address. Must apply appropriate access control.
@@ -17,7 +14,7 @@ abstract contract ERC2771ContextStorage is ERC2771ContextUpgradeable(address(0))
     }
   }
 
-  function trustedForwarder() public view override returns (address operator) {
+  function trustedForwarder() public view returns (address operator) {
     bytes32 position = ERC2771_CONTEXT_STORAGE_POSITION;
     assembly {
       operator := sload(position)
@@ -27,7 +24,7 @@ abstract contract ERC2771ContextStorage is ERC2771ContextUpgradeable(address(0))
   /**
    * @dev Indicates whether any particular address is the trusted forwarder.
    */
-  function isTrustedForwarder(address forwarder) public view override returns (bool) {
+  function isTrustedForwarder(address forwarder) public view returns (bool) {
     return forwarder == trustedForwarder();
   }
 
@@ -36,8 +33,14 @@ abstract contract ERC2771ContextStorage is ERC2771ContextUpgradeable(address(0))
    * a call is not performed by the trusted forwarder or the calldata length is less than
    * 20 bytes (an address length).
    */
-  function _msgSender() internal view virtual override returns (address) {
-    return super._msgSender();
+  function _msgSender() internal view virtual returns (address) {
+    uint256 calldataLength = msg.data.length;
+    uint256 contextSuffixLength = 20;
+    if (isTrustedForwarder(msg.sender) && calldataLength >= contextSuffixLength) {
+      return address(bytes20(msg.data[calldataLength - contextSuffixLength:]));
+    } else {
+      return msg.sender;
+    }
   }
 
   /**
@@ -45,14 +48,13 @@ abstract contract ERC2771ContextStorage is ERC2771ContextUpgradeable(address(0))
    * a call is not performed by the trusted forwarder or the calldata length is less than
    * 20 bytes (an address length).
    */
-  function _msgData() internal view virtual override returns (bytes calldata) {
-    return super._msgData();
-  }
-
-  /**
-   * @dev ERC-2771 specifies the context as being a single address (20 bytes).
-   */
-  function _contextSuffixLength() internal view virtual override returns (uint256) {
-    return 20;
+  function _msgData() internal view virtual returns (bytes calldata) {
+    uint256 calldataLength = msg.data.length;
+    uint256 contextSuffixLength = 20;
+    if (isTrustedForwarder(msg.sender) && calldataLength >= contextSuffixLength) {
+      return msg.data[:calldataLength - contextSuffixLength];
+    } else {
+      return msg.data;
+    }
   }
 }
