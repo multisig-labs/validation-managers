@@ -519,4 +519,20 @@ contract NodeLicenseTest is Base {
     // Verify the transfer was successful and user2 is the new owner
     assertEq(nodeLicense.ownerOf(tokenId), user2, "user2 should now own the token");
   }
+
+  function test_Enumerable() public {
+    vm.startPrank(minter);
+    nodeLicense.mint(user1);
+    nodeLicense.mint(user1);
+    nodeLicense.mint(user1);
+
+    assertEq(nodeLicense.balanceOf(user1), 3);
+    assertEq(nodeLicense.ownerOf(1), user1);
+    assertEq(nodeLicense.ownerOf(2), user1);
+    assertEq(nodeLicense.ownerOf(3), user1);
+
+    assertEq(nodeLicense.tokenOfOwnerByIndex(user1, 0), 1);
+    assertEq(nodeLicense.tokenOfOwnerByIndex(user1, 1), 2);
+    assertEq(nodeLicense.tokenOfOwnerByIndex(user1, 2), 3);
+  }
 }
