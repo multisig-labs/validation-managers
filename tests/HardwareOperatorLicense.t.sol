@@ -121,4 +121,20 @@ contract HardwareOperatorLicenseTest is Base {
     vm.expectRevert();
     hardwareLicense.setBaseURI("https://new-uri.com/");
   }
+
+  function test_Enumerable() public {
+    vm.startPrank(minter);
+    hardwareLicense.mint(user1);
+    hardwareLicense.mint(user1);
+    hardwareLicense.mint(user1);
+
+    assertEq(hardwareLicense.balanceOf(user1), 3);
+    assertEq(hardwareLicense.ownerOf(1), user1);
+    assertEq(hardwareLicense.ownerOf(2), user1);
+    assertEq(hardwareLicense.ownerOf(3), user1);
+
+    assertEq(hardwareLicense.tokenOfOwnerByIndex(user1, 0), 1);
+    assertEq(hardwareLicense.tokenOfOwnerByIndex(user1, 1), 2);
+    assertEq(hardwareLicense.tokenOfOwnerByIndex(user1, 2), 3);
+  }
 }

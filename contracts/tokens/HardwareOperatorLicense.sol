@@ -10,7 +10,9 @@ import { UUPSUpgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721Upgradeable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/ERC721Upgradeable.sol";
-
+import { ERC721EnumerableUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 /* 
  * @title HardwareOperatorLicense
  * @notice An ERC721 Soulbound NFT that represents a license that can be staked to create a Validator node
@@ -46,9 +48,10 @@ import { ERC721Upgradeable } from
  *     }
  * } 
  */
+
 contract HardwareOperatorLicense is
   Initializable,
-  ERC721Upgradeable,
+  ERC721EnumerableUpgradeable,
   AccessControlDefaultAdminRulesUpgradeable,
   UUPSUpgradeable
 {
@@ -102,11 +105,11 @@ contract HardwareOperatorLicense is
     _baseTokenURI = baseTokenURI;
   }
 
-  function approve(address, uint256) public virtual override {
+  function approve(address, uint256) public virtual override (ERC721Upgradeable, IERC721) {
     revert SoulboundToken();
   }
 
-  function setApprovalForAll(address, bool) public virtual override {
+  function setApprovalForAll(address, bool) public virtual override (ERC721Upgradeable, IERC721) {
     revert SoulboundToken();
   }
 
@@ -133,7 +136,7 @@ contract HardwareOperatorLicense is
   function supportsInterface(bytes4 interfaceId)
     public
     view
-    override (ERC721Upgradeable, AccessControlDefaultAdminRulesUpgradeable)
+    override (ERC721EnumerableUpgradeable, AccessControlDefaultAdminRulesUpgradeable)
     returns (bool)
   {
     return super.supportsInterface(interfaceId);
