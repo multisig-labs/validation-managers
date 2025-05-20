@@ -260,6 +260,7 @@ contract NFTStakingManager is
   error InvalidDelegatorStatus(DelegatorStatus status);
   error InvalidValidatorStatus(ValidatorStatus status);
   error UnexpectedValidationID(bytes32 expectedValidationID, bytes32 actualValidationID);
+  error UptimeAlreadySubmitted();
 
   /// @notice disable initializers if constructed directly
   constructor() {
@@ -699,18 +700,22 @@ contract NFTStakingManager is
     (bytes32 validationID, uint64 uptimeSeconds) =
       ValidatorMessages.unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex).payload);
 
-    uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
-    epoch--;
+    uint32 currentEpoch = getEpochByTimestamp(uint32(block.timestamp));
+    uint32 previousEpoch = currentEpoch - 1;
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    if (epoch == 0 || block.timestamp < getEpochEndTime(epoch)) {
+    if (previousEpoch == 0 || block.timestamp < getEpochEndTime(previousEpoch)) {
       revert EpochHasNotEnded();
     }
 
-    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+    if (block.timestamp >= getEpochEndTime(previousEpoch) + $.gracePeriod) {
       revert GracePeriodHasPassed();
     }
 
     ValidationInfo storage validation = $.validations[validationID];
+
+    if (getEpochByTimestamp(validation.lastSubmissionTime) == currentEpoch) {
+      revert UptimeAlreadySubmitted();
+    }
 
     if (!$.bypassUptimeCheck) {
       uint32 lastSubmissionTime = validation.lastSubmissionTime;
@@ -728,14 +733,14 @@ contract NFTStakingManager is
       }
     }
 
-    EpochInfo storage epochInfo = $.epochs[epoch];
+    EpochInfo storage epochInfo = $.epochs[previousEpoch];
     epochInfo.totalStakedLicenses += validation.licenseCount;
 
     // then for each delegation that was on the active validator, record that they can get rewards
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
-      delegation.uptimeCheck.add(epoch);
+      delegation.uptimeCheck.add(previousEpoch);
     }
   }
 
@@ -1099,7 +1104,8 @@ contract NFTStakingManager is
   /// @return rewards The rewards for the delegation for the given epoch
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bool success, uint256 rewards) = $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
+    (bool success, uint256 rewards) =
+      $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
     if (!success) {
       return 0;
     }

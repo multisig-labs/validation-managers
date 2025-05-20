@@ -682,13 +682,11 @@ contract NFTStakingManagerTest is Base {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
 
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
     (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
-    
     uint32 epoch = nftStakingManager.getEpochByTimestamp(startTime);
     uint256 insufficientUptime = epochDuration * 70 / 100;
-
 
     // Process proof with insufficient uptime
     _warpToGracePeriod(epoch);
@@ -697,12 +695,11 @@ contract NFTStakingManagerTest is Base {
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
     nftStakingManager.processProof(uint32(0));
 
-    
     // Verify that the uptime and submissiontime were set properly
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validation.lastUptimeSeconds, insufficientUptime);
     assertEq(validation.lastSubmissionTime, block.timestamp);
-    
+
     // Verify that the delegation did not receive rewards
     _warpAfterGracePeriod(epoch);
     _mintOneReward(validationID, 1);
@@ -748,6 +745,35 @@ contract NFTStakingManagerTest is Base {
     assertEq(rewards, epochRewards);
   }
 
+  function test_processProof_cannotSubmitTwiceForSameEpoch() public {
+    (bytes32 validationID, address validator) = _createValidator();
+    _createDelegation(validationID, 1); // Create a delegation so there's something to process
+
+    uint32 epochToTest = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    vm.prank(validator);
+    nftStakingManager.addPrepaidCredits(getActor("Delegator1"), uint32(EPOCH_DURATION * 2));
+
+    _warpToGracePeriod(epochToTest);
+
+    uint256 uptimeForEpoch = uint256(EPOCH_DURATION) * 90 / 100; // 90% uptime
+    bytes memory uptimeMessage1 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch));
+
+    _mockGetUptimeWarpMessage(uptimeMessage1, true, uint32(0)); // Using message index 0
+    nftStakingManager.processProof(uint32(0));
+
+    vm.warp(block.timestamp + 10);
+
+    bytes memory uptimeMessage2 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch)); // Can be the same or different valid message
+
+    _mockGetUptimeWarpMessage(uptimeMessage2, true, uint32(1)); // Using a new message index 1
+
+    vm.expectRevert(NFTStakingManager.UptimeAlreadySubmitted.selector);
+    nftStakingManager.processProof(uint32(1));
+  }
+
   //
   // DELEGATION FEE
   //
@@ -778,6 +804,7 @@ contract NFTStakingManagerTest is Base {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
+
     nftStakingManager.processProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
