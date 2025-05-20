@@ -719,13 +719,13 @@ contract NFTStakingManager is
       uint32 uptimeDelta = uint32(uptimeSeconds) - lastUptimeSeconds;
       uint32 submissionTimeDelta = uint32(block.timestamp) - lastSubmissionTime;
       uint256 effectiveUptime = uint256(uptimeDelta) * $.epochDuration / submissionTimeDelta;
-      if (effectiveUptime < _expectedUptime()) {
-        revert InsufficientUptime();
-      }
 
-      // Only update state if uptime check passes
       validation.lastUptimeSeconds = uint32(uptimeSeconds);
       validation.lastSubmissionTime = uint32(block.timestamp);
+
+      if (effectiveUptime < _expectedUptime()) {
+        return;
+      }
     }
 
     EpochInfo storage epochInfo = $.epochs[epoch];
@@ -1099,7 +1099,11 @@ contract NFTStakingManager is
   /// @return rewards The rewards for the delegation for the given epoch
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.delegations[delegationID].claimableRewardsPerEpoch.get(uint256(epoch));
+    (bool success, uint256 rewards) = $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
+    if (!success) {
+      return 0;
+    }
+    return rewards;
   }
 
   /// @notice Gets the key for a given epoch and token ID
