@@ -821,6 +821,7 @@ contract NFTStakingManagerTest is Base {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
+    
     nftStakingManager.processProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);

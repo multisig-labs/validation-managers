@@ -47,7 +47,6 @@ struct ValidationInfo {
   uint32 licenseCount;
   uint32 lastUptimeSeconds;
   uint32 lastSubmissionTime;
-  uint32 lastSubmissionEpoch;
   uint32 delegationFeeBips;
   address owner;
   uint256 hardwareTokenID;
@@ -701,20 +700,21 @@ contract NFTStakingManager is
     (bytes32 validationID, uint64 uptimeSeconds) =
       ValidatorMessages.unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex).payload);
 
-    uint32 epoch = getEpochByTimestamp(uint32(block.timestamp));
-    epoch--;
+    uint32 currentEpoch = getEpochByTimestamp(uint32(block.timestamp));
+    uint32 previousEpoch = currentEpoch - 1;
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    if (epoch == 0 || block.timestamp < getEpochEndTime(epoch)) {
+    if (previousEpoch == 0 || block.timestamp < getEpochEndTime(previousEpoch)) {
       revert EpochHasNotEnded();
     }
 
-    if (block.timestamp >= getEpochEndTime(epoch) + $.gracePeriod) {
+    if (block.timestamp >= getEpochEndTime(previousEpoch) + $.gracePeriod) {
       revert GracePeriodHasPassed();
     }
 
     ValidationInfo storage validation = $.validations[validationID];
     
-    if (validation.lastSubmissionEpoch == epoch) {
+    
+    if (getEpochByTimestamp(validation.lastSubmissionTime) == currentEpoch) {
       revert UptimeAlreadySubmitted();
     }
     
@@ -734,16 +734,15 @@ contract NFTStakingManager is
       }
     }
     
-    validation.lastSubmissionEpoch = epoch;
 
-    EpochInfo storage epochInfo = $.epochs[epoch];
+    EpochInfo storage epochInfo = $.epochs[previousEpoch];
     epochInfo.totalStakedLicenses += validation.licenseCount;
 
     // then for each delegation that was on the active validator, record that they can get rewards
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
-      delegation.uptimeCheck.add(epoch);
+      delegation.uptimeCheck.add(previousEpoch);
     }
   }
 
