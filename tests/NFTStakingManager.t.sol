@@ -682,13 +682,11 @@ contract NFTStakingManagerTest is Base {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
 
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
     (bytes32 delegationID,) = _createDelegation(validationID, 1);
 
-    
     uint32 epoch = nftStakingManager.getEpochByTimestamp(startTime);
     uint256 insufficientUptime = epochDuration * 70 / 100;
-
 
     // Process proof with insufficient uptime
     _warpToGracePeriod(epoch);
@@ -697,12 +695,11 @@ contract NFTStakingManagerTest is Base {
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
     nftStakingManager.processProof(uint32(0));
 
-    
     // Verify that the uptime and submissiontime were set properly
     ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
     assertEq(validation.lastUptimeSeconds, insufficientUptime);
     assertEq(validation.lastSubmissionTime, block.timestamp);
-    
+
     // Verify that the delegation did not receive rewards
     _warpAfterGracePeriod(epoch);
     _mintOneReward(validationID, 1);
@@ -756,7 +753,6 @@ contract NFTStakingManagerTest is Base {
     // _createValidator and _createDelegation complete registrations, making them active in the current epoch (epoch 1 by default if block.timestamp is at initial)
     uint32 epochToTest = nftStakingManager.getEpochByTimestamp(block.timestamp);
 
-
     // Ensure validator has prepaid credits if fees are relevant, though not strictly for this test's purpose
     vm.prank(validator);
     nftStakingManager.addPrepaidCredits(getActor("Delegator1"), uint32(EPOCH_DURATION * 2));
@@ -776,7 +772,7 @@ contract NFTStakingManagerTest is Base {
     // Attempt the second call to processProof for the SAME epoch
     // Warp time a little, but stay within the grace period
     vm.warp(block.timestamp + 10); // Still within grace period
-    
+
     // It's important that getEpochByTimestamp(block.timestamp) - 1 still resolves to epochToTest
     // block.timestamp is now getEpochEndTime(epochToTest) + GRACE_PERIOD / 2 + 10
     // getEpochByTimestamp for this new time should be epochToTest + 1
@@ -821,7 +817,7 @@ contract NFTStakingManagerTest is Base {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    
+
     nftStakingManager.processProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
