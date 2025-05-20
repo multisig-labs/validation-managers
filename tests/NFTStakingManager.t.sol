@@ -1124,17 +1124,20 @@ contract NFTStakingManagerTest is Base {
 
     // 4. Validator claims rewards
     vm.startPrank(validator);
-    (uint256 totalClaimedRewards, ) = nftStakingManager.claimValidatorRewards(validationID, 1); // Claim for 1 epoch
+    (uint256 totalClaimedRewards,) = nftStakingManager.claimValidatorRewards(validationID, 1); // Claim for 1 epoch
     vm.stopPrank();
 
     // 5. Calculate expected total fees
     // Total licenses staked in this epoch for this validator by these two delegators
     uint256 totalStakedLicensesInEpochByTheseDelegators = numLicenses1 + numLicenses2;
-    
-    EpochInfoView memory epochInfo = nftStakingManager.getEpochInfoView(epochToTest);
-    
 
-    assertEq(epochInfo.totalStakedLicenses, totalStakedLicensesInEpochByTheseDelegators, "Mismatch in expected total staked licenses for the epoch");
+    EpochInfoView memory epochInfo = nftStakingManager.getEpochInfoView(epochToTest);
+
+    assertEq(
+      epochInfo.totalStakedLicenses,
+      totalStakedLicensesInEpochByTheseDelegators,
+      "Mismatch in expected total staked licenses for the epoch"
+    );
 
     uint256 rewardsPerLicense = epochRewards / epochInfo.totalStakedLicenses;
 
@@ -1147,7 +1150,11 @@ contract NFTStakingManagerTest is Base {
     uint256 expectedTotalValidatorFees = feeDelegation1 + feeDelegation2;
 
     // 6. Assert claimed rewards match expected total fees
-    assertEq(totalClaimedRewards, expectedTotalValidatorFees, "Validator rewards should be the sum of all delegation fees");
+    assertEq(
+      totalClaimedRewards,
+      expectedTotalValidatorFees,
+      "Validator rewards should be the sum of all delegation fees"
+    );
   }
 
   function test_claimDelegatorRewards_success() public {
