@@ -585,7 +585,7 @@ contract NFTStakingManager is
     // If we're less than halfway through the epoch, set startEpoch as current
     // otherwise set startEpoch as the next epoch
     uint32 epoch = getEpochByTimestamp(block.timestamp);
-    if ((getEpochEndTime(epoch - 1) + ($.gracePeriod / 2)) > block.timestamp) {
+    if ((getEpochEndTime(epoch - 1) + ($.epochDuration / 2)) > block.timestamp) {
       delegation.startEpoch = epoch;
     } else {
       delegation.startEpoch = epoch + 1;
