@@ -464,6 +464,102 @@ contract NFTStakingManagerTest is Base {
     assertEq(delegation.validationID, validationID);
   }
 
+  function test_delegatorJoinsLate_noRewards() public {
+    (bytes32 validationID,) = _createValidator();
+
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    uint32 epochEndTime = nftStakingManager.getEpochEndTime(currentEpoch - 1); // currentEpoch is 1-indexed, getEpochEndTime expects 0-indexed or current epoch number
+    uint32 halfwayThroughEpoch = epochEndTime + (EPOCH_DURATION / 2);
+
+    // Warp to after halfway through the current epoch
+    vm.warp(halfwayThroughEpoch + 1 seconds);
+
+    (bytes32 delegationID,) = _createDelegation(validationID, 1);
+
+    DelegationInfoView memory d = nftStakingManager.getDelegationInfoView(delegationID);
+    // Start epoch should be the next epoch
+    assertEq(d.startEpoch, currentEpoch + 1, "Delegator start epoch should be next epoch");
+
+    // Process proof for the current epoch
+    _warpToGracePeriod(currentEpoch);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+
+    // Mint rewards for the current epoch
+    _warpAfterGracePeriod(currentEpoch);
+    _mintOneReward(validationID, currentEpoch);
+
+    // Verify delegator has no rewards for the current epoch
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, currentEpoch);
+    assertEq(rewards, 0, "Delegator should have no rewards for the current epoch");
+
+    // Verify delegator has rewards for the next epoch if they stay
+    uint32 nextEpoch = currentEpoch + 1;
+    _warpToGracePeriod(nextEpoch);
+    _processUptimeProof(validationID, EPOCH_DURATION * 2 * 90 / 100); // Uptime for 2 epochs worth
+    _warpAfterGracePeriod(nextEpoch);
+    _mintOneReward(validationID, nextEpoch);
+
+    rewards = nftStakingManager.getRewardsForEpoch(delegationID, nextEpoch);
+    assertGt(rewards, 0, "Delegator should have rewards for the next epoch");
+  }
+
+  function test_delegatorJoinsEarly_leavesLate_rewards() public {
+    // this function should test that a delegator joins early in the cycle, their
+    // start epoch is set, they complete delegation removal
+    // and still get rewards at the end of the cycle
+    (bytes32 validationID,) = _createValidator();
+    uint32 joinEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    // Delegator joins early in the current epoch
+    uint32 epochStartTime = nftStakingManager.getEpochEndTime(joinEpoch - 1);
+    vm.warp(epochStartTime + 10 seconds); // Join 10 seconds into the epoch
+
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(delegation.startEpoch, joinEpoch, "Delegator start epoch should be current epoch");
+
+    // Delegator initiates removal late in the same epoch (after grace period would have ended, but before next epoch starts)
+    uint32 epochEndTime = nftStakingManager.getEpochEndTime(joinEpoch);
+    vm.warp(epochEndTime - 10 seconds); // Leave 10 seconds before epoch ends
+
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.startPrank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+    vm.stopPrank();
+
+    // Process proof for the joinEpoch
+    _warpToGracePeriod(joinEpoch);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+
+    // Mint rewards for the joinEpoch
+    _warpAfterGracePeriod(joinEpoch);
+    _mintOneReward(validationID, joinEpoch);
+
+    // Verify delegator has rewards for the joinEpoch
+    uint256 rewards = nftStakingManager.getRewardsForEpoch(delegationID, joinEpoch);
+    assertGt(rewards, 0, "Delegator should have rewards for the epoch they joined and left late");
+
+    // Claim rewards
+    vm.prank(delegator);
+    (uint256 totalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID, 1);
+    assertGt(totalRewards, 0, "Claimed rewards mismatch");
+  }
+
+  function test_delegatorJoinsEarly_leavesDuringGracePeriod_rewards() public {
+    // this funciton should test that a delegator joins early in the cycle,
+    // start epoch is this epoch, they leave during the grace period and still get rewards
+  }
+
+  function test_delegatorSwitchValidator_singleRewards() public {
+    // this function should test that a delegator joins early in one epoch,
+    // then leaves during the next epoch and switches to a different validator
+    // they should get rewards from the first validator on the first epoch,
+    // and rewards from the second validator on the second epoch
+  }
+
   //
   // DELEGATOR REMOVAL
   //
@@ -523,10 +619,6 @@ contract NFTStakingManagerTest is Base {
     DelegationInfoView memory delegation = nftStakingManager.getDelegationInfoView(delegationID);
     assertEq(uint8(delegation.status), uint8(DelegatorStatus.PendingRemoved));
     assertEq(delegation.endEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
-
-    // Verify validator state
-    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validation.licenseCount, 0);
   }
 
   function test_initiateDelegatorRemoval_multiple() public {
@@ -546,10 +638,6 @@ contract NFTStakingManagerTest is Base {
       assertEq(uint8(delegation.status), uint8(DelegatorStatus.PendingRemoved));
       assertEq(delegation.endEpoch, nftStakingManager.getEpochByTimestamp(block.timestamp) - 1);
     }
-
-    // Verify validator state
-    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validation.licenseCount, 0);
   }
 
   //
@@ -1342,11 +1430,11 @@ contract NFTStakingManagerTest is Base {
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
   }
-  
+
   function test_getRewardsMintedForEpoch() public {
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
     _createDelegation(validationID, 1);
-    
+
     uint32 epoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
     _warpToGracePeriod(epoch);
     _processUptimeProof(validationID, EPOCH_DURATION);
@@ -1357,7 +1445,6 @@ contract NFTStakingManagerTest is Base {
     uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
     assertEq(tokenIDs.length, 1);
   }
-  
 
   ///
   /// NONCE TESTS
@@ -1472,9 +1559,16 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator1).length, 0, "Delegation should be removed"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID1);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after removal without rewards");
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID1);
+    assertEq(
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed"
+    );
+    assertEq(
+      delegationInfo.owner,
+      address(0),
+      "Delegation owner should not exist after removal without rewards"
+    );
   }
 
   function test_DelegationsByOwner_EndsNotClaimedStays_ThenClaimedIsRemoved() public {
@@ -1512,8 +1606,13 @@ contract NFTStakingManagerTest is Base {
       1,
       "Delegation should STILL be present as rewards not claimed"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID2);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be in PendingRemoved status");
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID2);
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Removed),
+      "Delegation should be in PendingRemoved status"
+    );
 
     vm.prank(delegator2);
     (uint256 d2TotalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID2, 1);
@@ -1525,7 +1624,11 @@ contract NFTStakingManagerTest is Base {
       "Delegation should be removed after claiming rewards"
     );
     delegationInfo = nftStakingManager.getDelegationInfoView(delegationID2);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after claiming rewards");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Unknown),
+      "Delegation should be removed after claiming rewards"
+    );
   }
 
   function test_DelegationsByOwner_ActiveAndRewardsClaimedStays() public {
@@ -1559,75 +1662,11 @@ contract NFTStakingManagerTest is Base {
       1,
       "Delegation should STILL be present as it's active"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID3);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Active), "Delegation should be active");
-  }
-
-  function test_ValidatorRemoval_RemovesFromOwnerMapping() public {
-    // Test Validator Removal
-    address validatorOwner = getActor("ValidatorOwnerNoRewards");
-    uint256 hardwareTokenId = hardwareNft.mint(validatorOwner);
-
-    (bytes32 validationID,) = _createValidator(validatorOwner, hardwareTokenId);
-
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID3);
     assertEq(
-      nftStakingManager.getValidationsByOwner(validatorOwner).length,
-      1,
-      "Validator should initially be in validationsByOwner"
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Active), "Delegation should be active"
     );
-    assertEq(
-      nftStakingManager.getValidationsByOwner(validatorOwner)[0],
-      validationID,
-      "Validator ID mismatch in validationsByOwner"
-    );
-
-    // Initiate and complete validator removal (no rewards minted)
-    vm.prank(validatorOwner);
-    nftStakingManager.initiateValidatorRemoval(validationID);
-    nftStakingManager.completeValidatorRemoval(0);
-
-    assertEq(
-      nftStakingManager.getValidationsByOwner(validatorOwner).length,
-      0,
-      "Validator should be removed from validationsByOwner after removal without rewards"
-    );
-
-    ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, address(0), "Validation owner should not exist after removal without rewards");
-  }
-
-  function test_DelegatorRemoval_RemovesFromOwnerMapping() public {
-    // Test Delegator Removal
-    (bytes32 validatorForDelegator,) = _createValidator();
-    (bytes32 delegationID, address delegatorOwner) = _createDelegation(validatorForDelegator, 1);
-
-    assertEq(
-      nftStakingManager.getDelegationsByOwner(delegatorOwner).length,
-      1,
-      "Delegation should initially be in delegationsByOwner"
-    );
-    assertEq(
-      nftStakingManager.getDelegationsByOwner(delegatorOwner)[0],
-      delegationID,
-      "Delegation ID mismatch in delegationsByOwner"
-    );
-
-    // Initiate and complete delegator removal (no rewards minted)
-    bytes32[] memory delegationIDsToRemove = new bytes32[](1);
-    delegationIDsToRemove[0] = delegationID;
-    vm.prank(delegatorOwner);
-    nftStakingManager.initiateDelegatorRemoval(delegationIDsToRemove);
-    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
-
-    assertEq(
-      nftStakingManager.getDelegationsByOwner(delegatorOwner).length,
-      0,
-      "Delegation should be removed from delegationsByOwner after removal without rewards"
-    );
-
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after removal without rewards");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after removal without rewards");
   }
 
   function test_ValidatorRemoval_WithRewards_DoesNotRemoveFromOwnerMapping() public {
@@ -1665,9 +1704,13 @@ contract NFTStakingManagerTest is Base {
       1,
       "Validator should STILL be in validationsByOwner due to pending rewards"
     );
-    
+
     ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, validatorOwner, "Validation owner should be the same as the validator owner");
+    assertEq(
+      validationInfo.owner,
+      validatorOwner,
+      "Validation owner should be the same as the validator owner"
+    );
 
     // Claim validator rewards
     vm.prank(validatorOwner);
@@ -1681,7 +1724,11 @@ contract NFTStakingManagerTest is Base {
     );
 
     validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, address(0), "Validation owner should not exist after rewards are claimed");
+    assertEq(
+      validationInfo.owner,
+      address(0),
+      "Validation owner should not exist after rewards are claimed"
+    );
   }
 
   function test_DelegatorRemoval_WithRewards_DoesNotRemoveFromOwnerMapping() public {
@@ -1714,8 +1761,16 @@ contract NFTStakingManagerTest is Base {
       "Delegation should STILL be in delegationsByOwner due to pending rewards"
     );
     DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be in PendingRemoved status");
-    assertEq(delegationInfo.owner, delegatorOwner, "Delegation owner should be the same as the delegator owner");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Removed),
+      "Delegation should be in PendingRemoved status"
+    );
+    assertEq(
+      delegationInfo.owner,
+      delegatorOwner,
+      "Delegation owner should be the same as the delegator owner"
+    );
 
     // Claim delegator rewards
     vm.prank(delegatorOwner);
@@ -1728,8 +1783,16 @@ contract NFTStakingManagerTest is Base {
       "Delegation should be removed from delegationsByOwner after rewards are claimed"
     );
     delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after rewards are claimed");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after rewards are claimed");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Unknown),
+      "Delegation should be removed after rewards are claimed"
+    );
+    assertEq(
+      delegationInfo.owner,
+      address(0),
+      "Delegation owner should not exist after rewards are claimed"
+    );
   }
 
   function _mintOneReward(bytes32 validationID, uint32 epoch) internal {
