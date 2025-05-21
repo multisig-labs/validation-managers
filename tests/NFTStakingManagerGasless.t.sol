@@ -118,6 +118,11 @@ contract NFTStakingManagerGaslessTest is Base {
 
   function test_TrustedForwarder() public {
     assertEq(nftStakingManager.trustedForwarder(), address(forwarder));
+
+    vm.expectRevert();
+    nftStakingManager.setTrustedForwarder(address(0));
+
+    vm.prank(admin);
     nftStakingManager.setTrustedForwarder(address(0));
     assertEq(nftStakingManager.trustedForwarder(), address(0));
   }

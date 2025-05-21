@@ -17,7 +17,11 @@ contract NFTStakingManagerGasless is NFTStakingManager, ERC2771ContextStorage {
     initializer
   {
     super.initialize(settings);
-    setTrustedForwarder(trustedForwarder);
+    _setTrustedForwarder(trustedForwarder);
+  }
+
+  function setTrustedForwarder(address _trustedForwarder) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    _setTrustedForwarder(_trustedForwarder);
   }
 
   function _msgSender()

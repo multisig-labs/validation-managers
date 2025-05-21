@@ -6,14 +6,6 @@ pragma solidity ^0.8.25;
 abstract contract ERC2771ContextStorage {
   bytes32 public constant ERC2771_CONTEXT_STORAGE_POSITION = keccak256("erc2771.context.storage");
 
-  // @dev Set the trusted forwarder address. Must apply appropriate access control.
-  function setTrustedForwarder(address operator) public {
-    bytes32 position = ERC2771_CONTEXT_STORAGE_POSITION;
-    assembly {
-      sstore(position, operator)
-    }
-  }
-
   function trustedForwarder() public view returns (address operator) {
     bytes32 position = ERC2771_CONTEXT_STORAGE_POSITION;
     assembly {
@@ -24,8 +16,16 @@ abstract contract ERC2771ContextStorage {
   /**
    * @dev Indicates whether any particular address is the trusted forwarder.
    */
-  function isTrustedForwarder(address forwarder) public view returns (bool) {
-    return forwarder == trustedForwarder();
+  function isTrustedForwarder(address operator) public view returns (bool) {
+    return operator == trustedForwarder();
+  }
+
+  // @dev Set the trusted forwarder address. Parent contract must apply appropriate access control.
+  function _setTrustedForwarder(address operator) internal virtual {
+    bytes32 position = ERC2771_CONTEXT_STORAGE_POSITION;
+    assembly {
+      sstore(position, operator)
+    }
   }
 
   /**

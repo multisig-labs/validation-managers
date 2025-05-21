@@ -46,7 +46,7 @@ contract NodeLicenseGaslessTest is Base {
 
     // Deploy the proxy contract
     bytes memory data =
-      abi.encodeWithSelector(NodeLicenseGasless.initialize.selector, settings, forwarder);
+      abi.encodeWithSelector(NodeLicenseGasless.initialize.selector, settings, address(forwarder));
 
     // Deploy the proxy and initialize it
     nodeLicense = NodeLicenseGasless(address(new ERC1967Proxy(address(implementation), data)));
@@ -61,6 +61,11 @@ contract NodeLicenseGaslessTest is Base {
 
   function test_TrustedForwarder() public {
     assertEq(nodeLicense.trustedForwarder(), address(forwarder));
+
+    vm.expectRevert();
+    nodeLicense.setTrustedForwarder(address(0));
+
+    vm.prank(admin);
     nodeLicense.setTrustedForwarder(address(0));
     assertEq(nodeLicense.trustedForwarder(), address(0));
   }
