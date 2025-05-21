@@ -299,6 +299,7 @@ contract NFTStakingManager is
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
     $.minimumDelegationFeeBips = 0; // 0%
     $.maximumDelegationFeeBips = 10000; // 100%
+    $.minDelegationEpochs = settings.minDelegationEpochs;
   }
 
   ///
