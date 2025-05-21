@@ -407,8 +407,12 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[validationID];
     if (validation.owner != _msgSender()) revert UnauthorizedOwner();
 
-    if (validation.licenseCount > 0) {
-      revert ValidatorHasActiveDelegations();
+    for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
+      bytes32 delegationID = validation.delegationIDs.at(i);
+      DelegationInfo storage delegation = $.delegations[delegationID];
+      if (delegation.status == DelegatorStatus.Active) {
+        revert ValidatorHasActiveDelegations();
+      }
     }
 
     validation.endEpoch = getEpochByTimestamp(block.timestamp);
@@ -420,6 +424,9 @@ contract NFTStakingManager is
 
   /// @notice Completes validator removal
   ///
+  /// @dev    This function does not delete the validator from storage
+  ///         That happens only in claimValidatorRewards when all rewards are claimed
+  ///
   /// @param messageIndex The index of the warp message to complete validator removal
   function completeValidatorRemoval(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
@@ -429,11 +436,6 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[validationID];
 
     _unlockHardwareToken(validation.hardwareTokenID);
-
-    if (validation.claimableRewardsPerEpoch.length() == 0) {
-      $.validationsByOwner[validation.owner].remove(validationID);
-      delete $.validations[validationID];
-    }
 
     emit CompletedValidatorRemoval(validationID);
 
@@ -600,6 +602,9 @@ contract NFTStakingManager is
 
   /// @notice Initiates removal of one or more delegations
   ///
+  /// @dev    This function does not update licenseCount of the validation or
+  ///         remove the delegation from the validation.
+  ///
   /// @param delegationIDs The ids of the delegations to remove
   function initiateDelegatorRemoval(bytes32[] calldata delegationIDs) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
@@ -632,9 +637,6 @@ contract NFTStakingManager is
       delegation.endingNonce = nonce;
       delegation.status = DelegatorStatus.PendingRemoved;
 
-      validation.licenseCount -= uint32(delegation.tokenIDs.length);
-      validation.delegationIDs.remove(delegationIDs[i]);
-
       emit InitiatedDelegatorRemoval(
         delegation.validationID, delegationIDs[i], delegation.endEpoch, delegation.tokenIDs
       );
@@ -642,6 +644,9 @@ contract NFTStakingManager is
   }
 
   /// @notice Completes delegator removal
+  ///
+  /// @dev    This function does not delete the delegation from storage
+  ///         That happens only in claimDelegatorRewards when all rewards are claimed
   ///
   /// @param delegationID The id of the delegation to complete
   /// @param messageIndex The index of the warp message to complete the delegation
@@ -684,11 +689,6 @@ contract NFTStakingManager is
     }
 
     delegation.status = DelegatorStatus.Removed;
-
-    if (delegation.claimableRewardsPerEpoch.length() == 0) {
-      $.delegationsByOwner[delegation.owner].remove(delegationID);
-      delete $.delegations[delegationID];
-    }
 
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
@@ -750,7 +750,6 @@ contract NFTStakingManager is
     }
 
     EpochInfo storage epochInfo = $.epochs[epoch];
-    epochInfo.totalStakedLicenses += validation.licenseCount;
 
     // then for each delegation that was on the active validator, record that they can get rewards
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
@@ -760,6 +759,11 @@ contract NFTStakingManager is
         delegation.startEpoch <= epoch && (delegation.endEpoch == 0 || delegation.endEpoch >= epoch)
       ) {
         delegation.uptimeCheck.add(epoch);
+        epochInfo.totalStakedLicenses += uint32(delegation.tokenIDs.length);
+      }
+
+      if (delegation.status != DelegatorStatus.Active) {
+        validation.licenseCount -= uint32(delegation.tokenIDs.length);
       }
     }
   }
@@ -783,7 +787,6 @@ contract NFTStakingManager is
       for (uint256 j = 0; j < totalDelegations; j++) {
         bytes32 delegationID = validation.delegationIDs.at(j);
         DelegationInfo storage delegation = $.delegations[delegationID];
-        // check end epoch here. and dont remove delegator from validation until
         if (delegation.uptimeCheck.contains(epoch)) {
           rewardsToMint += _mintRewardsPerDelegator(epoch, delegationID);
         }
@@ -812,15 +815,7 @@ contract NFTStakingManager is
       return 0;
     }
 
-    if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0))
-    {
-      return 0;
-    }
-
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
-      if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
-        return 0;
-      }
       if (epochInfo.rewardsMintedFor.contains(delegation.tokenIDs[i])) {
         return 0;
       }
@@ -909,6 +904,7 @@ contract NFTStakingManager is
       delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
         && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
     ) {
+      $.validations[delegation.validationID].delegationIDs.remove(delegationID);
       $.delegationsByOwner[delegation.owner].remove(delegationID);
       delete $.delegations[delegationID];
     }
