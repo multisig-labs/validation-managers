@@ -582,8 +582,16 @@ contract NFTStakingManager is
       }
     }
 
+    // If we're less than halfway through the epoch, set startEpoch as current
+    // otherwise set startEpoch as the next epoch
+    uint32 epoch = getEpochByTimestamp(block.timestamp);
+    if ((getEpochEndTime(epoch - 1) + ($.gracePeriod / 2)) > block.timestamp) {
+      delegation.startEpoch = epoch;
+    } else {
+      delegation.startEpoch = epoch + 1;
+    }
+
     delegation.status = DelegatorStatus.Active;
-    delegation.startEpoch = getEpochByTimestamp(block.timestamp);
 
     emit CompletedDelegatorRegistration(
       delegation.validationID, delegationID, delegation.startEpoch, nonce
@@ -682,7 +690,6 @@ contract NFTStakingManager is
       delete $.delegations[delegationID];
     }
 
-
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
@@ -749,7 +756,11 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
-      delegation.uptimeCheck.add(epoch);
+      if (
+        delegation.startEpoch <= epoch && (delegation.endEpoch == 0 || delegation.endEpoch >= epoch)
+      ) {
+        delegation.uptimeCheck.add(epoch);
+      }
     }
   }
 
@@ -772,7 +783,8 @@ contract NFTStakingManager is
       for (uint256 j = 0; j < totalDelegations; j++) {
         bytes32 delegationID = validation.delegationIDs.at(j);
         DelegationInfo storage delegation = $.delegations[delegationID];
-        if (delegation.uptimeCheck.contains(epoch) && epoch >= delegation.startEpoch) {
+        // check end epoch here. and dont remove delegator from validation until
+        if (delegation.uptimeCheck.contains(epoch)) {
           rewardsToMint += _mintRewardsPerDelegator(epoch, delegationID);
         }
       }
@@ -797,20 +809,20 @@ contract NFTStakingManager is
     EpochInfo storage epochInfo = $.epochs[epoch];
 
     if (delegation.owner == address(0)) {
-      revert DelegationDoesNotExist();
+      return 0;
     }
 
     if (epoch < delegation.startEpoch || (epoch > delegation.endEpoch && delegation.endEpoch != 0))
     {
-      revert EpochOutOfRange();
+      return 0;
     }
 
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
       if ($.tokenLockedBy[delegation.tokenIDs[i]] != delegationID) {
-        revert TokenNotLockedByDelegationID();
+        return 0;
       }
       if (epochInfo.rewardsMintedFor.contains(delegation.tokenIDs[i])) {
-        revert RewardsAlreadyMintedForTokenID();
+        return 0;
       }
 
       epochInfo.rewardsMintedFor.add(delegation.tokenIDs[i]);
@@ -1075,9 +1087,14 @@ contract NFTStakingManager is
   /// @return rewards The rewards for the delegation for the given epoch
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.delegations[delegationID].claimableRewardsPerEpoch.get(uint256(epoch));
+    (bool success, uint256 rewards) =
+      $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
+    if (!success) {
+      return 0;
+    }
+    return rewards;
   }
-  
+
   /// @notice Gets tokenIds that have been minted rewards for a given epoch
   ///
   /// @param epoch The rewards epoch to fetch tokenIds

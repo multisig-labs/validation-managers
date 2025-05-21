@@ -1185,11 +1185,11 @@ contract NFTStakingManagerTest is Base {
     assertEq(totalRewards, epochRewards * 2);
     assertEq(claimedEpochNumbers.length, 2);
   }
-  
+
   function test_getRewardsMintedForEpoch() public {
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
     _createDelegation(validationID, 1);
-    
+
     uint32 epoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
     _warpToGracePeriod(epoch);
     _processUptimeProof(validationID, EPOCH_DURATION);
@@ -1200,7 +1200,6 @@ contract NFTStakingManagerTest is Base {
     uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
     assertEq(tokenIDs.length, 1);
   }
-  
 
   ///
   /// NONCE TESTS
@@ -1315,9 +1314,16 @@ contract NFTStakingManagerTest is Base {
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator1).length, 0, "Delegation should be removed"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID1);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after removal without rewards");
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID1);
+    assertEq(
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed"
+    );
+    assertEq(
+      delegationInfo.owner,
+      address(0),
+      "Delegation owner should not exist after removal without rewards"
+    );
   }
 
   function test_DelegationsByOwner_EndsNotClaimedStays_ThenClaimedIsRemoved() public {
@@ -1355,8 +1361,13 @@ contract NFTStakingManagerTest is Base {
       1,
       "Delegation should STILL be present as rewards not claimed"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID2);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be in PendingRemoved status");
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID2);
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Removed),
+      "Delegation should be in PendingRemoved status"
+    );
 
     vm.prank(delegator2);
     (uint256 d2TotalRewards,) = nftStakingManager.claimDelegatorRewards(delegationID2, 1);
@@ -1368,7 +1379,11 @@ contract NFTStakingManagerTest is Base {
       "Delegation should be removed after claiming rewards"
     );
     delegationInfo = nftStakingManager.getDelegationInfoView(delegationID2);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after claiming rewards");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Unknown),
+      "Delegation should be removed after claiming rewards"
+    );
   }
 
   function test_DelegationsByOwner_ActiveAndRewardsClaimedStays() public {
@@ -1402,8 +1417,11 @@ contract NFTStakingManagerTest is Base {
       1,
       "Delegation should STILL be present as it's active"
     );
-    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID3);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Active), "Delegation should be active");
+    DelegationInfoView memory delegationInfo =
+      nftStakingManager.getDelegationInfoView(delegationID3);
+    assertEq(
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Active), "Delegation should be active"
+    );
   }
 
   function test_ValidatorRemoval_RemovesFromOwnerMapping() public {
@@ -1436,7 +1454,11 @@ contract NFTStakingManagerTest is Base {
     );
 
     ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, address(0), "Validation owner should not exist after removal without rewards");
+    assertEq(
+      validationInfo.owner,
+      address(0),
+      "Validation owner should not exist after removal without rewards"
+    );
   }
 
   function test_DelegatorRemoval_RemovesFromOwnerMapping() public {
@@ -1469,8 +1491,16 @@ contract NFTStakingManagerTest is Base {
     );
 
     DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after removal without rewards");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after removal without rewards");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Unknown),
+      "Delegation should be removed after removal without rewards"
+    );
+    assertEq(
+      delegationInfo.owner,
+      address(0),
+      "Delegation owner should not exist after removal without rewards"
+    );
   }
 
   function test_ValidatorRemoval_WithRewards_DoesNotRemoveFromOwnerMapping() public {
@@ -1508,9 +1538,13 @@ contract NFTStakingManagerTest is Base {
       1,
       "Validator should STILL be in validationsByOwner due to pending rewards"
     );
-    
+
     ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, validatorOwner, "Validation owner should be the same as the validator owner");
+    assertEq(
+      validationInfo.owner,
+      validatorOwner,
+      "Validation owner should be the same as the validator owner"
+    );
 
     // Claim validator rewards
     vm.prank(validatorOwner);
@@ -1524,7 +1558,11 @@ contract NFTStakingManagerTest is Base {
     );
 
     validationInfo = nftStakingManager.getValidationInfoView(validationID);
-    assertEq(validationInfo.owner, address(0), "Validation owner should not exist after rewards are claimed");
+    assertEq(
+      validationInfo.owner,
+      address(0),
+      "Validation owner should not exist after rewards are claimed"
+    );
   }
 
   function test_DelegatorRemoval_WithRewards_DoesNotRemoveFromOwnerMapping() public {
@@ -1557,8 +1595,16 @@ contract NFTStakingManagerTest is Base {
       "Delegation should STILL be in delegationsByOwner due to pending rewards"
     );
     DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be in PendingRemoved status");
-    assertEq(delegationInfo.owner, delegatorOwner, "Delegation owner should be the same as the delegator owner");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Removed),
+      "Delegation should be in PendingRemoved status"
+    );
+    assertEq(
+      delegationInfo.owner,
+      delegatorOwner,
+      "Delegation owner should be the same as the delegator owner"
+    );
 
     // Claim delegator rewards
     vm.prank(delegatorOwner);
@@ -1571,8 +1617,16 @@ contract NFTStakingManagerTest is Base {
       "Delegation should be removed from delegationsByOwner after rewards are claimed"
     );
     delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(uint8(delegationInfo.status), uint8(DelegatorStatus.Unknown), "Delegation should be removed after rewards are claimed");
-    assertEq(delegationInfo.owner, address(0), "Delegation owner should not exist after rewards are claimed");
+    assertEq(
+      uint8(delegationInfo.status),
+      uint8(DelegatorStatus.Unknown),
+      "Delegation should be removed after rewards are claimed"
+    );
+    assertEq(
+      delegationInfo.owner,
+      address(0),
+      "Delegation owner should not exist after rewards are claimed"
+    );
   }
 
   function _mintOneReward(bytes32 validationID, uint32 epoch) internal {
