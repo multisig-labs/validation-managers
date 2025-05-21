@@ -691,7 +691,6 @@ contract NFTStakingManager is
       delete $.delegations[delegationID];
     }
 
-
     // we never delete the delegation so that the user can claim rewards whenever
     _unlockTokens(delegationID, delegation.tokenIDs);
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
@@ -763,9 +762,10 @@ contract NFTStakingManager is
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
       if (
-        delegation.startEpoch <= epoch && (delegation.endEpoch == 0 || delegation.endEpoch >= epoch)
+        delegation.startEpoch <= previousEpoch
+          && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch)
       ) {
-      delegation.uptimeCheck.add(previousEpoch);
+        delegation.uptimeCheck.add(previousEpoch);
       }
     }
   }
