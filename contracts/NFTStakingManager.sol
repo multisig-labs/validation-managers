@@ -754,16 +754,16 @@ contract NFTStakingManager is
       }
     }
 
-    EpochInfo storage epochInfo = $.epochs[epoch];
+    EpochInfo storage epochInfo = $.epochs[previousEpoch];
 
     // then for each delegation that was on the active validator, record that they can get rewards
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
       if (
-        delegation.startEpoch <= epoch && (delegation.endEpoch == 0 || delegation.endEpoch >= epoch)
+        delegation.startEpoch <= previousEpoch && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch)
       ) {
-        delegation.uptimeCheck.add(epoch);
+        delegation.uptimeCheck.add(previousEpoch);
         epochInfo.totalStakedLicenses += uint32(delegation.tokenIDs.length);
       }
 

@@ -1520,7 +1520,7 @@ contract NFTStakingManagerTest is Base {
     address delegator1 = getActor("DelegatorForScenarioA");
 
     vm.prank(validatorOwner);
-    nftStakingManager.addPrepaidCredits(delegator1, uint32(1 * EPOCH_DURATION));
+    nftStakingManager.addPrepaidCredits(validatorOwner, delegator1, uint32(1 * EPOCH_DURATION));
     bytes32 delegationID1 = _createDelegation(validationID, delegator1, 1);
 
     assertEq(
@@ -1579,7 +1579,7 @@ contract NFTStakingManagerTest is Base {
     bytes32[] memory delegationIdArray = new bytes32[](1);
 
     vm.prank(validatorOwner);
-    nftStakingManager.addPrepaidCredits(delegator2, uint32(1 * EPOCH_DURATION));
+    nftStakingManager.addPrepaidCredits(validatorOwner, delegator2, uint32(1 * EPOCH_DURATION));
     bytes32 delegationID2 = _createDelegation(validationID, delegator2, 1);
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator2).length,
@@ -1638,7 +1638,7 @@ contract NFTStakingManagerTest is Base {
     uint32 rewardsEpoch;
 
     vm.prank(validatorOwner);
-    nftStakingManager.addPrepaidCredits(delegator3, uint32(1 * EPOCH_DURATION));
+    nftStakingManager.addPrepaidCredits(validatorOwner, delegator3, uint32(1 * EPOCH_DURATION));
     bytes32 delegationID3 = _createDelegation(validationID, delegator3, 1);
     assertEq(
       nftStakingManager.getDelegationsByOwner(delegator3).length,
