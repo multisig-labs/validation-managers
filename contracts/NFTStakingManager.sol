@@ -272,6 +272,7 @@ contract NFTStakingManager is
   /// @notice Initializes NFTStakingManager with necessary parameters and settings
   function initialize(NFTStakingManagerSettings calldata settings) public initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
+    ContextUpgradeable.__Context_init();
     AccessControlDefaultAdminRulesUpgradeable.__AccessControlDefaultAdminRules_init(
       0, settings.admin
     );
