@@ -106,7 +106,7 @@ contract NFTStakingManagerTest is Base {
   //
   // INITIALIZATION
   //
-  function test_initialization_defaultSettings() public {
+  function test_initialization_defaultSettings() public view {
     NFTStakingManagerSettings memory expectedSettings = _defaultNFTStakingManagerSettings(
       address(validatorManager), address(nft), address(hardwareNft)
     );
