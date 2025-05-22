@@ -240,7 +240,7 @@ contract NodeLicense is
         revert LicenseStakedError();
       }
     }
-    
+
     // Clear approvals
     _approveDelegation(address(0), tokenId, address(0));
 

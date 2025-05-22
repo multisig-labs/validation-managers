@@ -760,7 +760,8 @@ contract NFTStakingManager is
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
       if (
-        delegation.startEpoch <= previousEpoch && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch)
+        delegation.startEpoch <= previousEpoch
+          && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch)
       ) {
         delegation.uptimeCheck.add(previousEpoch);
         epochInfo.totalStakedLicenses += uint32(delegation.tokenIDs.length);

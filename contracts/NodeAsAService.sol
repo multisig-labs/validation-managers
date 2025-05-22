@@ -182,7 +182,10 @@ contract NodeAsAService is
    * @param _newPricePerMonth New price per 30 days in USDC (6 decimals)
    * @dev Only callable by the protocol manager
    */
-  function setLicensePricePerMonth(uint256 _newPricePerMonth) external onlyRole(PROTOCOL_MANAGER_ROLE) {
+  function setLicensePricePerMonth(uint256 _newPricePerMonth)
+    external
+    onlyRole(PROTOCOL_MANAGER_ROLE)
+  {
     if (_newPricePerMonth == 0) {
       revert InvalidPrice();
     }

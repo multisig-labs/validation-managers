@@ -895,7 +895,9 @@ contract NFTStakingManagerTest is Base {
     uint32 epochToTest = nftStakingManager.getEpochByTimestamp(block.timestamp);
 
     vm.prank(validator);
-    nftStakingManager.addPrepaidCredits(validator, getActor("Delegator1"), uint32(EPOCH_DURATION * 2));
+    nftStakingManager.addPrepaidCredits(
+      validator, getActor("Delegator1"), uint32(EPOCH_DURATION * 2)
+    );
 
     _warpToGracePeriod(epochToTest);
 
