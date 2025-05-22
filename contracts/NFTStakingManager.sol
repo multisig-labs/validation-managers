@@ -253,6 +253,7 @@ contract NFTStakingManager is
   error InsufficientUptime();
   error MaxLicensesPerValidatorReached();
   error MinDelegationDurationNotMet();
+  error NoTokenIDsProvided();
   error RewardsAlreadyMintedForTokenID();
   error DelegationDoesNotExist();
   error TokenAlreadyLocked(uint256 tokenID);
@@ -501,6 +502,10 @@ contract NFTStakingManager is
     address owner,
     uint256[] calldata tokenIDs
   ) internal returns (bytes32) {
+    if (tokenIDs.length == 0) {
+      revert NoTokenIDsProvided();
+    }
+
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
 
