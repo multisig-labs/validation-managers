@@ -1074,10 +1074,7 @@ contract NFTStakingManager is
     returns (uint256)
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bool success, uint256 creditSeconds) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
-    if (!success) {
-      return 0;
-    }
+    (, uint256 creditSeconds) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
     return creditSeconds;
   }
 
@@ -1089,11 +1086,8 @@ contract NFTStakingManager is
   /// @return rewards The rewards for the delegation for the given epoch
   function getRewardsForEpoch(bytes32 delegationID, uint32 epoch) external view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    (bool success, uint256 rewards) =
+    (, uint256 rewards) =
       $.delegations[delegationID].claimableRewardsPerEpoch.tryGet(uint256(epoch));
-    if (!success) {
-      return 0;
-    }
     return rewards;
   }
 
