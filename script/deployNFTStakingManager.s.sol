@@ -24,7 +24,6 @@ contract DeployNFTStakingManager is Script {
 
     // TODO: Configure settings for NFTStakingManager initialization
     NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
-      admin: msg.sender, // Or specify another admin address
       validatorManager: proxyAddress, // Address of the upgraded ValidatorManager proxy
       license: licenseAddress,
       hardwareLicense: hardwareLicenseAddress,
@@ -37,7 +36,7 @@ contract DeployNFTStakingManager is Script {
       gracePeriod: 1 hours, // Example value
       uptimePercentageBips: 8000, // Example value (95%)
       bypassUptimeCheck: true,
-      minDelegationEpochs: 0
+      minDelegationEpochs: 1
     });
 
     bytes memory nftsmInitData =

@@ -46,6 +46,7 @@ contract NFTStakingManagerGaslessTest is Base {
   function setUp() public override {
     super.setUp();
     admin = getActor("Admin");
+    vm.startPrank(admin);
 
     validatorManager = new MockValidatorManager();
 
@@ -87,11 +88,12 @@ contract NFTStakingManagerGaslessTest is Base {
     );
     nftStakingManager = NFTStakingManagerGasless(address(stakingManagerProxy));
 
-    vm.prank(admin);
     nft.setNFTStakingManager(address(nftStakingManager));
 
     NativeMinterMock nativeMinter = new NativeMinterMock();
     vm.etch(0x0200000000000000000000000000000000000001, address(nativeMinter).code);
+
+    vm.stopPrank();
   }
 
   function _defaultNFTStakingManagerSettings(
@@ -100,7 +102,6 @@ contract NFTStakingManagerGaslessTest is Base {
     address hardwareLicense_
   ) internal view returns (NFTStakingManagerSettings memory) {
     return NFTStakingManagerSettings({
-      admin: admin,
       validatorManager: validatorManager_,
       license: license_,
       hardwareLicense: hardwareLicense_,

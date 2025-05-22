@@ -7,8 +7,8 @@ import { Address } from "@openzeppelin-contracts-5.3.0/utils/Address.sol";
 import { EnumerableMap } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableMap.sol";
 import { EnumerableSet } from "@openzeppelin-contracts-5.3.0/utils/structs/EnumerableSet.sol";
 
-import { AccessControlDefaultAdminRulesUpgradeable } from
-  "@openzeppelin-contracts-upgradeable-5.3.0/access/extensions/AccessControlDefaultAdminRulesUpgradeable.sol";
+import { AccessControlUpgradeable } from
+  "@openzeppelin-contracts-upgradeable-5.3.0/access/AccessControlUpgradeable.sol";
 import { Initializable } from
   "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol";
 import { UUPSUpgradeable } from
@@ -113,7 +113,6 @@ struct NFTStakingManagerSettings {
   uint32 minDelegationEpochs;
   uint64 licenseWeight;
   uint64 hardwareLicenseWeight;
-  address admin;
   address validatorManager;
   address license;
   address hardwareLicense;
@@ -134,7 +133,7 @@ interface INativeMinter {
 contract NFTStakingManager is
   Initializable,
   ContextUpgradeable,
-  AccessControlDefaultAdminRulesUpgradeable,
+  AccessControlUpgradeable,
   UUPSUpgradeable
 {
   ///
@@ -273,9 +272,8 @@ contract NFTStakingManager is
   function initialize(NFTStakingManagerSettings calldata settings) public initializer {
     UUPSUpgradeable.__UUPSUpgradeable_init();
     ContextUpgradeable.__Context_init();
-    AccessControlDefaultAdminRulesUpgradeable.__AccessControlDefaultAdminRules_init(
-      0, settings.admin
-    );
+    AccessControlUpgradeable.__AccessControl_init();
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
     __NFTStakingManager_init(settings);
   }
@@ -1121,8 +1119,7 @@ contract NFTStakingManager is
       validatorManager: address($.manager),
       license: address($.licenseContract),
       hardwareLicense: address($.hardwareLicenseContract),
-      epochRewards: $.epochRewards,
-      admin: defaultAdmin()
+      epochRewards: $.epochRewards
     });
     return settings;
   }
