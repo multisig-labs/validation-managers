@@ -379,7 +379,6 @@ contract NFTStakingManager is
     validation.owner = _msgSender();
     validation.hardwareTokenID = hardwareTokenID;
     validation.registrationMessage = registerL1ValidatorMessage;
-    validation.lastSubmissionTime = getEpochEndTime(getEpochByTimestamp(block.timestamp) - 1);
     validation.delegationFeeBips = delegationFeeBips;
 
     $.validationsByOwner[_msgSender()].add(validationID);
@@ -402,6 +401,7 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[validationID];
 
     validation.startEpoch = getEpochByTimestamp(block.timestamp);
+    validation.lastSubmissionTime = getEpochEndTime(getEpochByTimestamp(block.timestamp) - 1);
 
     emit CompletedValidatorRegistration(validationID, validation.startEpoch);
     return validationID;
