@@ -25,11 +25,11 @@ contract DeployNFTStakingManager is Script {
     // TODO: Configure settings for NFTStakingManager initialization
     NFTStakingManagerSettings memory settings = NFTStakingManagerSettings({
       validatorManager: proxyAddress, // Address of the upgraded ValidatorManager proxy
-      license: licenseAddress,
+      nodeLicense: licenseAddress,
       hardwareLicense: hardwareLicenseAddress,
       initialEpochTimestamp: uint32(block.timestamp), // Or specify a fixed timestamp
       epochDuration: 1 days, // Example: 1 day
-      licenseWeight: 10, // Example value
+      nodeLicenseWeight: 10, // Example value
       hardwareLicenseWeight: 1, // Example value
       epochRewards: 1000 ether, // Example value
       maxLicensesPerValidator: 50, // Example value

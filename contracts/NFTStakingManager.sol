@@ -110,10 +110,10 @@ struct NFTStakingManagerSettings {
   uint32 epochDuration;
   uint32 gracePeriod;
   uint32 minDelegationEpochs;
-  uint64 licenseWeight;
+  uint64 nodeLicenseWeight;
   uint64 hardwareLicenseWeight;
   address validatorManager;
-  address license;
+  address nodeLicense;
   address hardwareLicense;
   uint256 epochRewards;
 }
@@ -165,11 +165,11 @@ contract NFTStakingManager is
     uint32 minimumDelegationFeeBips; // 0
     uint32 maximumDelegationFeeBips; // 10000
     uint32 minDelegationEpochs;
-    uint64 licenseWeight;
+    uint64 nodeLicenseWeight;
     uint64 hardwareLicenseWeight;
-    ValidatorManager manager;
-    INodeLicense licenseContract;
-    IERC721 hardwareLicenseContract;
+    ValidatorManager validatorManager;
+    INodeLicense nodeLicense;
+    IERC721 hardwareLicense;
     uint256 epochRewards;
     // Validation state
     EnumerableSet.Bytes32Set validationIDs;
@@ -292,21 +292,22 @@ contract NFTStakingManager is
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    $.manager = ValidatorManager(settings.validatorManager);
-    $.licenseContract = INodeLicense(settings.license);
-    $.hardwareLicenseContract = IERC721(settings.hardwareLicense);
+    $.bypassUptimeCheck = settings.bypassUptimeCheck;
+    $.uptimePercentageBips = settings.uptimePercentageBips;
+    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
     $.initialEpochTimestamp = settings.initialEpochTimestamp;
     $.epochDuration = settings.epochDuration;
-    $.licenseWeight = settings.licenseWeight;
-    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
-    $.epochRewards = settings.epochRewards;
     $.gracePeriod = settings.gracePeriod;
-    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
-    $.uptimePercentageBips = settings.uptimePercentageBips;
-    $.bypassUptimeCheck = settings.bypassUptimeCheck;
+    $.minDelegationEpochs = settings.minDelegationEpochs;
+    $.nodeLicenseWeight = settings.nodeLicenseWeight;
+    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
+    $.validatorManager = ValidatorManager(settings.validatorManager);
+    $.nodeLicense = INodeLicense(settings.nodeLicense);
+    $.hardwareLicense = IERC721(settings.hardwareLicense);
+    $.epochRewards = settings.epochRewards;
+
     $.minimumDelegationFeeBips = 0; // 0%
     $.maximumDelegationFeeBips = 10000; // 100%
-    $.minDelegationEpochs = settings.minDelegationEpochs;
   }
 
   ///
@@ -346,10 +347,10 @@ contract NFTStakingManager is
     }
 
     // will revert if the token does not exist
-    address owner = $.hardwareLicenseContract.ownerOf(hardwareTokenID);
+    address owner = $.hardwareLicense.ownerOf(hardwareTokenID);
     if (owner != _msgSender()) revert UnauthorizedOwner();
 
-    bytes32 validationID = $.manager.initiateValidatorRegistration({
+    bytes32 validationID = $.validatorManager.initiateValidatorRegistration({
       nodeID: nodeID,
       blsPublicKey: blsPublicKey,
       remainingBalanceOwner: remainingBalanceOwner,
@@ -365,12 +366,12 @@ contract NFTStakingManager is
     // does not expose it or keep it around, so we store it here.
     (, bytes memory registerL1ValidatorMessage) = ValidatorMessages.packRegisterL1ValidatorMessage(
       ValidatorMessages.ValidationPeriod({
-        subnetID: $.manager.subnetID(),
+        subnetID: $.validatorManager.subnetID(),
         nodeID: nodeID,
         blsPublicKey: blsPublicKey,
         remainingBalanceOwner: remainingBalanceOwner,
         disableOwner: disableOwner,
-        registrationExpiry: uint64(block.timestamp) + $.manager.REGISTRATION_EXPIRY_LENGTH(),
+        registrationExpiry: uint64(block.timestamp) + $.validatorManager.REGISTRATION_EXPIRY_LENGTH(),
         weight: $.hardwareLicenseWeight
       })
     );
@@ -397,7 +398,7 @@ contract NFTStakingManager is
   /// @return validationID The unique identifier for this validator registration
   function completeValidatorRegistration(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    bytes32 validationID = $.manager.completeValidatorRegistration(messageIndex);
+    bytes32 validationID = $.validatorManager.completeValidatorRegistration(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
 
@@ -424,7 +425,7 @@ contract NFTStakingManager is
 
     validation.endEpoch = getEpochByTimestamp(block.timestamp);
 
-    $.manager.initiateValidatorRemoval(validationID);
+    $.validatorManager.initiateValidatorRemoval(validationID);
 
     emit InitiatedValidatorRemoval(validationID, validation.hardwareTokenID, validation.endEpoch);
   }
@@ -438,7 +439,7 @@ contract NFTStakingManager is
   function completeValidatorRemoval(uint32 messageIndex) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    bytes32 validationID = $.manager.completeValidatorRemoval(messageIndex);
+    bytes32 validationID = $.validatorManager.completeValidatorRemoval(messageIndex);
 
     ValidationInfo storage validation = $.validations[validationID];
 
@@ -463,12 +464,12 @@ contract NFTStakingManager is
   ) external returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    bool isApprovedForAll = $.licenseContract.isDelegationApprovedForAll(owner, _msgSender());
+    bool isApprovedForAll = $.nodeLicense.isDelegationApprovedForAll(owner, _msgSender());
 
     // If no blanket approval, check each token individually
     if (!isApprovedForAll) {
       for (uint256 i = 0; i < tokenIDs.length; i++) {
-        if ($.licenseContract.getDelegationApproval(tokenIDs[i]) != _msgSender()) {
+        if ($.nodeLicense.getDelegationApproval(tokenIDs[i]) != _msgSender()) {
           revert UnauthorizedOwner();
         }
       }
@@ -510,7 +511,7 @@ contract NFTStakingManager is
     ValidationInfo storage validation = $.validations[validationID];
 
     for (uint256 i = 0; i < tokenIDs.length; i++) {
-      if ($.licenseContract.ownerOf(tokenIDs[i]) != owner) {
+      if ($.nodeLicense.ownerOf(tokenIDs[i]) != owner) {
         revert UnauthorizedOwner();
       }
     }
@@ -535,9 +536,9 @@ contract NFTStakingManager is
     }
 
     // Update validator weight
-    Validator memory validator = $.manager.getValidator(validationID);
-    uint64 newWeight = validator.weight + $.licenseWeight * uint64(tokenIDs.length);
-    (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(validationID, newWeight);
+    Validator memory validator = $.validatorManager.getValidator(validationID);
+    uint64 newWeight = validator.weight + $.nodeLicenseWeight * uint64(tokenIDs.length);
+    (uint64 nonce,) = $.validatorManager.initiateValidatorWeightUpdate(validationID, newWeight);
 
     bytes32 delegationID = keccak256(abi.encodePacked(validationID, nonce));
 
@@ -574,7 +575,7 @@ contract NFTStakingManager is
       revert InvalidDelegatorStatus(delegation.status);
     }
 
-    Validator memory validator = $.manager.getValidator(delegation.validationID);
+    Validator memory validator = $.validatorManager.getValidator(delegation.validationID);
     if (validator.status != ValidatorStatus.Active) {
       revert InvalidValidatorStatus(validator.status);
     }
@@ -583,7 +584,7 @@ contract NFTStakingManager is
 
     if (validator.receivedNonce < delegation.startingNonce) {
       (bytes32 validationID, uint64 receivedNonce) =
-        $.manager.completeValidatorWeightUpdate(messageIndex);
+        $.validatorManager.completeValidatorWeightUpdate(messageIndex);
       nonce = receivedNonce;
 
       if (validationID != delegation.validationID) {
@@ -623,7 +624,7 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < delegationIDs.length; i++) {
       DelegationInfo storage delegation = $.delegations[delegationIDs[i]];
       ValidationInfo storage validation = $.validations[delegation.validationID];
-      Validator memory validator = $.manager.getValidator(delegation.validationID);
+      Validator memory validator = $.validatorManager.getValidator(delegation.validationID);
 
       if (
         delegation.owner == _msgSender()
@@ -640,9 +641,10 @@ contract NFTStakingManager is
         revert InvalidDelegatorStatus(delegation.status);
       }
 
-      uint64 newWeight = validator.weight - $.licenseWeight * uint64(delegation.tokenIDs.length);
+      uint64 newWeight = validator.weight - $.nodeLicenseWeight * uint64(delegation.tokenIDs.length);
 
-      (uint64 nonce,) = $.manager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
+      (uint64 nonce,) =
+        $.validatorManager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
 
       delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
       delegation.endingNonce = nonce;
@@ -674,7 +676,7 @@ contract NFTStakingManager is
       revert InvalidDelegatorStatus(delegation.status);
     }
 
-    Validator memory validator = $.manager.getValidator(delegation.validationID);
+    Validator memory validator = $.validatorManager.getValidator(delegation.validationID);
     bytes32 validationID = delegation.validationID;
     uint64 nonce;
 
@@ -683,7 +685,7 @@ contract NFTStakingManager is
         && validator.receivedNonce < delegation.endingNonce
     ) {
       (bytes32 receivedValidationID, uint64 receivedNonce) =
-        $.manager.completeValidatorWeightUpdate(messageIndex);
+        $.validatorManager.completeValidatorWeightUpdate(messageIndex);
       nonce = receivedNonce;
 
       if (receivedValidationID != validationID) {
@@ -1112,6 +1114,27 @@ contract NFTStakingManager is
   }
 
   /// @notice Gets the current settings for the NFT Staking Manager
+  function setSettings(NFTStakingManagerSettings calldata settings)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    $.bypassUptimeCheck = settings.bypassUptimeCheck;
+    $.uptimePercentageBips = settings.uptimePercentageBips;
+    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
+    $.initialEpochTimestamp = settings.initialEpochTimestamp;
+    $.epochDuration = settings.epochDuration;
+    $.gracePeriod = settings.gracePeriod;
+    $.minDelegationEpochs = settings.minDelegationEpochs;
+    $.nodeLicenseWeight = settings.nodeLicenseWeight;
+    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
+    $.validatorManager = ValidatorManager(settings.validatorManager);
+    $.nodeLicense = INodeLicense(settings.nodeLicense);
+    $.hardwareLicense = IERC721(settings.hardwareLicense);
+    $.epochRewards = settings.epochRewards;
+  }
+
+  /// @notice Gets the current settings for the NFT Staking Manager
   ///
   /// @return settings The current settings for the NFT Staking Manager
   function getSettings() external view returns (NFTStakingManagerSettings memory) {
@@ -1124,11 +1147,11 @@ contract NFTStakingManager is
       epochDuration: $.epochDuration,
       gracePeriod: $.gracePeriod,
       minDelegationEpochs: $.minDelegationEpochs,
-      licenseWeight: $.licenseWeight,
+      nodeLicenseWeight: $.nodeLicenseWeight,
       hardwareLicenseWeight: $.hardwareLicenseWeight,
-      validatorManager: address($.manager),
-      license: address($.licenseContract),
-      hardwareLicense: address($.hardwareLicenseContract),
+      validatorManager: address($.validatorManager),
+      nodeLicense: address($.nodeLicense),
+      hardwareLicense: address($.hardwareLicense),
       epochRewards: $.epochRewards
     });
     return settings;

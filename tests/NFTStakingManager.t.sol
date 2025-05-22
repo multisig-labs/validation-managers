@@ -46,7 +46,7 @@ contract NFTStakingManagerTest is Base {
 
   uint256 public epochRewards = 1000 ether;
   uint16 public MAX_LICENSES_PER_VALIDATOR = 40;
-  uint64 public LICENSE_WEIGHT = 1000;
+  uint64 public NODE_LICENSE_WEIGHT = 1000;
   uint64 public HARDWARE_LICENSE_WEIGHT = 0;
   uint32 public GRACE_PERIOD = 1 hours;
   uint32 public DELEGATION_FEE_BIPS = 1000;
@@ -120,7 +120,7 @@ contract NFTStakingManagerTest is Base {
       expectedSettings.validatorManager,
       "validatorManager mismatch"
     );
-    assertEq(actualSettings.license, expectedSettings.license, "license mismatch");
+    assertEq(actualSettings.nodeLicense, expectedSettings.nodeLicense, "license mismatch");
     assertEq(
       actualSettings.hardwareLicense, expectedSettings.hardwareLicense, "hardwareLicense mismatch"
     );
@@ -130,7 +130,11 @@ contract NFTStakingManagerTest is Base {
       "initialEpochTimestamp mismatch"
     );
     assertEq(actualSettings.epochDuration, expectedSettings.epochDuration, "epochDuration mismatch");
-    assertEq(actualSettings.licenseWeight, expectedSettings.licenseWeight, "licenseWeight mismatch");
+    assertEq(
+      actualSettings.nodeLicenseWeight,
+      expectedSettings.nodeLicenseWeight,
+      "nodeLicenseWeight mismatch"
+    );
     assertEq(
       actualSettings.hardwareLicenseWeight,
       expectedSettings.hardwareLicenseWeight,
@@ -162,16 +166,16 @@ contract NFTStakingManagerTest is Base {
 
   function _defaultNFTStakingManagerSettings(
     address validatorManager_,
-    address license_,
+    address nodeLicense_,
     address hardwareLicense_
   ) internal view returns (NFTStakingManagerSettings memory) {
     return NFTStakingManagerSettings({
       validatorManager: validatorManager_,
-      license: license_,
+      nodeLicense: nodeLicense_,
       hardwareLicense: hardwareLicense_,
       initialEpochTimestamp: uint32(block.timestamp),
       epochDuration: EPOCH_DURATION,
-      licenseWeight: LICENSE_WEIGHT,
+      nodeLicenseWeight: NODE_LICENSE_WEIGHT,
       hardwareLicenseWeight: HARDWARE_LICENSE_WEIGHT,
       epochRewards: epochRewards,
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
@@ -330,7 +334,7 @@ contract NFTStakingManagerTest is Base {
     assertEq(validation.licenseCount, 1);
 
     Validator memory v = validatorManager.getValidator(validationID);
-    assertEq(v.weight, LICENSE_WEIGHT);
+    assertEq(v.weight, NODE_LICENSE_WEIGHT);
   }
 
   function test_initiateDelegatorRegistrationByOperator_default() public {
@@ -1479,7 +1483,7 @@ contract NFTStakingManagerTest is Base {
     uint64 firstNonce = delegation1.startingNonce;
 
     Validator memory v = validatorManager.getValidator(validationID);
-    assertEq(v.weight, LICENSE_WEIGHT);
+    assertEq(v.weight, NODE_LICENSE_WEIGHT);
     assertEq(v.sentNonce, firstNonce);
     assertEq(v.receivedNonce, 0);
 
@@ -1491,7 +1495,7 @@ contract NFTStakingManagerTest is Base {
     uint64 secondNonce = delegation2.startingNonce;
 
     v = validatorManager.getValidator(validationID);
-    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.weight, NODE_LICENSE_WEIGHT * 2);
     assertEq(v.sentNonce, secondNonce);
     assertEq(v.receivedNonce, 0);
 
@@ -1499,14 +1503,14 @@ contract NFTStakingManagerTest is Base {
     nftStakingManager.completeDelegatorRegistration(delegationID2, uint32(0));
 
     v = validatorManager.getValidator(validationID);
-    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.weight, NODE_LICENSE_WEIGHT * 2);
     assertEq(v.receivedNonce, secondNonce);
 
     nftStakingManager.completeDelegatorRegistration(delegationID1, uint32(0));
 
     v = validatorManager.getValidator(validationID);
 
-    assertEq(v.weight, LICENSE_WEIGHT * 2);
+    assertEq(v.weight, NODE_LICENSE_WEIGHT * 2);
     assertEq(v.receivedNonce, secondNonce);
 
     // Verify both delegations are active

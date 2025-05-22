@@ -32,7 +32,7 @@ contract NFTStakingManagerGaslessTest is Base {
 
   uint256 public epochRewards = 1000 ether;
   uint16 public MAX_LICENSES_PER_VALIDATOR = 40;
-  uint64 public LICENSE_WEIGHT = 1000;
+  uint64 public NODE_LICENSE_WEIGHT = 1000;
   uint64 public HARDWARE_LICENSE_WEIGHT = 0;
   uint32 public GRACE_PERIOD = 1 hours;
   uint32 public DELEGATION_FEE_BIPS = 1000;
@@ -98,16 +98,16 @@ contract NFTStakingManagerGaslessTest is Base {
 
   function _defaultNFTStakingManagerSettings(
     address validatorManager_,
-    address license_,
+    address nodeLicense_,
     address hardwareLicense_
   ) internal view returns (NFTStakingManagerSettings memory) {
     return NFTStakingManagerSettings({
       validatorManager: validatorManager_,
-      license: license_,
+      nodeLicense: nodeLicense_,
       hardwareLicense: hardwareLicense_,
       initialEpochTimestamp: uint32(block.timestamp),
       epochDuration: EPOCH_DURATION,
-      licenseWeight: LICENSE_WEIGHT,
+      nodeLicenseWeight: NODE_LICENSE_WEIGHT,
       hardwareLicenseWeight: HARDWARE_LICENSE_WEIGHT,
       epochRewards: epochRewards,
       maxLicensesPerValidator: MAX_LICENSES_PER_VALIDATOR,
