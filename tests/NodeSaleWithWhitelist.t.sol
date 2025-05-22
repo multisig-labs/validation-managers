@@ -95,14 +95,11 @@ contract NodeSaleWithWhitelistTest is Base {
 
   function testPurchaseWithWhitelist() public {
     address user1 = address(0x123);
-    address user2 = address(0x456);
-    address user3 = address(0x789);
 
     // Pre-computed merkle root and proof for the tree containing user1, user2, user3
     bytes32 merkleRoot = 0x41cf1389b94091728e9c16266f10d1b8376e6f7cf1a6ec90b6f25cde50595156;
     bytes32[] memory user1Proof = new bytes32[](1);
     user1Proof[0] = 0xd4e04e9ec701cb7aad361d72111b8655a0cff267a1d0937f7c90a645730a61f6;
-    bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user1))));
 
     vm.startPrank(manager);
     nodeSale.setMerkleRoot(merkleRoot);

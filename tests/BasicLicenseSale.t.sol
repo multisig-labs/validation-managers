@@ -86,7 +86,7 @@ contract BasicLicenseSaleTest is Base {
         vm.stopPrank();
     }
 
-    function test_InitialState() public {
+    function test_InitialState() public view {
         assertEq(address(licenseSale.usdc()), address(usdc));
         assertEq(licenseSale.treasury(), treasury);
         assertEq(licenseSale.price(), 10_000); // 0.01 USDC

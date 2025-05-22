@@ -71,7 +71,7 @@ contract NodeAsAServiceTest is Base {
      * @notice Tests the initialization of the NodeAsAService contract
      * @dev Verifies that all contract parameters are set correctly during initialization
      */
-    function test_Initialization() public {
+    function test_Initialization() public view {
         assertEq(address(nodeAsAService.usdc()), address(usdc));
         assertEq(nodeAsAService.licensePricePerMonth(), INITIAL_PRICE);
         assertTrue(nodeAsAService.hasRole(nodeAsAService.DEFAULT_ADMIN_ROLE(), admin));
