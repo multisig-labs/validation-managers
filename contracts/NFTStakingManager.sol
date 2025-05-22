@@ -339,7 +339,8 @@ contract NFTStakingManager is
     }
 
     // will revert if the token does not exist
-    $.hardwareLicenseContract.ownerOf(hardwareTokenID);
+    address owner = $.hardwareLicenseContract.ownerOf(hardwareTokenID);
+    if (owner != _msgSender()) revert UnauthorizedOwner();
 
     bytes32 validationID = $.manager.initiateValidatorRegistration({
       nodeID: nodeID,
@@ -531,7 +532,7 @@ contract NFTStakingManager is
 
     validation.delegationIDs.add(delegationID);
 
-    _lockTokens(delegationID, tokenIDs);
+    _lockTokens(owner, delegationID, tokenIDs);
 
     DelegationInfo storage newDelegation = $.delegations[delegationID];
     newDelegation.owner = owner;
@@ -1054,7 +1055,7 @@ contract NFTStakingManager is
   ///
   /// @param tokenID The token ID to get the locked by for
   ///
-  /// @return lockedBy The address that the token is locked by
+  /// @return lockedBy The validationID that the token is locked by
   function getHardwareTokenLockedBy(uint256 tokenID) external view returns (bytes32) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.hardwareTokenLockedBy[tokenID];
@@ -1098,8 +1099,6 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochs[epoch].rewardsMintedFor.values();
   }
-
-  // EnumerableSet.UintSet rewardsMintedFor; // which tokenids have rewards been minted for
 
   /// @notice Gets the current settings for the NFT Staking Manager
   ///
@@ -1201,14 +1200,13 @@ contract NFTStakingManager is
 
   /// @notice Locks tokens for a delegation
   ///
+  /// @param owner The owner of the tokens (must have been verified by caller)
   /// @param delegationID The id of the delegation to lock the tokens for
   /// @param tokenIDs The token IDs to lock
-  function _lockTokens(bytes32 delegationID, uint256[] memory tokenIDs) internal {
+  function _lockTokens(address owner, bytes32 delegationID, uint256[] memory tokenIDs) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    address owner;
     for (uint256 i = 0; i < tokenIDs.length; i++) {
       uint256 tokenID = tokenIDs[i];
-      owner = $.licenseContract.ownerOf(tokenID);
       if ($.tokenLockedBy[tokenID] != bytes32(0)) revert TokenAlreadyLocked(tokenID);
       $.tokenLockedBy[tokenID] = delegationID;
     }
@@ -1221,8 +1219,6 @@ contract NFTStakingManager is
   /// @param tokenID The token ID to lock
   function _lockHardwareToken(bytes32 validationID, uint256 tokenID) internal {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    address owner = $.hardwareLicenseContract.ownerOf(tokenID);
-    if (owner != _msgSender()) revert UnauthorizedOwner();
     if ($.hardwareTokenLockedBy[tokenID] != bytes32(0)) revert TokenAlreadyLocked(tokenID);
     $.hardwareTokenLockedBy[tokenID] = validationID;
   }
