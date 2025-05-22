@@ -25,7 +25,8 @@ contract DeployNodeLicense is Script {
       name: "Node License",
       symbol: "NL",
       baseTokenURI: "https://example.com/node-license",
-      unlockTime: uint32(block.timestamp)
+      unlockTime: uint32(block.timestamp),
+      defaultAdminDelay: 0
     });
     bytes memory initData = abi.encodeWithSelector(NodeLicense.initialize.selector, settings);
 
