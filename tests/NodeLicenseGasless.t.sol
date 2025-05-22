@@ -38,7 +38,8 @@ contract NodeLicenseGaslessTest is Base {
       name: "Node License",
       symbol: "NODE",
       baseTokenURI: "https://example.com/token/",
-      unlockTime: 0
+      unlockTime: 0,
+      defaultAdminDelay: 0
     });
 
     // Deploy the implementation contract
