@@ -26,7 +26,6 @@ import {
 } from "icm-contracts-2.0.0/contracts/validator-manager/interfaces/IACP99Manager.sol";
 
 import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
-import { NodeLicense } from "./tokens/NodeLicense.sol";
 
 /// @notice Information about each rewards epoch
 struct EpochInfo {
@@ -124,6 +123,13 @@ interface INativeMinter {
   function mintNativeCoin(address addr, uint256 amount) external;
 }
 
+/// @notice Minimum interface for ERC721 NFTs that can be used as NodeLicense NFTs
+interface INodeLicense {
+  function ownerOf(uint256 tokenID) external view returns (address);
+  function isDelegationApprovedForAll(address owner, address operator) external view returns (bool);
+  function getDelegationApproval(uint256 tokenID) external view returns (address);
+}
+
 /// @title NFTStakingManager: Stake NFTs on a blockchain to enable validator registration
 ///
 /// @dev This contract allows a user to stake HardwareOperator NFTs to run validators
@@ -162,7 +168,7 @@ contract NFTStakingManager is
     uint64 licenseWeight;
     uint64 hardwareLicenseWeight;
     ValidatorManager manager;
-    NodeLicense licenseContract;
+    INodeLicense licenseContract;
     IERC721 hardwareLicenseContract;
     uint256 epochRewards;
     // Validation state
@@ -286,7 +292,7 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
     $.manager = ValidatorManager(settings.validatorManager);
-    $.licenseContract = NodeLicense(settings.license);
+    $.licenseContract = INodeLicense(settings.license);
     $.hardwareLicenseContract = IERC721(settings.hardwareLicense);
     $.initialEpochTimestamp = settings.initialEpochTimestamp;
     $.epochDuration = settings.epochDuration;
