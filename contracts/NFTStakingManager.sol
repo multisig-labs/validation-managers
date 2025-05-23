@@ -734,11 +734,11 @@ contract NFTStakingManager is
 
     uint32 currentEpoch = getEpochByTimestamp(uint32(block.timestamp));
     uint32 previousEpoch = currentEpoch - 1;
-    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    if (previousEpoch == 0 || block.timestamp < getEpochEndTime(previousEpoch)) {
+    if (previousEpoch == 0) {
       revert EpochHasNotEnded();
     }
 
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     if (block.timestamp > getEpochEndTime(previousEpoch) + $.gracePeriod) {
       revert GracePeriodHasPassed();
     }
