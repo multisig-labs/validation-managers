@@ -1147,6 +1147,45 @@ contract NFTStakingManagerTest is Base {
     assertEq(nftStakingManager.getPrepaidCredits(hardwareProvider, delegator), 1 days);
   }
 
+  function test_resetPrepaidCredits() public {
+    address hardwareProvider = getActor("HardwareProvider");
+    vm.startPrank(admin);
+    nftStakingManager.grantRole(nftStakingManager.PREPAYMENT_ROLE(), hardwareProvider);
+    vm.stopPrank();
+
+    address delegator = getActor("Delegator");
+
+    uint32 initialCredits = uint32(5 * EPOCH_DURATION); // 5 days worth
+    vm.prank(hardwareProvider);
+    nftStakingManager.addPrepaidCredits(hardwareProvider, delegator, initialCredits);
+
+    assertEq(
+      nftStakingManager.getPrepaidCredits(hardwareProvider, delegator),
+      initialCredits,
+      "Initial credits should match"
+    );
+
+    vm.prank(hardwareProvider);
+    nftStakingManager.resetPrepaidCredits(hardwareProvider, delegator);
+
+    assertEq(
+      nftStakingManager.getPrepaidCredits(hardwareProvider, delegator),
+      0,
+      "Credits should be reset to zero"
+    );
+  }
+
+  function test_resetPrepaidCredits_unauthorized() public {
+    address hardwareProvider = getActor("HardwareProvider");
+    address delegator = getActor("Delegator");
+    address unauthorized = getActor("Unauthorized");
+
+    vm.startPrank(unauthorized);
+    vm.expectRevert();
+    nftStakingManager.resetPrepaidCredits(hardwareProvider, delegator);
+    vm.stopPrank();
+  }
+
   ///
   /// REWARDS TESTS
   ///

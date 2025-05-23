@@ -234,6 +234,7 @@ contract NFTStakingManager is
   event PrepaidCreditsAdded(
     address indexed hardwareOperator, address indexed licenseHolder, uint32 creditSeconds
   );
+  event PrepaidCreditsReset(address indexed hardwareOperator, address indexed licneseHolder);
   event RewardsClaimed(uint32 indexed epochNumber, bytes32 indexed delegationID, uint256 rewards);
   event RewardsMinted(uint32 indexed epochNumber, bytes32 indexed delegationID, uint256 rewards);
   event TokensLocked(address indexed owner, bytes32 indexed delegationID, uint256[] tokenIDs);
@@ -720,6 +721,15 @@ contract NFTStakingManager is
     (, uint256 currentCredits) = $.prepaidCredits[hardwareOperator].tryGet(licenseHolder);
     $.prepaidCredits[hardwareOperator].set(licenseHolder, currentCredits + creditSeconds);
     emit PrepaidCreditsAdded(hardwareOperator, licenseHolder, creditSeconds);
+  }
+
+  function resetPrepaidCredits(address hardwareOperator, address licenseHolder)
+    external
+    onlyRole(PREPAYMENT_ROLE)
+  {
+    NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
+    $.prepaidCredits[hardwareOperator].set(licenseHolder, 0);
+    emit PrepaidCreditsReset(hardwareOperator, licenseHolder);
   }
 
   /// @notice Processes a proof of an uptime message for a validator
