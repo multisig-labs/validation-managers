@@ -739,7 +739,7 @@ contract NFTStakingManager is
       revert EpochHasNotEnded();
     }
 
-    if (block.timestamp >= getEpochEndTime(previousEpoch) + $.gracePeriod) {
+    if (block.timestamp > getEpochEndTime(previousEpoch) + $.gracePeriod) {
       revert GracePeriodHasPassed();
     }
 
