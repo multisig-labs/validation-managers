@@ -644,6 +644,64 @@ contract NFTStakingManagerTest is Base {
     }
   }
 
+  function test_delegationEndEpoch_firstHalf() public {
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    vm.prank(validator);
+    nftStakingManager.setPrepaidCredits(validator, delegator, uint32(EPOCH_DURATION));
+
+    skip(EPOCH_DURATION);
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    uint32 epochStartTime = nftStakingManager.getEpochEndTime(currentEpoch - 1);
+    uint32 firstQuarterTime = epochStartTime + (EPOCH_DURATION / 4);
+
+    vm.warp(firstQuarterTime);
+    console2.log("firstQuarterTime", firstQuarterTime);
+
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+
+    DelegationInfoView memory delegation1 = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(
+      delegation1.endEpoch,
+      currentEpoch - 1,
+      "End epoch should be previous epoch when removed in first half"
+    );
+  }
+
+  function test_delegationEndEpoch_secondHalf() public {
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    vm.prank(validator);
+    nftStakingManager.setPrepaidCredits(validator, delegator, uint32(EPOCH_DURATION));
+
+    skip(EPOCH_DURATION);
+
+    skip(EPOCH_DURATION);
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    uint32 epochStartTime = nftStakingManager.getEpochEndTime(currentEpoch - 1);
+    uint32 thirdQuarterTime = epochStartTime + (EPOCH_DURATION * 3 / 4);
+    vm.warp(thirdQuarterTime);
+
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+
+    DelegationInfoView memory delegation2 = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(
+      delegation2.endEpoch,
+      currentEpoch,
+      "End epoch should be current epoch when removed in second half"
+    );
+  }
+
   //
   // COMPLETE DELEGATOR REMOVAL
   //

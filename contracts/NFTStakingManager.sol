@@ -650,7 +650,13 @@ contract NFTStakingManager is
       (uint64 nonce,) =
         $.validatorManager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
 
-      delegation.endEpoch = getEpochByTimestamp(block.timestamp) - 1;
+      uint32 epoch = getEpochByTimestamp(block.timestamp);
+      if ((getEpochEndTime(epoch - 1) + ($.epochDuration / 2)) > block.timestamp) {
+        delegation.endEpoch = epoch - 1;
+      } else {
+        delegation.endEpoch = epoch;
+      }
+
       delegation.endingNonce = nonce;
       delegation.status = DelegatorStatus.PendingRemoved;
 
