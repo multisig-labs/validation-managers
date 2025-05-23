@@ -752,9 +752,9 @@ contract NFTStakingManagerTest is Base {
     }
   }
 
-  //
-  // PROOF PROCESSING
-  //
+  ///
+  /// PROOF PROCESSING
+  ///
   function test_processProof_base() public {
     uint256 startTime = block.timestamp;
     uint256 epochDuration = 1 days;
@@ -921,6 +921,100 @@ contract NFTStakingManagerTest is Base {
 
     vm.expectRevert(NFTStakingManager.UptimeAlreadySubmitted.selector);
     nftStakingManager.processProof(uint32(1));
+  }
+
+  function test_processProof_updatesLicenseCount() public {
+    // Create validator
+    (bytes32 validationID,) = _createValidator();
+
+    // Create delegation with multiple licenses
+    uint256 numLicenses = 3;
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, numLicenses);
+
+    // Check initial license count (should be set when delegation is created)
+    ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount, numLicenses, "Initial license count should match delegation size"
+    );
+
+    // Remove the delegation
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+
+    // Verify delegation is no longer active
+    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be removed"
+    );
+
+    // License count should still be the same before processProof
+    validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount, numLicenses, "License count should not change until processProof"
+    );
+
+    // Process proof to trigger license count update
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    _warpToGracePeriod(currentEpoch);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+
+    // Check that license count was updated (reduced)
+    validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount,
+      0,
+      "License count should be 0 after processProof with removed delegation"
+    );
+  }
+
+  function test_processProof_updatesLicenseCount_insufficientUptime() public {
+    // Create validator
+    (bytes32 validationID,) = _createValidator();
+
+    // Create delegation with multiple licenses
+    uint256 numLicenses = 3;
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, numLicenses);
+
+    // Check initial license count (should be set when delegation is created)
+    ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount, numLicenses, "Initial license count should match delegation size"
+    );
+
+    // Remove the delegation
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+
+    // Verify delegation is no longer active
+    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(
+      uint8(delegationInfo.status), uint8(DelegatorStatus.Removed), "Delegation should be removed"
+    );
+
+    // License count should still be the same before processProof
+    validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount, numLicenses, "License count should not change until processProof"
+    );
+
+    // Process proof to trigger license count update
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    _warpToGracePeriod(currentEpoch);
+    _processUptimeProof(validationID, 0);
+
+    // Check that license count was updated (reduced)
+    validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(
+      validationInfo.licenseCount,
+      0,
+      "License count should be 0 after processProof with removed delegation"
+    );
   }
 
   //
