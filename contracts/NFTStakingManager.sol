@@ -416,7 +416,8 @@ contract NFTStakingManager is
   function initiateValidatorRemoval(bytes32 validationID) external {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     ValidationInfo storage validation = $.validations[validationID];
-    if (validation.owner != _msgSender()) revert UnauthorizedOwner();
+    address owner = $.hardwareLicense.ownerOf(validation.hardwareTokenID);
+    if (owner != _msgSender()) revert UnauthorizedOwner();
 
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
