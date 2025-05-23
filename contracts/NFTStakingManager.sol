@@ -754,6 +754,7 @@ contract NFTStakingManager is
       revert UptimeAlreadySubmitted();
     }
 
+    bool passedUptime = true;
     if (!$.bypassUptimeCheck) {
       uint32 lastSubmissionTime = validation.lastSubmissionTime;
       uint32 lastUptimeSeconds = validation.lastUptimeSeconds;
@@ -766,7 +767,7 @@ contract NFTStakingManager is
       validation.lastSubmissionTime = uint32(block.timestamp);
 
       if (effectiveUptime < _expectedUptime()) {
-        return;
+        passedUptime = false;
       }
     }
 
@@ -776,9 +777,10 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
+
       if (
         delegation.startEpoch <= previousEpoch
-          && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch)
+          && (delegation.endEpoch == 0 || delegation.endEpoch >= previousEpoch) && passedUptime
       ) {
         delegation.uptimeCheck.add(previousEpoch);
         epochInfo.totalStakedLicenses += uint32(delegation.tokenIDs.length);
