@@ -641,23 +641,31 @@ contract NFTStakingManager is
         revert UnauthorizedOwner();
       }
 
-      if (delegation.status != DelegatorStatus.Active) {
+      if (
+        delegation.status != DelegatorStatus.Active
+          && delegation.status != DelegatorStatus.PendingAdded
+      ) {
         revert InvalidDelegatorStatus(delegation.status);
       }
 
-      uint64 newWeight = validator.weight - $.nodeLicenseWeight * uint64(delegation.tokenIDs.length);
+      // if the validator is not active, the weight update call will revert
+      if (validator.status == ValidatorStatus.Active) {
+        uint64 newWeight =
+          validator.weight - $.nodeLicenseWeight * uint64(delegation.tokenIDs.length);
 
-      (uint64 nonce,) =
-        $.validatorManager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
+        (uint64 nonce,) =
+          $.validatorManager.initiateValidatorWeightUpdate(delegation.validationID, newWeight);
 
-      uint32 epoch = getEpochByTimestamp(block.timestamp);
-      if ((getEpochEndTime(epoch - 1) + ($.epochDuration / 2)) > block.timestamp) {
-        delegation.endEpoch = epoch - 1;
-      } else {
-        delegation.endEpoch = epoch;
+        uint32 epoch = getEpochByTimestamp(block.timestamp);
+        if ((getEpochEndTime(epoch - 1) + ($.epochDuration / 2)) > block.timestamp) {
+          delegation.endEpoch = epoch - 1;
+        } else {
+          delegation.endEpoch = epoch;
+        }
+
+        delegation.endingNonce = nonce;
       }
 
-      delegation.endingNonce = nonce;
       delegation.status = DelegatorStatus.PendingRemoved;
 
       emit InitiatedDelegatorRemoval(
