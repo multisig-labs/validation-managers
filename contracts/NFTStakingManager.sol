@@ -770,13 +770,13 @@ contract NFTStakingManager is
       uint32 submissionTimeDelta = uint32(block.timestamp) - lastSubmissionTime;
       uint256 effectiveUptime = uint256(uptimeDelta) * $.epochDuration / submissionTimeDelta;
 
-      validation.lastUptimeSeconds = uint32(uptimeSeconds);
-      validation.lastSubmissionTime = uint32(block.timestamp);
-
       if (effectiveUptime < _expectedUptime()) {
         passedUptime = false;
       }
     }
+
+    validation.lastUptimeSeconds = uint32(uptimeSeconds);
+    validation.lastSubmissionTime = uint32(block.timestamp);
 
     EpochInfo storage epochInfo = $.epochs[previousEpoch];
 
