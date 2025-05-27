@@ -184,6 +184,40 @@ contract NFTStakingManagerProofProcessingTest is NFTStakingManagerBase {
     nftStakingManager.processProof(uint32(1));
   }
 
+  function test_processProof_cannotSubmitTwiceForSameEpoch_bypassUptimeCheck() public {
+    vm.prank(admin);
+    nftStakingManager.setBypassUptimeCheck(true);
+
+    (bytes32 validationID, address validator) = _createValidator();
+    _createDelegation(validationID, 1);
+
+    uint32 epochToTest = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    vm.prank(validator);
+    nftStakingManager.setPrepaidCredits(
+      validator, getActor("Delegator1"), uint32(EPOCH_DURATION * 2)
+    );
+
+    _warpToGracePeriod(epochToTest);
+
+    uint256 uptimeForEpoch = uint256(EPOCH_DURATION) * 90 / 100; // 90% uptime
+    bytes memory uptimeMessage1 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch));
+
+    _mockGetUptimeWarpMessage(uptimeMessage1, true, uint32(0)); // Using message index 0
+    nftStakingManager.processProof(uint32(0));
+
+    vm.warp(block.timestamp + 10);
+
+    bytes memory uptimeMessage2 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeForEpoch)); // Can be the same or different valid message
+
+    _mockGetUptimeWarpMessage(uptimeMessage2, true, uint32(1)); // Using a new message index 1
+
+    vm.expectRevert(NFTStakingManager.UptimeAlreadySubmitted.selector);
+    nftStakingManager.processProof(uint32(1));
+  }
+
   function test_processProof_updatesLicenseCount() public {
     // Create validator
     (bytes32 validationID,) = _createValidator();
