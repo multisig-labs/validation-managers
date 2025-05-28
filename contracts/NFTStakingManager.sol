@@ -936,7 +936,9 @@ contract NFTStakingManager is
       delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
         && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
     ) {
-      $.validations[delegation.validationID].delegationIDs.remove(delegationID);
+      if ($.validations[delegation.validationID].owner != address(0)) {
+        $.validations[delegation.validationID].delegationIDs.remove(delegationID);
+      }
       $.delegationsByOwner[delegation.owner].remove(delegationID);
       delete $.delegations[delegationID];
     }

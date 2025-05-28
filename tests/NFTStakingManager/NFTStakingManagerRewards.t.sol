@@ -2,9 +2,14 @@
 pragma solidity 0.8.25;
 
 import {
-  DelegatorStatus, EpochInfoView, NFTStakingManager
+  DelegationInfoView,
+  DelegatorStatus,
+  EpochInfoView,
+  NFTStakingManager,
+  ValidationInfoView
 } from "../../contracts/NFTStakingManager.sol";
 import { NFTStakingManagerBase } from "../utils/NFTStakingManagerBase.sol";
+import { console } from "forge-std/console.sol";
 
 contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
   ///
@@ -352,5 +357,56 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     // Verify rewards were minted for all tokens
     uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
     assertEq(tokenIDs.length, 3); // 1 + 2 tokens
+  }
+
+  function test_claimDelegatorRewards_afterValidatorDeleted() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    // Process proof and mint rewards for first epoch
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Remove the delegation first (required before validator removal)
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+
+    // Remove the validator
+    vm.prank(validator);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+    nftStakingManager.completeValidatorRemoval(0);
+
+    // Validator claims their rewards first, which should delete the validation
+    vm.prank(validator);
+    nftStakingManager.claimValidatorRewards(validationID, 1);
+
+    // Verify the validation has been deleted
+    ValidationInfoView memory validationInfo = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validationInfo.owner, address(0), "Validation should be deleted");
+
+    // Now delegator should be able to claim rewards even after validator deletion
+    vm.startPrank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimDelegatorRewards(delegationID, 1);
+    vm.stopPrank();
+
+    // Verify the rewards are correct
+    uint256 expectedRewards =
+      epochRewards * (BIPS_CONVERSION_FACTOR - DELEGATION_FEE_BIPS) / BIPS_CONVERSION_FACTOR;
+    assertEq(totalRewards, expectedRewards, "Delegator should receive correct rewards");
+    assertEq(claimedEpochNumbers.length, 1, "Should claim 1 epoch");
+    assertEq(claimedEpochNumbers[0], 1, "Should claim epoch 1");
+
+    // Verify delegation is cleaned up after claiming all rewards
+    DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
+    assertEq(
+      delegationInfo.owner, address(0), "Delegation should be deleted after claiming all rewards"
+    );
   }
 }
