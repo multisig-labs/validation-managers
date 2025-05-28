@@ -122,14 +122,9 @@ contract NFTStakingManagerValidatorRemovalTest is NFTStakingManagerBase {
     vm.prank(delegator);
     bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
 
-    vm.prank(validator);
+    vm.startPrank(validator);
+    vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
     nftStakingManager.initiateValidatorRemoval(validationID);
-
-    bytes32[] memory delegationIDs = new bytes32[](1);
-    delegationIDs[0] = delegationID;
-    vm.prank(delegator);
-    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
-
-    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+    vm.stopPrank();
   }
 }

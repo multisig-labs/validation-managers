@@ -422,7 +422,10 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < validation.delegationIDs.length(); i++) {
       bytes32 delegationID = validation.delegationIDs.at(i);
       DelegationInfo storage delegation = $.delegations[delegationID];
-      if (delegation.status == DelegatorStatus.Active) {
+      if (
+        delegation.status == DelegatorStatus.Active
+          || delegation.status == DelegatorStatus.PendingAdded
+      ) {
         revert ValidatorHasActiveDelegations();
       }
     }
@@ -641,10 +644,7 @@ contract NFTStakingManager is
         revert UnauthorizedOwner();
       }
 
-      if (
-        delegation.status != DelegatorStatus.Active
-          && delegation.status != DelegatorStatus.PendingAdded
-      ) {
+      if (delegation.status != DelegatorStatus.Active) {
         revert InvalidDelegatorStatus(delegation.status);
       }
 
