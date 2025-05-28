@@ -272,6 +272,7 @@ contract NFTStakingManager is
   error InvalidValidatorStatus(ValidatorStatus status);
   error UnexpectedValidationID(bytes32 expectedValidationID, bytes32 actualValidationID);
   error UptimeAlreadySubmitted();
+  error InvalidUptimeSeconds(uint64 currentUptime, uint64 previousUptime);
 
   /// @notice disable initializers if constructed directly
   constructor() {
@@ -763,11 +764,12 @@ contract NFTStakingManager is
 
     bool passedUptime = true;
     if (!$.bypassUptimeCheck) {
-      uint32 lastSubmissionTime = validation.lastSubmissionTime;
-      uint32 lastUptimeSeconds = validation.lastUptimeSeconds;
+      if (uptimeSeconds < validation.lastUptimeSeconds) {
+        revert InvalidUptimeSeconds(uptimeSeconds, validation.lastUptimeSeconds);
+      }
 
-      uint32 uptimeDelta = uint32(uptimeSeconds) - lastUptimeSeconds;
-      uint32 submissionTimeDelta = uint32(block.timestamp) - lastSubmissionTime;
+      uint32 uptimeDelta = uint32(uptimeSeconds) - validation.lastUptimeSeconds;
+      uint32 submissionTimeDelta = uint32(block.timestamp) - validation.lastSubmissionTime;
       uint256 effectiveUptime = uint256(uptimeDelta) * $.epochDuration / submissionTimeDelta;
 
       if (effectiveUptime < _expectedUptime()) {

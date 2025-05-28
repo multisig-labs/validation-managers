@@ -343,4 +343,70 @@ contract NFTStakingManagerProofProcessingTest is NFTStakingManagerBase {
     vm.expectRevert(NFTStakingManager.GracePeriodHasPassed.selector);
     nftStakingManager.processProof(uint32(0));
   }
+
+  function test_processProof_invalidUptimeSeconds() public {
+    (bytes32 validationID,) = _createValidator();
+    _createDelegation(validationID, 1);
+
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    // First, submit a valid proof with high uptime
+    _warpToGracePeriod(currentEpoch);
+    uint64 initialUptime = uint64(EPOCH_DURATION * 90 / 100);
+    bytes memory uptimeMessage1 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, initialUptime);
+    _mockGetUptimeWarpMessage(uptimeMessage1, true, uint32(0));
+    nftStakingManager.processProof(uint32(0));
+
+    // Move to next epoch
+    vm.warp(nftStakingManager.getEpochEndTime(currentEpoch) + 1);
+    uint32 nextEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    _warpToGracePeriod(nextEpoch);
+
+    // Try to submit proof with lower uptime (should revert)
+    uint64 lowerUptime = initialUptime - 1000; // Lower than previous
+    bytes memory uptimeMessage2 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, lowerUptime);
+    _mockGetUptimeWarpMessage(uptimeMessage2, true, uint32(1));
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        NFTStakingManager.InvalidUptimeSeconds.selector, lowerUptime, initialUptime
+      )
+    );
+    nftStakingManager.processProof(uint32(1));
+  }
+
+  function test_processProof_validUptimeIncrease() public {
+    (bytes32 validationID,) = _createValidator();
+    _createDelegation(validationID, 1);
+
+    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+
+    // First, submit a valid proof
+    _warpToGracePeriod(currentEpoch);
+    uint64 initialUptime = uint64(EPOCH_DURATION * 90 / 100);
+    bytes memory uptimeMessage1 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, initialUptime);
+    _mockGetUptimeWarpMessage(uptimeMessage1, true, uint32(0));
+    nftStakingManager.processProof(uint32(0));
+
+    // Move to next epoch
+    vm.warp(nftStakingManager.getEpochEndTime(currentEpoch) + 1);
+    uint32 nextEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
+    _warpToGracePeriod(nextEpoch);
+
+    // Submit proof with higher uptime (should succeed)
+    uint64 higherUptime = initialUptime + uint64(EPOCH_DURATION * 90 / 100);
+    bytes memory uptimeMessage2 =
+      ValidatorMessages.packValidationUptimeMessage(validationID, higherUptime);
+    _mockGetUptimeWarpMessage(uptimeMessage2, true, uint32(1));
+
+    // Should not revert
+    nftStakingManager.processProof(uint32(1));
+
+    // Verify the uptime was updated
+    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.lastUptimeSeconds, higherUptime);
+  }
 }
