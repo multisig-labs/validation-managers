@@ -9,7 +9,6 @@ import {
   ValidationInfoView
 } from "../../contracts/NFTStakingManager.sol";
 import { NFTStakingManagerBase } from "../utils/NFTStakingManagerBase.sol";
-import { console } from "forge-std/console.sol";
 
 contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
   ///
@@ -435,8 +434,6 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     vm.prank(delegator);
     (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
       nftStakingManager.claimDelegatorRewards(delegationID, 1);
-    console.log("somethingsomething");
-    console.log(totalRewards);
 
     // Verify they got epoch 1 rewards
     assertEq(totalRewards, epochRewards, "Should receive epoch 1 rewards");
