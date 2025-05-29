@@ -928,7 +928,6 @@ contract NFTStakingManager is
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage delegation = $.delegations[delegationID];
-    EpochInfo storage epochInfo = $.epochs[delegation.endEpoch];
 
     if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
 
@@ -944,13 +943,12 @@ contract NFTStakingManager is
       _claimRewards(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
 
     if (delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0) {
-      if (
-        !delegation.uptimeCheck.contains(delegation.endEpoch)
-          || (
-            delegation.uptimeCheck.contains(delegation.endEpoch)
-              && epochInfo.rewardsMintedForValidationIDs.contains(delegation.validationID)
-          )
-      ) {
+      bool shouldDelete = !delegation.uptimeCheck.contains(delegation.endEpoch)
+        || $.epochs[delegation.endEpoch].rewardsMintedForValidationIDs.contains(
+          delegation.validationID
+        );
+
+      if (shouldDelete) {
         if ($.validations[delegation.validationID].owner != address(0)) {
           $.validations[delegation.validationID].delegationIDs.remove(delegationID);
         }
@@ -983,21 +981,13 @@ contract NFTStakingManager is
 
     totalRewardsToTransfer = 0;
     claimedEpochNumbers = new uint32[](maxEpochs);
-    uint256[] memory rewardsAmounts = new uint256[](maxEpochs); // To store amounts for individual events
 
     for (uint32 i = 0; i < maxEpochs; i++) {
       (uint256 epochNumber, uint256 rewards) = rewardsMap.at(0);
-      // State changes
       claimedEpochNumbers[i] = uint32(epochNumber);
       totalRewardsToTransfer += rewards;
-      rewardsAmounts[i] = rewards;
-      // this remove updates the array indicies. so always remove item 0
       rewardsMap.remove(epochNumber);
-    }
-
-    // Events (after all state changes)
-    for (uint32 i = 0; i < maxEpochs; i++) {
-      emit RewardsClaimed(claimedEpochNumbers[i], id, rewardsAmounts[i]);
+      emit RewardsClaimed(uint32(epochNumber), id, rewards);
     }
 
     return (totalRewardsToTransfer, claimedEpochNumbers);
