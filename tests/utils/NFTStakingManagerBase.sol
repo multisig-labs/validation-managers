@@ -168,7 +168,7 @@ abstract contract NFTStakingManagerBase is Base {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(uptimeSeconds));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
   }
 
   function _createMultipleDelegations(bytes32 validationID, address delegator, uint256 count)
