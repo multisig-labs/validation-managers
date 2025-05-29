@@ -111,4 +111,20 @@ contract NFTStakingManagerValidatorRemovalTest is NFTStakingManagerBase {
     Validator memory v = validatorManager.getValidator(validationID);
     assertEq(uint8(v.status), uint8(ValidatorStatus.PendingRemoved));
   }
+
+  function test_validatorRemoval_pendingAddedDelegation() public {
+    address delegator = getActor("Delegator");
+    (bytes32 validationID, address validator) = _createValidator();
+
+    uint256[] memory tokenIDs = new uint256[](1);
+    tokenIDs[0] = nft.mint(delegator);
+
+    vm.prank(delegator);
+    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
+
+    vm.startPrank(validator);
+    vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
+    nftStakingManager.initiateValidatorRemoval(validationID);
+    vm.stopPrank();
+  }
 }
