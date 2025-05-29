@@ -932,15 +932,24 @@ contract NFTStakingManager is
     (totalRewards, claimedEpochNumbers) =
       _claimRewards(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
 
-    if (
-      delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
-        && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
-    ) {
-      if ($.validations[delegation.validationID].owner != address(0)) {
-        $.validations[delegation.validationID].delegationIDs.remove(delegationID);
+    if (delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0) {
+      uint32 currentEpoch = getEpochByTimestamp(block.timestamp);
+      uint32 lastProcessedEpoch = currentEpoch - 1;
+
+      if (
+        delegation.endEpoch < lastProcessedEpoch
+          || delegation.uptimeCheck.contains(delegation.endEpoch)
+          || (
+            delegation.endEpoch == lastProcessedEpoch
+              && block.timestamp > getEpochEndTime(lastProcessedEpoch) + $.gracePeriod
+          )
+      ) {
+        if ($.validations[delegation.validationID].owner != address(0)) {
+          $.validations[delegation.validationID].delegationIDs.remove(delegationID);
+        }
+        $.delegationsByOwner[delegation.owner].remove(delegationID);
+        delete $.delegations[delegationID];
       }
-      $.delegationsByOwner[delegation.owner].remove(delegationID);
-      delete $.delegations[delegationID];
     }
 
     // Send rewards last

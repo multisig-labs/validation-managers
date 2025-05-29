@@ -402,11 +402,51 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     assertEq(totalRewards, expectedRewards, "Delegator should receive correct rewards");
     assertEq(claimedEpochNumbers.length, 1, "Should claim 1 epoch");
     assertEq(claimedEpochNumbers[0], 1, "Should claim epoch 1");
+  }
 
-    // Verify delegation is cleaned up after claiming all rewards
+  function test_delegatorMissesRewardsAfterLeavingMidEpoch_BUG() public {
+    // Create validator and delegator
+    (bytes32 validationID, address validator) = _createValidator();
+    (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
+
+    vm.prank(validator);
+    nftStakingManager.setPrepaidCredits(validator, delegator, uint32(2 * EPOCH_DURATION));
+
+    // Process proof and mint rewards for epoch 1
+    _warpToGracePeriod(1);
+    _processUptimeProof(validationID, EPOCH_DURATION * 90 / 100);
+    _warpAfterGracePeriod(1);
+    _mintOneReward(validationID, 1);
+
+    // Move to the halfway point of epoch 2
+    uint32 epoch2Start = nftStakingManager.getEpochEndTime(1);
+    vm.warp(epoch2Start + (EPOCH_DURATION / 2) + 1); // Just past halfway point of epoch 2
+
+    // Delegator leaves after halfway point
+    bytes32[] memory delegationIDs = new bytes32[](1);
+    delegationIDs[0] = delegationID;
+    vm.prank(delegator);
+    nftStakingManager.initiateDelegatorRemoval(delegationIDs);
+    nftStakingManager.completeDelegatorRemoval(delegationID, 0);
+
+    _warpToGracePeriod(2);
+
+    // Claim rewards
+    vm.prank(delegator);
+    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+      nftStakingManager.claimDelegatorRewards(delegationID, 1);
+    console.log("somethingsomething");
+    console.log(totalRewards);
+
+    // Verify they got epoch 1 rewards
+    assertEq(totalRewards, epochRewards, "Should receive epoch 1 rewards");
+
+    _warpAfterGracePeriod(2);
+
     DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
-    assertEq(
-      delegationInfo.owner, address(0), "Delegation should be deleted after claiming all rewards"
+
+    assertNotEq(
+      delegationInfo.owner, address(0), "Delegation should still exist for epoch 2 rewards"
     );
   }
 }
