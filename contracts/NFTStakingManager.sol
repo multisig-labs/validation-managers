@@ -1130,7 +1130,7 @@ contract NFTStakingManager is
   /// @param epoch The rewards epoch to fetch tokenIds
   ///
   /// @return tokenIds the tokenIds that have been minted rewards
-  function getRewardsMintedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
+  function getTokenIDsRewardedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochs[epoch].rewardsMintedForTokenIDs.values();
   }

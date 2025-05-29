@@ -301,7 +301,7 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     assertEq(claimedEpochNumbers.length, 2);
   }
 
-  function test_getRewardsMintedForEpoch() public {
+  function test_getTokenIDsRewardedForEpoch() public {
     (bytes32 validationID,) = _createValidator();
     _createDelegation(validationID, 1);
 
@@ -312,7 +312,7 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
 
     _mintOneReward(validationID, epoch);
 
-    uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
+    uint256[] memory tokenIDs = nftStakingManager.getTokenIDsRewardedForEpoch(epoch);
     assertEq(tokenIDs.length, 1);
   }
 
@@ -354,7 +354,7 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     nftStakingManager.mintRewards(validationIDs, epoch);
 
     // Verify rewards were minted for all tokens
-    uint256[] memory tokenIDs = nftStakingManager.getRewardsMintedForEpoch(epoch);
+    uint256[] memory tokenIDs = nftStakingManager.getTokenIDsRewardedForEpoch(epoch);
     assertEq(tokenIDs.length, 3); // 1 + 2 tokens
   }
 
