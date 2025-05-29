@@ -30,7 +30,8 @@ import { IWarpMessenger, WarpMessage } from "./subnet-evm/IWarpMessenger.sol";
 /// @notice Information about each rewards epoch
 struct EpochInfo {
   uint256 totalStakedLicenses;
-  EnumerableSet.UintSet rewardsMintedFor; // which tokenids have rewards been minted for
+  EnumerableSet.UintSet rewardsMintedForTokenIDs; // which tokenIDs have rewards been minted rewards
+  EnumerableSet.Bytes32Set rewardsMintedForValidationIDs; // which valiationIDs have been minted rewards
 }
 
 /// @notice Returnable epoch information
@@ -823,6 +824,7 @@ contract NFTStakingManager is
     for (uint256 i = 0; i < validationIDs.length; i++) {
       ValidationInfo storage validation = $.validations[validationIDs[i]];
       uint256 totalDelegations = validation.delegationIDs.length();
+      $.epochs[epoch].rewardsMintedForValidationIDs.add(validationIDs[i]);
 
       for (uint256 j = 0; j < totalDelegations; j++) {
         bytes32 delegationID = validation.delegationIDs.at(j);
@@ -856,11 +858,11 @@ contract NFTStakingManager is
     }
 
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
-      if (epochInfo.rewardsMintedFor.contains(delegation.tokenIDs[i])) {
+      if (epochInfo.rewardsMintedForTokenIDs.contains(delegation.tokenIDs[i])) {
         return 0;
       }
 
-      epochInfo.rewardsMintedFor.add(delegation.tokenIDs[i]);
+      epochInfo.rewardsMintedForTokenIDs.add(delegation.tokenIDs[i]);
     }
 
     // If the license holder has prepaid credits, deduct them.
@@ -938,16 +940,30 @@ contract NFTStakingManager is
 
     if (delegation.owner != _msgSender()) revert UnauthorizedOwner();
 
+    // if the delegation has ended, only allow claiming after the grace period
+    if (
+      delegation.endEpoch != 0
+        && block.timestamp <= getEpochEndTime(delegation.endEpoch) + $.gracePeriod
+    ) {
+      revert GracePeriodHasNotPassed();
+    }
+
     (totalRewards, claimedEpochNumbers) =
       _claimRewards(delegation.claimableRewardsPerEpoch, delegationID, maxEpochs);
 
-    if (
-      delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0
-        && delegation.endEpoch < getEpochByTimestamp(block.timestamp)
-    ) {
-      $.validations[delegation.validationID].delegationIDs.remove(delegationID);
-      $.delegationsByOwner[delegation.owner].remove(delegationID);
-      delete $.delegations[delegationID];
+    if (delegation.claimableRewardsPerEpoch.length() == 0 && delegation.endEpoch != 0) {
+      bool shouldDelete = !delegation.uptimeCheck.contains(delegation.endEpoch)
+        || $.epochs[delegation.endEpoch].rewardsMintedForValidationIDs.contains(
+          delegation.validationID
+        );
+
+      if (shouldDelete) {
+        if ($.validations[delegation.validationID].owner != address(0)) {
+          $.validations[delegation.validationID].delegationIDs.remove(delegationID);
+        }
+        $.delegationsByOwner[delegation.owner].remove(delegationID);
+        delete $.delegations[delegationID];
+      }
     }
 
     // Send rewards last
@@ -974,21 +990,13 @@ contract NFTStakingManager is
 
     totalRewardsToTransfer = 0;
     claimedEpochNumbers = new uint32[](maxEpochs);
-    uint256[] memory rewardsAmounts = new uint256[](maxEpochs); // To store amounts for individual events
 
     for (uint32 i = 0; i < maxEpochs; i++) {
       (uint256 epochNumber, uint256 rewards) = rewardsMap.at(0);
-      // State changes
       claimedEpochNumbers[i] = uint32(epochNumber);
       totalRewardsToTransfer += rewards;
-      rewardsAmounts[i] = rewards;
-      // this remove updates the array indicies. so always remove item 0
       rewardsMap.remove(epochNumber);
-    }
-
-    // Events (after all state changes)
-    for (uint32 i = 0; i < maxEpochs; i++) {
-      emit RewardsClaimed(claimedEpochNumbers[i], id, rewardsAmounts[i]);
+      emit RewardsClaimed(uint32(epochNumber), id, rewards);
     }
 
     return (totalRewardsToTransfer, claimedEpochNumbers);
@@ -1131,9 +1139,9 @@ contract NFTStakingManager is
   /// @param epoch The rewards epoch to fetch tokenIds
   ///
   /// @return tokenIds the tokenIds that have been minted rewards
-  function getRewardsMintedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
+  function getTokenIDsRewardedForEpoch(uint32 epoch) external view returns (uint256[] memory) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    return $.epochs[epoch].rewardsMintedFor.values();
+    return $.epochs[epoch].rewardsMintedForTokenIDs.values();
   }
 
   /// @notice Gets the current settings for the NFT Staking Manager
