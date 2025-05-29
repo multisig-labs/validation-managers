@@ -18,7 +18,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
     _mintOneReward(validationID, 1);
@@ -38,7 +38,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
 
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
     _mintOneReward(validationID, 1);
@@ -57,7 +57,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
     _mintOneReward(validationID, 1);
@@ -76,7 +76,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
 
     vm.warp(block.timestamp + 1 hours);
     _mintOneReward(validationID, 1);
@@ -114,7 +114,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(1 days * 90 / 100));
     _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-    nftStakingManager.processProof(uint32(0));
+    nftStakingManager.submitUptimeProof(uint32(0));
 
     // Mint rewards after grace period
     vm.warp(epochAfterGracePeriod);
@@ -173,7 +173,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
       bytes memory uptimeMessage =
         ValidatorMessages.packValidationUptimeMessage(validationID1, uptime);
       _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-      nftStakingManager.processProof(uint32(0));
+      nftStakingManager.submitUptimeProof(uint32(0));
 
       // Mint rewards after grace period
       _warpAfterGracePeriod(epoch);
@@ -207,7 +207,7 @@ contract NFTStakingManagerPrepaymentTest is NFTStakingManagerBase {
       bytes memory uptimeMessage =
         ValidatorMessages.packValidationUptimeMessage(validationID2, uptime);
       _mockGetUptimeWarpMessage(uptimeMessage, true, uint32(0));
-      nftStakingManager.processProof(uint32(0));
+      nftStakingManager.submitUptimeProof(uint32(0));
 
       // Mint rewards after grace period
       _warpAfterGracePeriod(epoch);

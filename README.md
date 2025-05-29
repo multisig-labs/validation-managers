@@ -110,7 +110,7 @@ struct EpochInfo {
 
 #### Rewards and Proof Functions
 - `addPrepaidCredits`
-- `processProof`
+- `submitUptimeProof`
 - `mintRewards`
 - `claimRewards`
 
@@ -149,7 +149,7 @@ struct EpochInfo {
 
 ### Rewards and Proof Functions
 
-|var|addPrepaidCredits|processProof|mintRewards|claimRewards|
+|var|addPrepaidCredits|submitUptimeProof|mintRewards|claimRewards|
 |---|---|---|---|---|
 |`map::prepaidCredits`|add|-|-|-|
 |`v::lastUptimeSeconds`|-|update|-|-|

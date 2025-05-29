@@ -753,7 +753,7 @@ contract NFTStakingManager is
   ///      epochs and check that the uptime is sufficient for the current epoch.
   ///
   /// @param messageIndex The index of the warp message that contains the proof
-  function processProof(uint32 messageIndex) external {
+  function submitUptimeProof(uint32 messageIndex) external {
     (bytes32 validationID, uint64 uptimeSeconds) =
       ValidatorMessages.unpackValidationUptimeMessage(_getPChainWarpMessage(messageIndex).payload);
 
