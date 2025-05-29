@@ -428,7 +428,12 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
     nftStakingManager.initiateDelegatorRemoval(delegationIDs);
     nftStakingManager.completeDelegatorRemoval(delegationID, 0);
 
+    // Process proof
     _warpToGracePeriod(2);
+    _processUptimeProof(validationID, EPOCH_DURATION * 2 * 95 / 100);
+
+    // can only claim rewards after grace period for delegators last epoch
+    _warpAfterGracePeriod(2);
 
     // Claim rewards
     vm.prank(delegator);
@@ -437,8 +442,6 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
 
     // Verify they got epoch 1 rewards
     assertEq(totalRewards, epochRewards, "Should receive epoch 1 rewards");
-
-    _warpAfterGracePeriod(2);
 
     DelegationInfoView memory delegationInfo = nftStakingManager.getDelegationInfoView(delegationID);
 
