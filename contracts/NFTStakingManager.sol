@@ -715,6 +715,9 @@ contract NFTStakingManager is
     delegation.status = DelegatorStatus.Removed;
 
     _unlockTokens(delegationID, delegation.tokenIDs);
+
+    $.validations[validationID].licenseCount -= uint32(delegation.tokenIDs.length);
+
     emit CompletedDelegatorRemoval(validationID, delegationID, nonce);
     return delegationID;
   }
@@ -793,10 +796,6 @@ contract NFTStakingManager is
       ) {
         delegation.uptimeCheck.add(previousEpoch);
         epochInfo.totalStakedLicenses += uint32(delegation.tokenIDs.length);
-      }
-
-      if (delegation.status != DelegatorStatus.Active) {
-        validation.licenseCount -= uint32(delegation.tokenIDs.length);
       }
     }
   }

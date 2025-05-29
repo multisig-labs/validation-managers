@@ -4,7 +4,8 @@ pragma solidity 0.8.25;
 import {
   DelegationInfoView,
   DelegatorStatus,
-  NFTStakingManager
+  NFTStakingManager,
+  ValidationInfoView
 } from "../../contracts/NFTStakingManager.sol";
 import { NFTStakingManagerBase } from "../utils/NFTStakingManagerBase.sol";
 import { console2 } from "forge-std-1.9.6/src/console2.sol";
@@ -218,6 +219,9 @@ contract NFTStakingManagerDelegatorRemovalTest is NFTStakingManagerBase {
     (bytes32 validationID,) = _createValidator();
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
+    ValidationInfoView memory validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.licenseCount, 1);
+
     // Initiate removal
     bytes32[] memory delegationIDs = new bytes32[](1);
     delegationIDs[0] = delegationID;
@@ -233,6 +237,10 @@ contract NFTStakingManagerDelegatorRemovalTest is NFTStakingManagerBase {
     for (uint256 i = 0; i < delegation.tokenIDs.length; i++) {
       assertEq(nftStakingManager.getTokenLockedBy(delegation.tokenIDs[i]), bytes32(0));
     }
+
+    // Verify the license count is updated
+    validation = nftStakingManager.getValidationInfoView(validationID);
+    assertEq(validation.licenseCount, 0, "License count should be 0 after removal");
   }
 
   function test_completeDelegatorRemoval_multipleDelegations() public {
