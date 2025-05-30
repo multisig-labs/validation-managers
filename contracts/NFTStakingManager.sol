@@ -1301,7 +1301,6 @@ contract NFTStakingManager is
     NFTStakingManagerStorage storage $,
     NFTStakingManagerSettings calldata settings
   ) private {
-    // NEW FUNCTION
     $.bypassUptimeCheck = settings.bypassUptimeCheck;
     $.uptimePercentageBips = settings.uptimePercentageBips;
     $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
