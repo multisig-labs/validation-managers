@@ -195,9 +195,6 @@ contract NFTStakingManager is
     IWarpMessenger(0x0200000000000000000000000000000000000005);
   INativeMinter public constant NATIVE_MINTER =
     INativeMinter(0x0200000000000000000000000000000000000001);
-  // keccak256(abi.encode(uint256(keccak256("gogopool.storage.NFTStakingManagerStorage")) - 1)) & ~bytes32(uint256(0xff));
-  bytes32 public constant NFT_STAKING_MANAGER_STORAGE_LOCATION =
-    0xb2bea876b5813e5069ed55d22ad257d01245c883a221b987791b00df2f4dfa00;
   bytes32 public constant PREPAYMENT_ROLE = keccak256("PREPAYMENT_ROLE");
 
   /// @notice Basis points conversion factor used for percentage calculations (100% = 10000 bips)
@@ -297,20 +294,7 @@ contract NFTStakingManager is
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
 
-    $.bypassUptimeCheck = settings.bypassUptimeCheck;
-    $.uptimePercentageBips = settings.uptimePercentageBips;
-    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
-    $.initialEpochTimestamp = settings.initialEpochTimestamp;
-    $.epochDuration = settings.epochDuration;
-    $.gracePeriod = settings.gracePeriod;
-    $.minDelegationEpochs = settings.minDelegationEpochs;
-    $.nodeLicenseWeight = settings.nodeLicenseWeight;
-    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
-    $.validatorManager = ValidatorManager(settings.validatorManager);
-    $.nodeLicense = INodeLicense(settings.nodeLicense);
-    $.hardwareLicense = IERC721(settings.hardwareLicense);
-    $.epochRewards = settings.epochRewards;
-
+    _applySettingsFromStruct($, settings);
     $.minimumDelegationFeeBips = 0; // 0%
     $.maximumDelegationFeeBips = 10000; // 100%
   }
@@ -1150,19 +1134,7 @@ contract NFTStakingManager is
     onlyRole(DEFAULT_ADMIN_ROLE)
   {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
-    $.bypassUptimeCheck = settings.bypassUptimeCheck;
-    $.uptimePercentageBips = settings.uptimePercentageBips;
-    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
-    $.initialEpochTimestamp = settings.initialEpochTimestamp;
-    $.epochDuration = settings.epochDuration;
-    $.gracePeriod = settings.gracePeriod;
-    $.minDelegationEpochs = settings.minDelegationEpochs;
-    $.nodeLicenseWeight = settings.nodeLicenseWeight;
-    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
-    $.validatorManager = ValidatorManager(settings.validatorManager);
-    $.nodeLicense = INodeLicense(settings.nodeLicense);
-    $.hardwareLicense = IERC721(settings.hardwareLicense);
-    $.epochRewards = settings.epochRewards;
+    _applySettingsFromStruct($, settings);
   }
 
   /// @notice Gets the current settings for the NFT Staking Manager
@@ -1246,7 +1218,7 @@ contract NFTStakingManager is
   /// @param epochNumber The epoch to calculate rewards for
   ///
   /// @return rewardsPerLicense The rewards per license for the epoch
-  function _calculateRewardsPerLicense(uint32 epochNumber) internal view returns (uint256) {
+  function _calculateRewardsPerLicense(uint32 epochNumber) private view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     uint256 totalStakedLicenses = $.epochs[epochNumber].totalStakedLicenses;
     if (totalStakedLicenses == 0) {
@@ -1258,7 +1230,7 @@ contract NFTStakingManager is
   /// @notice Gets the expected uptime for a given epoch
   ///
   /// @return uptime The expected uptime for the given epoch
-  function _expectedUptime() internal view returns (uint256) {
+  function _expectedUptime() private view returns (uint256) {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     return $.epochDuration * $.uptimePercentageBips / BIPS_CONVERSION_FACTOR;
   }
@@ -1268,7 +1240,7 @@ contract NFTStakingManager is
   /// @param owner The owner of the tokens (must have been verified by caller)
   /// @param delegationID The id of the delegation to lock the tokens for
   /// @param tokenIDs The token IDs to lock
-  function _lockTokens(address owner, bytes32 delegationID, uint256[] memory tokenIDs) internal {
+  function _lockTokens(address owner, bytes32 delegationID, uint256[] memory tokenIDs) private {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     for (uint256 i = 0; i < tokenIDs.length; i++) {
       uint256 tokenID = tokenIDs[i];
@@ -1282,7 +1254,7 @@ contract NFTStakingManager is
   ///
   /// @param validationID The id of the validation to lock the hardware token for
   /// @param tokenID The token ID to lock
-  function _lockHardwareToken(bytes32 validationID, uint256 tokenID) internal {
+  function _lockHardwareToken(bytes32 validationID, uint256 tokenID) private {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     if ($.hardwareTokenLockedBy[tokenID] != bytes32(0)) revert TokenAlreadyLocked(tokenID);
     $.hardwareTokenLockedBy[tokenID] = validationID;
@@ -1292,7 +1264,7 @@ contract NFTStakingManager is
   ///
   /// @param delegationID The id of the delegation to unlock the tokens for
   /// @param tokenIDs The token IDs to unlock
-  function _unlockTokens(bytes32 delegationID, uint256[] memory tokenIDs) internal {
+  function _unlockTokens(bytes32 delegationID, uint256[] memory tokenIDs) private {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     DelegationInfo storage stake = $.delegations[delegationID];
     address owner = stake.owner;
@@ -1305,7 +1277,7 @@ contract NFTStakingManager is
   /// @notice Unlocks a hardware token
   ///
   /// @param tokenID The token ID to unlock
-  function _unlockHardwareToken(uint256 tokenID) internal {
+  function _unlockHardwareToken(uint256 tokenID) private {
     NFTStakingManagerStorage storage $ = _getNFTStakingManagerStorage();
     $.hardwareTokenLockedBy[tokenID] = bytes32(0);
   }
@@ -1314,10 +1286,35 @@ contract NFTStakingManager is
   ///
   /// @return $ The NFT Staking Manager storage
   function _getNFTStakingManagerStorage() private pure returns (NFTStakingManagerStorage storage $) {
+    // Truncate to 9 bytes to reduce bytecode size.
+    uint256 s = uint72(bytes9(keccak256("gogopool.storage.NFTStakingManagerStorage")));
     // solhint-disable-next-line no-inline-assembly
     assembly {
-      $.slot := NFT_STAKING_MANAGER_STORAGE_LOCATION
+      $.slot := s
     }
+  }
+
+  /// @notice Internal helper to apply settings from the struct to storage
+  /// @param $ The NFTStakingManager storage pointer
+  /// @param settings The settings to apply
+  function _applySettingsFromStruct(
+    NFTStakingManagerStorage storage $,
+    NFTStakingManagerSettings calldata settings
+  ) private {
+    // NEW FUNCTION
+    $.bypassUptimeCheck = settings.bypassUptimeCheck;
+    $.uptimePercentageBips = settings.uptimePercentageBips;
+    $.maxLicensesPerValidator = settings.maxLicensesPerValidator;
+    $.initialEpochTimestamp = settings.initialEpochTimestamp;
+    $.epochDuration = settings.epochDuration;
+    $.gracePeriod = settings.gracePeriod;
+    $.minDelegationEpochs = settings.minDelegationEpochs;
+    $.nodeLicenseWeight = settings.nodeLicenseWeight;
+    $.hardwareLicenseWeight = settings.hardwareLicenseWeight;
+    $.validatorManager = ValidatorManager(settings.validatorManager);
+    $.nodeLicense = INodeLicense(settings.nodeLicense);
+    $.hardwareLicense = IERC721(settings.hardwareLicense);
+    $.epochRewards = settings.epochRewards;
   }
 
   /// @notice Gets a P-Chain warp message
@@ -1325,7 +1322,7 @@ contract NFTStakingManager is
   /// @param messageIndex The index of the warp message to get
   ///
   /// @return warpMessage The warp message
-  function _getPChainWarpMessage(uint32 messageIndex) internal view returns (WarpMessage memory) {
+  function _getPChainWarpMessage(uint32 messageIndex) private view returns (WarpMessage memory) {
     (WarpMessage memory warpMessage, bool valid) =
       WARP_MESSENGER.getVerifiedWarpMessage(messageIndex);
     if (!valid) {
