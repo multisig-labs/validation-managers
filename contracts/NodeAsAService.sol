@@ -85,7 +85,7 @@ contract NodeAsAService is
   }
 
   /**
-   * @notice Initializes the contract with required parameters
+   * @notice Initializes the contract with required parameters for new deployments
    * @param _usdc Address of the USDC token contract
    * @param _defaultAdmin Address that will have admin privileges
    * @param _initialPricePerMonthInUSDC Initial price for a 30-day period in USDC (6 decimals)
@@ -100,7 +100,7 @@ contract NodeAsAService is
     address _treasury,
     address _avaxPriceFeed,
     uint256 _payAsYouGoFeePerMonth
-  ) public reinitializer(2) {
+  ) public initializer {
     if (_usdc == address(0)) {
       revert ZeroAddress();
     }
