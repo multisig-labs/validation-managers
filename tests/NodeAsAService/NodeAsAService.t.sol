@@ -6,17 +6,17 @@ pragma solidity 0.8.25;
  * @notice Test suite for the NodeAsAService contract
  * @dev Tests the functionality of node service payments and administrative functions
  */
-import { NodeAsAService, PaymentRecord } from "../contracts/NodeAsAService.sol";
+import { NodeAsAService, PaymentRecord } from "../../contracts/NodeAsAService.sol";
 
 import { IAccessControl } from
-  "../dependencies/@openzeppelin-contracts-5.3.0/access/IAccessControl.sol";
+  "../../dependencies/@openzeppelin-contracts-5.3.0/access/IAccessControl.sol";
 import { ERC1967Proxy } from
-  "../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
+  "../../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
 
-import { MockChainlinkPriceFeed } from "./mocks/MockChainlinkPriceFeed.sol";
-import { MockERC20 } from "./mocks/MockERC20.sol";
+import { MockChainlinkPriceFeed } from "../mocks/MockChainlinkPriceFeed.sol";
+import { MockERC20 } from "../mocks/MockERC20.sol";
 
-import { Base } from "./utils/Base.sol";
+import { Base } from "../utils/Base.sol";
 
 contract NodeAsAServiceTest is Base {
   NodeAsAService public nodeAsAService;
@@ -34,7 +34,6 @@ contract NodeAsAServiceTest is Base {
   uint256 public constant INITIAL_BALANCE = 1000 * 1e6; // 1000 USDC
 
   bytes32 public constant PROTOCOL_MANAGER_ROLE = keccak256("PROTOCOL_MANAGER_ROLE");
-
 
   /**
    * @notice Sets up the test environment
