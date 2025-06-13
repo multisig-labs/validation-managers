@@ -10,6 +10,9 @@ import "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/Initializable.sol"
 import "@openzeppelin-contracts-upgradeable-5.3.0/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin-contracts-upgradeable-5.3.0/utils/ReentrancyGuardUpgradeable.sol";
 
+import { AggregatorV3Interface } from
+  "chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
 /**
  * @title NodeAsAService
  * @notice Contract for managing node rental payments and service records
@@ -43,6 +46,16 @@ contract NodeAsAService is
   mapping(uint32 invoiceNumber => PaymentRecord) public paymentRecord;
   mapping(address buyer => uint32[] invoiceNumbers) public buyerInvoices;
 
+  // Decimal scaling factor
+  // AVAX_DECIMALS = 18;
+  // USD_PRICE_DECIMALS = 18;
+  // USDC_DECIMALS = 6;
+  // DECIMAL_SCALING_FACTOR = 10 ** (AVAX_DECIMALS + USD_PRICE_DECIMALS - USDC_DECIMALS);
+  uint256 private constant DECIMAL_SCALING_FACTOR = 10 ** (18 + 18 - 6); // 1e30
+
+  uint256 public payAsYouGoFeePerMonth; // Fee in AVAX that is required per node per month
+  address public avaxPriceFeed;
+
   event PaidForNodeServices(
     uint32 indexed invoiceNumber,
     address indexed buyer,
@@ -53,6 +66,7 @@ contract NodeAsAService is
     uint256 priceAtPayment
   );
   event LicensePriceUpdated(uint256 oldPrice, uint256 newPrice);
+  event PayAsYouGoFeeUpdated(uint256 oldFee, uint256 newFee);
   event PauseStateChanged(bool isPaused);
 
   error ZeroAddress();
@@ -81,7 +95,9 @@ contract NodeAsAService is
     address _usdc,
     address _defaultAdmin,
     uint256 _initialPricePerMonthInUSDC,
-    address _treasury
+    address _treasury,
+    address _avaxPriceFeed,
+    uint256 _payAsYouGoFeePerMonth
   ) public initializer {
     if (_usdc == address(0)) {
       revert ZeroAddress();
@@ -102,6 +118,8 @@ contract NodeAsAService is
     invoiceNumber = 1; // Initialize, e.g., to start invoices from 1
     isPaused = false;
     treasury = _treasury;
+    avaxPriceFeed = _avaxPriceFeed;
+    payAsYouGoFeePerMonth = _payAsYouGoFeePerMonth;
   }
 
   ///
@@ -129,8 +147,18 @@ contract NodeAsAService is
       revert DurationMustBeGreaterThanZero();
     }
 
+    // Calculate monthly PAYG fee in USDC (6 decimals)
+    // payAsYouGoFeePerMonth is in AVAX (18 decimals)
+    // getAvaxUsdPrice() returns price in USD (18 decimals)
+    // We need result in USDC (6 decimals)
+    // Formula: (AVAX_amount * USD_price_per_AVAX) / scaling_factor = USDC_amount
+    uint256 monthlyPAYGFee = (payAsYouGoFeePerMonth * getAvaxUsdPrice()) / DECIMAL_SCALING_FACTOR;
+
+    uint256 totalMonthlyFee = licensePricePerMonth + monthlyPAYGFee;
+
     // Calculate required payment
-    uint256 requiredPayment = licensePricePerMonth * licenseCount * durationInMonths;
+    uint256 requiredPayment = totalMonthlyFee * licenseCount * durationInMonths;
+
     if (usdc.balanceOf(msg.sender) < requiredPayment) {
       revert InsufficientBalance();
     }
@@ -193,6 +221,24 @@ contract NodeAsAService is
     licensePricePerMonth = _newPricePerMonth;
   }
 
+  /**
+   * @notice Sets the pay as you go fee per month
+   * @param _payAsYouGoFeePerMonth New pay as you go fee per month in AVAX (18 decimals)
+   * @dev Only callable by the protocol manager
+   */
+  function setPayAsYouGoFeePerMonth(uint256 _payAsYouGoFeePerMonth)
+    external
+    onlyRole(PROTOCOL_MANAGER_ROLE)
+  {
+    emit PayAsYouGoFeeUpdated(payAsYouGoFeePerMonth, _payAsYouGoFeePerMonth);
+    payAsYouGoFeePerMonth = _payAsYouGoFeePerMonth;
+  }
+
+  /**
+   * @notice Sets the paused state of the contract
+   * @param _isPaused New paused state
+   * @dev Only callable by the protocol manager
+   */
   function setPaused(bool _isPaused) external onlyRole(PROTOCOL_MANAGER_ROLE) {
     isPaused = _isPaused;
     emit PauseStateChanged(_isPaused);
@@ -213,6 +259,17 @@ contract NodeAsAService is
 
   function getPaymentRecord(uint32 _invoiceNumber) external view returns (PaymentRecord memory) {
     return paymentRecord[_invoiceNumber];
+  }
+
+  /**
+   * @notice Get the price of AVAX in USD from chainlink aggregator
+   * @return price The price of AVAX in USD
+   */
+  function getAvaxUsdPrice() public view returns (uint256) {
+    (, int256 answer,,,) = AggregatorV3Interface(avaxPriceFeed).latestRoundData();
+    uint8 decimals = AggregatorV3Interface(avaxPriceFeed).decimals();
+    uint256 scalingFactor = 18 - decimals;
+    return uint256(answer) * 10 ** scalingFactor;
   }
 
   /**

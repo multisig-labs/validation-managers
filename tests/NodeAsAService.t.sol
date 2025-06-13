@@ -12,12 +12,16 @@ import { IAccessControl } from
   "../dependencies/@openzeppelin-contracts-5.3.0/access/IAccessControl.sol";
 import { ERC1967Proxy } from
   "../dependencies/@openzeppelin-contracts-5.3.0/proxy/ERC1967/ERC1967Proxy.sol";
+
+import { MockChainlinkPriceFeed } from "./mocks/MockChainlinkPriceFeed.sol";
 import { MockERC20 } from "./mocks/MockERC20.sol";
+
 import { Base } from "./utils/Base.sol";
 
 contract NodeAsAServiceTest is Base {
   NodeAsAService public nodeAsAService;
   MockERC20 public usdc;
+  MockChainlinkPriceFeed public avaxPriceFeed;
 
   address public admin;
   address public protocolManager;
@@ -26,9 +30,11 @@ contract NodeAsAServiceTest is Base {
   address public treasury;
 
   uint256 public constant INITIAL_PRICE = 100 * 1e6; // 100 USDC per month (6 decimals)
+  uint256 public constant INITIAL_PAYASYOUGO_FEE = 1.33 ether; // 1.33 AVAX per month
   uint256 public constant INITIAL_BALANCE = 1000 * 1e6; // 1000 USDC
 
   bytes32 public constant PROTOCOL_MANAGER_ROLE = keccak256("PROTOCOL_MANAGER_ROLE");
+
 
   /**
    * @notice Sets up the test environment
@@ -46,12 +52,19 @@ contract NodeAsAServiceTest is Base {
 
     // Deploy mock USDC
     usdc = new MockERC20("USD Coin", "USDC", 6);
+    avaxPriceFeed = new MockChainlinkPriceFeed(1955483503);
 
     // Deploy NodeAsAService
     NodeAsAService implementation = new NodeAsAService();
 
     bytes memory data = abi.encodeWithSelector(
-      NodeAsAService.initialize.selector, address(usdc), admin, INITIAL_PRICE, treasury
+      NodeAsAService.initialize.selector,
+      address(usdc),
+      admin,
+      INITIAL_PRICE,
+      treasury,
+      address(avaxPriceFeed),
+      INITIAL_PAYASYOUGO_FEE
     );
     nodeAsAService = NodeAsAService(address(new ERC1967Proxy(address(implementation), data)));
 
@@ -76,6 +89,7 @@ contract NodeAsAServiceTest is Base {
     assertTrue(nodeAsAService.hasRole(nodeAsAService.DEFAULT_ADMIN_ROLE(), admin));
     assertTrue(nodeAsAService.hasRole(PROTOCOL_MANAGER_ROLE, protocolManager));
     assertEq(nodeAsAService.treasury(), treasury);
+    assertEq(nodeAsAService.avaxPriceFeed(), address(avaxPriceFeed));
   }
 
   /**
@@ -91,8 +105,11 @@ contract NodeAsAServiceTest is Base {
     vm.prank(user1);
     usdc.approve(address(nodeAsAService), type(uint256).max);
 
-    // Calculate expected payment
-    uint256 expectedPayment = INITIAL_PRICE * licenseCount * durationInMonths;
+    // Calculate expected payment using simplified decimal math
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 monthlyPAYGFee = (nodeAsAService.payAsYouGoFeePerMonth() * avaxPriceInUsd) / 1e30;
+
+    uint256 expectedPayment = (INITIAL_PRICE + monthlyPAYGFee) * licenseCount * durationInMonths;
 
     // Pay for services
     vm.prank(user1);
@@ -292,5 +309,224 @@ contract NodeAsAServiceTest is Base {
       )
     );
     nodeAsAService.setPaused(true);
+  }
+
+  /**
+   * @notice Tests updating the pay-as-you-go fee per month
+   * @dev Verifies that protocol managers can update the PAYG fee and it's reflected in calculations
+   */
+  function test_UpdatePayAsYouGoFee() public {
+    uint256 newPayAsYouGoFee = 2.5 ether; // 2.5 AVAX per month
+
+    // Update the fee
+    vm.prank(protocolManager);
+    nodeAsAService.setPayAsYouGoFeePerMonth(newPayAsYouGoFee);
+
+    // Verify the fee was updated
+    assertEq(nodeAsAService.payAsYouGoFeePerMonth(), newPayAsYouGoFee);
+  }
+
+  /**
+   * @notice Tests that pay-as-you-go fee update emits correct event
+   */
+  function test_PayAsYouGoFeeUpdateEmitsEvent() public {
+    uint256 oldFee = nodeAsAService.payAsYouGoFeePerMonth();
+    uint256 newFee = 2.0 ether;
+
+    vm.prank(protocolManager);
+    vm.expectEmit(true, true, true, true);
+    emit NodeAsAService.PayAsYouGoFeeUpdated(oldFee, newFee);
+    nodeAsAService.setPayAsYouGoFeePerMonth(newFee);
+  }
+
+  /**
+   * @notice Tests that payment amount reflects updated pay-as-you-go fee
+   * @dev Verifies that when PAYG fee is updated, the payment calculation uses the new fee
+   */
+  function test_PaymentReflectsUpdatedPayAsYouGoFee() public {
+    uint8 licenseCount = 1;
+    uint8 durationInMonths = 1;
+    bytes32 subnetId = bytes32("test-subnet");
+
+    // Calculate initial expected payment
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 initialMonthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * avaxPriceInUsd) / 1e30;
+    uint256 initialExpectedPayment =
+      (INITIAL_PRICE + initialMonthlyPAYGFee) * licenseCount * durationInMonths;
+
+    // Make first payment with initial fee
+    vm.startPrank(user1);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    // Verify first payment amount
+    PaymentRecord memory record1 = nodeAsAService.getPaymentRecord(1);
+    assertEq(record1.totalAmountPaidInUSDC, initialExpectedPayment);
+
+    // Update pay-as-you-go fee
+    uint256 newPayAsYouGoFee = 2.0 ether; // 2.0 AVAX per month
+    vm.prank(protocolManager);
+    nodeAsAService.setPayAsYouGoFeePerMonth(newPayAsYouGoFee);
+
+    // Calculate new expected payment
+    uint256 newMonthlyPAYGFee = (newPayAsYouGoFee * avaxPriceInUsd) / 1e30;
+    uint256 newExpectedPayment =
+      (INITIAL_PRICE + newMonthlyPAYGFee) * licenseCount * durationInMonths;
+
+    // Make second payment with updated fee
+    vm.startPrank(user2);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    // Verify second payment amount reflects the updated fee
+    PaymentRecord memory record2 = nodeAsAService.getPaymentRecord(2);
+    assertEq(record2.totalAmountPaidInUSDC, newExpectedPayment);
+
+    // Verify the payments are different (assuming different PAYG fees)
+    if (INITIAL_PAYASYOUGO_FEE != newPayAsYouGoFee) {
+      assertTrue(record1.totalAmountPaidInUSDC != record2.totalAmountPaidInUSDC);
+    }
+  }
+
+  /**
+   * @notice Tests payment calculation accuracy with multiple scenarios
+   * @dev Verifies payment calculations are accurate across different license counts and durations
+   */
+  function test_PaymentCalculationAccuracy() public {
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 monthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * avaxPriceInUsd) / 1e30;
+    uint256 totalMonthlyFee = INITIAL_PRICE + monthlyPAYGFee;
+
+    // Test scenario 1: 1 license for 1 month
+    uint8 licenseCount1 = 1;
+    uint8 duration1 = 1;
+    uint256 expectedPayment1 = totalMonthlyFee * licenseCount1 * duration1;
+
+    vm.startPrank(user1);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount1, duration1, bytes32("subnet-1"));
+    vm.stopPrank();
+
+    PaymentRecord memory record1 = nodeAsAService.getPaymentRecord(1);
+    assertEq(record1.totalAmountPaidInUSDC, expectedPayment1);
+
+    // Test scenario 2: 5 licenses for 3 months
+    uint8 licenseCount2 = 5;
+    uint8 duration2 = 3;
+    uint256 expectedPayment2 = totalMonthlyFee * licenseCount2 * duration2;
+
+    vm.startPrank(user2);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount2, duration2, bytes32("subnet-2"));
+    vm.stopPrank();
+
+    PaymentRecord memory record2 = nodeAsAService.getPaymentRecord(2);
+    assertEq(record2.totalAmountPaidInUSDC, expectedPayment2);
+
+    // Test scenario 3: 10 licenses for 12 months
+    uint8 licenseCount3 = 10;
+    uint8 duration3 = 12;
+    uint256 expectedPayment3 = totalMonthlyFee * licenseCount3 * duration3;
+
+    vm.prank(user1);
+    nodeAsAService.payForNodeServices(licenseCount3, duration3, bytes32("subnet-3"));
+
+    PaymentRecord memory record3 = nodeAsAService.getPaymentRecord(3);
+    assertEq(record3.totalAmountPaidInUSDC, expectedPayment3);
+  }
+
+  /**
+   * @notice Tests that non-protocol manager cannot update pay-as-you-go fee
+   */
+  function test_RevertWhen_NonProtocolManagerCannotUpdatePayAsYouGoFee() public {
+    address notAllowed = makeAddr("notAllowed");
+    vm.prank(notAllowed);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IAccessControl.AccessControlUnauthorizedAccount.selector, notAllowed, PROTOCOL_MANAGER_ROLE
+      )
+    );
+    nodeAsAService.setPayAsYouGoFeePerMonth(2.0 ether);
+  }
+
+  /**
+   * @notice Tests that admin cannot update pay-as-you-go fee
+   */
+  function test_RevertWhen_AdminCannotUpdatePayAsYouGoFee() public {
+    vm.prank(admin);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IAccessControl.AccessControlUnauthorizedAccount.selector, admin, PROTOCOL_MANAGER_ROLE
+      )
+    );
+    nodeAsAService.setPayAsYouGoFeePerMonth(2.0 ether);
+  }
+
+  /**
+   * @notice Tests payment calculation with different AVAX prices
+   * @dev Verifies that payment amounts change correctly when AVAX price changes
+   */
+  function test_PaymentCalculationWithDifferentAvaxPrices() public {
+    uint8 licenseCount = 1;
+    uint8 durationInMonths = 1;
+    bytes32 subnetId = bytes32("test-subnet");
+
+    // Make payment with initial AVAX price
+    vm.startPrank(user1);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    PaymentRecord memory record1 = nodeAsAService.getPaymentRecord(1);
+    uint256 payment1 = record1.totalAmountPaidInUSDC;
+
+    // Update AVAX price (simulate price change)
+    uint256 newAvaxPrice = 3000000000; // $30 (8 decimals from Chainlink)
+    avaxPriceFeed.setPrice(newAvaxPrice);
+
+    // Make payment with new AVAX price
+    vm.startPrank(user2);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    PaymentRecord memory record2 = nodeAsAService.getPaymentRecord(2);
+    uint256 payment2 = record2.totalAmountPaidInUSDC;
+
+    // Payments should be different due to different AVAX prices
+    assertTrue(payment1 != payment2);
+
+    // Verify the payment calculation manually
+    uint256 newAvaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 newMonthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * newAvaxPriceInUsd) / 1e30;
+    uint256 expectedPayment2 = (INITIAL_PRICE + newMonthlyPAYGFee) * licenseCount * durationInMonths;
+    assertEq(payment2, expectedPayment2);
+  }
+
+  /**
+   * @notice Tests that zero pay-as-you-go fee works correctly
+   * @dev Verifies that setting PAYG fee to zero results in payments equal to license price only
+   */
+  function test_ZeroPayAsYouGoFee() public {
+    // Set PAYG fee to zero
+    vm.prank(protocolManager);
+    nodeAsAService.setPayAsYouGoFeePerMonth(0);
+
+    uint8 licenseCount = 2;
+    uint8 durationInMonths = 3;
+    bytes32 subnetId = bytes32("test-subnet");
+
+    // Expected payment should be only the license price (no PAYG fee)
+    uint256 expectedPayment = INITIAL_PRICE * licenseCount * durationInMonths;
+
+    vm.startPrank(user1);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    PaymentRecord memory record = nodeAsAService.getPaymentRecord(1);
+    assertEq(record.totalAmountPaidInUSDC, expectedPayment);
   }
 }

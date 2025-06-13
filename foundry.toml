@@ -32,6 +32,7 @@ forge-std = "1.9.6"
 "@openzeppelin-contracts-upgradeable" = "5.3.0"
 solmate = "6.8.0"
 icm-contracts = { version = "2.0.0", git = "https://github.com/ava-labs/icm-contracts", tag = "validator-manager-v2.0.0" }
+smartcontractkit-chainlink = "2.24.0"
 
 [soldeer]
 # whether Soldeer manages remappings
