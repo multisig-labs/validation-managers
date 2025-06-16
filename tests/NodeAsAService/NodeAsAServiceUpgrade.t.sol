@@ -84,33 +84,6 @@ contract NodeAsAServiceUpgradeTest is Base {
   }
 
   /**
-   * @notice Creates sample payment data in V1 to test data preservation
-   */
-  function _createSampleDataInV1() internal {
-    NodeAsAServiceV1 v1Contract = NodeAsAServiceV1(address(proxy));
-
-    // User1 makes a payment
-    vm.startPrank(user1);
-    usdc.approve(address(proxy), type(uint256).max);
-    v1Contract.payForNodeServices(5, 3, bytes32("subnet-1")); // 5 licenses for 3 months
-    vm.stopPrank();
-
-    // User2 makes a payment
-    vm.startPrank(user2);
-    usdc.approve(address(proxy), type(uint256).max);
-    v1Contract.payForNodeServices(2, 6, bytes32("subnet-2")); // 2 licenses for 6 months
-    vm.stopPrank();
-
-    // Protocol manager updates price
-    vm.prank(protocolManager);
-    v1Contract.setLicensePricePerMonth(150 * 1e6); // Update to 150 USDC
-
-    // User1 makes another payment with new price
-    vm.prank(user1);
-    v1Contract.payForNodeServices(1, 1, bytes32("subnet-3")); // 1 license for 1 month
-  }
-
-  /**
    * @notice Tests the upgrade process from V1 to V2
    */
   function test_UpgradeFromV1ToV2() public {
@@ -236,6 +209,239 @@ contract NodeAsAServiceUpgradeTest is Base {
     // Test new V2 function works
     uint256 avaxPrice = nodeAsAServiceV2.getAvaxUsdPrice();
     assertTrue(avaxPrice > 0, "AVAX price should be available");
+  }
+
+  /**
+   * @notice Tests comprehensive fund preservation during upgrade
+   */
+  function test_FundPreservationDuringUpgrade() public {
+    NodeAsAServiceV1 v1Contract = NodeAsAServiceV1(address(proxy));
+
+    // Record initial contract balance from setUp (created from _createSampleDataInV1)
+    uint256 initialBalance = usdc.balanceOf(address(proxy));
+    assertTrue(initialBalance > 0, "Should have initial balance from sample data");
+
+    // Add more funds through additional payments
+    vm.startPrank(user1);
+    usdc.approve(address(proxy), type(uint256).max);
+    v1Contract.payForNodeServices(10, 12, bytes32("large-payment")); // Large payment
+    vm.stopPrank();
+
+    vm.startPrank(user2);
+    usdc.approve(address(proxy), type(uint256).max);
+    v1Contract.payForNodeServices(7, 24, bytes32("very-large-payment")); // Very large payment
+    vm.stopPrank();
+
+    // Record balance before upgrade
+    uint256 balanceBeforeUpgrade = usdc.balanceOf(address(proxy));
+    assertTrue(balanceBeforeUpgrade > initialBalance, "Balance should have increased");
+
+    // Also record individual user payments to verify accounting
+    PaymentRecord memory largePayment;
+    {
+      // Use a block to avoid stack too deep
+      (uint8 lc1, uint8 d1, uint256 ta1, uint256 pm1, address b1, bytes32 s1) =
+        _getPaymentRecordData(v1Contract, 4);
+      largePayment = PaymentRecord({
+        licenseCount: lc1,
+        durationInMonths: d1,
+        totalAmountPaidInUSDC: ta1,
+        pricePerMonthInUSDC: pm1,
+        buyer: b1,
+        subnetId: s1
+      });
+    }
+
+    // Deploy V2 implementation
+    nodeAsAServiceV2Implementation = new NodeAsAServiceV2();
+
+    // Perform upgrade
+    vm.prank(admin);
+    v1Contract.upgradeToAndCall(
+      address(nodeAsAServiceV2Implementation),
+      abi.encodeWithSelector(
+        NodeAsAServiceV2.initializeV2.selector, address(avaxPriceFeed), INITIAL_PAYASYOUGO_FEE
+      )
+    );
+
+    // Cast to V2
+    nodeAsAServiceV2 = NodeAsAServiceV2(address(proxy));
+
+    // Verify exact balance preservation
+    uint256 balanceAfterUpgrade = usdc.balanceOf(address(proxy));
+    assertEq(
+      balanceAfterUpgrade, balanceBeforeUpgrade, "Exact balance must be preserved during upgrade"
+    );
+
+    // Verify payment records that contributed to the balance are intact
+    PaymentRecord memory preservedLargePayment = nodeAsAServiceV2.getPaymentRecord(4);
+
+    assertEq(
+      preservedLargePayment.totalAmountPaidInUSDC,
+      largePayment.totalAmountPaidInUSDC,
+      "Large payment amount should be preserved"
+    );
+
+    // Verify funds are still withdrawable after upgrade
+    uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+
+    vm.prank(protocolManager);
+    nodeAsAServiceV2.withdrawFunds(balanceAfterUpgrade);
+
+    assertEq(usdc.balanceOf(address(proxy)), 0, "Contract should be empty after withdrawal");
+    assertEq(
+      usdc.balanceOf(treasury),
+      treasuryBalanceBefore + balanceAfterUpgrade,
+      "Treasury should receive all preserved funds"
+    );
+  }
+
+  /**
+   * @notice Tests fund preservation with zero balance edge case
+   */
+  function test_FundPreservationWithZeroBalance() public {
+    // Deploy fresh V1 with no payments (zero balance)
+    NodeAsAServiceV1 freshV1 = new NodeAsAServiceV1();
+    bytes memory initData = abi.encodeWithSelector(
+      NodeAsAServiceV1.initialize.selector, address(usdc), admin, INITIAL_PRICE, treasury
+    );
+    ERC1967Proxy freshProxy = new ERC1967Proxy(address(freshV1), initData);
+
+    // Verify zero balance
+    assertEq(usdc.balanceOf(address(freshProxy)), 0, "Fresh contract should have zero balance");
+
+    // Deploy V2 implementation
+    NodeAsAServiceV2 v2Implementation = new NodeAsAServiceV2();
+
+    // Perform upgrade
+    vm.prank(admin);
+    NodeAsAServiceV1(address(freshProxy)).upgradeToAndCall(
+      address(v2Implementation),
+      abi.encodeWithSelector(
+        NodeAsAServiceV2.initializeV2.selector, address(avaxPriceFeed), INITIAL_PAYASYOUGO_FEE
+      )
+    );
+
+    // Verify zero balance is preserved
+    assertEq(
+      usdc.balanceOf(address(freshProxy)), 0, "Zero balance should be preserved after upgrade"
+    );
+
+    // Verify the contract still works (can receive payments)
+    NodeAsAServiceV2 freshV2 = NodeAsAServiceV2(address(freshProxy));
+
+    vm.prank(admin);
+    freshV2.grantRole(PROTOCOL_MANAGER_ROLE, protocolManager);
+
+    vm.startPrank(user1);
+    usdc.approve(address(freshProxy), 1000 * 1e6);
+    freshV2.payForNodeServices(1, 1, bytes32("test-payment"));
+    vm.stopPrank();
+
+    assertTrue(
+      usdc.balanceOf(address(freshProxy)) > 0, "Contract should accept payments after upgrade"
+    );
+  }
+
+  /**
+   * @notice Tests fund preservation with maximum realistic balance
+   */
+  function test_FundPreservationWithLargeBalance() public {
+    NodeAsAServiceV1 v1Contract = NodeAsAServiceV1(address(proxy));
+
+    // Create a very large balance by making many payments
+    uint256 largePaymentAmount = 500_000 * 1e6; // 500,000 USDC worth of payments
+    usdc.mint(user1, largePaymentAmount);
+    usdc.mint(user2, largePaymentAmount);
+
+    vm.startPrank(user1);
+    usdc.approve(address(proxy), largePaymentAmount);
+    // Make multiple large payments to accumulate significant balance
+    v1Contract.payForNodeServices(100, 12, bytes32("massive-payment-1"));
+    v1Contract.payForNodeServices(200, 6, bytes32("massive-payment-2"));
+    vm.stopPrank();
+
+    vm.startPrank(user2);
+    usdc.approve(address(proxy), largePaymentAmount);
+    v1Contract.payForNodeServices(150, 8, bytes32("massive-payment-3"));
+    vm.stopPrank();
+
+    // Record the large balance
+    uint256 largeBalanceBeforeUpgrade = usdc.balanceOf(address(proxy));
+
+    // Deploy V2 implementation
+    nodeAsAServiceV2Implementation = new NodeAsAServiceV2();
+
+    // Perform upgrade
+    vm.prank(admin);
+    v1Contract.upgradeToAndCall(
+      address(nodeAsAServiceV2Implementation),
+      abi.encodeWithSelector(
+        NodeAsAServiceV2.initializeV2.selector, address(avaxPriceFeed), INITIAL_PAYASYOUGO_FEE
+      )
+    );
+
+    // Cast to V2
+    nodeAsAServiceV2 = NodeAsAServiceV2(address(proxy));
+
+    // Verify large balance is perfectly preserved
+    uint256 largeBalanceAfterUpgrade = usdc.balanceOf(address(proxy));
+    assertEq(
+      largeBalanceAfterUpgrade, largeBalanceBeforeUpgrade, "Large balance must be exactly preserved"
+    );
+
+    // Verify we can still withdraw the large amount
+    uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+
+    vm.prank(protocolManager);
+    nodeAsAServiceV2.withdrawFunds(largeBalanceAfterUpgrade);
+
+    assertEq(
+      usdc.balanceOf(treasury),
+      treasuryBalanceBefore + largeBalanceAfterUpgrade,
+      "Treasury should receive full large balance"
+    );
+  }
+
+  /**
+   * @notice Tests that partial fund withdrawals work correctly after upgrade
+   */
+  function test_PartialFundWithdrawalAfterUpgrade() public {
+    // First perform upgrade to get V2
+    test_UpgradeFromV1ToV2();
+
+    uint256 totalBalance = usdc.balanceOf(address(proxy));
+    assertTrue(totalBalance > 0, "Should have some balance to test with");
+
+    // Withdraw only half the funds
+    uint256 partialAmount = totalBalance / 2;
+    uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+
+    vm.prank(protocolManager);
+    nodeAsAServiceV2.withdrawFunds(partialAmount);
+
+    // Verify partial withdrawal
+    assertEq(
+      usdc.balanceOf(address(proxy)),
+      totalBalance - partialAmount,
+      "Contract should have remaining balance"
+    );
+    assertEq(
+      usdc.balanceOf(treasury),
+      treasuryBalanceBefore + partialAmount,
+      "Treasury should receive partial amount"
+    );
+
+    // Verify we can still make payments with remaining balance in contract
+    vm.startPrank(user1);
+    nodeAsAServiceV2.payForNodeServices(1, 1, bytes32("post-partial-withdrawal"));
+    vm.stopPrank();
+
+    // Contract balance should have increased again
+    assertTrue(
+      usdc.balanceOf(address(proxy)) > totalBalance - partialAmount,
+      "Contract balance should increase after new payment"
+    );
   }
 
   /**
@@ -366,6 +572,33 @@ contract NodeAsAServiceUpgradeTest is Base {
       nextInvoiceNumber + 1,
       "Invoice number should increment correctly"
     );
+  }
+
+  /**
+   * @notice Creates sample payment data in V1 to test data preservation
+   */
+  function _createSampleDataInV1() internal {
+    NodeAsAServiceV1 v1Contract = NodeAsAServiceV1(address(proxy));
+
+    // User1 makes a payment
+    vm.startPrank(user1);
+    usdc.approve(address(proxy), type(uint256).max);
+    v1Contract.payForNodeServices(5, 3, bytes32("subnet-1")); // 5 licenses for 3 months
+    vm.stopPrank();
+
+    // User2 makes a payment
+    vm.startPrank(user2);
+    usdc.approve(address(proxy), type(uint256).max);
+    v1Contract.payForNodeServices(2, 6, bytes32("subnet-2")); // 2 licenses for 6 months
+    vm.stopPrank();
+
+    // Protocol manager updates price
+    vm.prank(protocolManager);
+    v1Contract.setLicensePricePerMonth(150 * 1e6); // Update to 150 USDC
+
+    // User1 makes another payment with new price
+    vm.prank(user1);
+    v1Contract.payForNodeServices(1, 1, bytes32("subnet-3")); // 1 license for 1 month
   }
 
   /**

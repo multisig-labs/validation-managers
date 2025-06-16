@@ -362,7 +362,7 @@ contract NFTStakingManagerNonceTest is NFTStakingManagerBase {
   }
 
   function test_nonce_sequentialIncrement() public {
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
 
     address delegator1 = getActor("Delegator1");
     address delegator2 = getActor("Delegator2");
@@ -390,7 +390,7 @@ contract NFTStakingManagerNonceTest is NFTStakingManagerBase {
   }
 
   function test_nonce_removalNonceTracking() public {
-    (bytes32 validationID, ) = _createValidator();
+    (bytes32 validationID,) = _createValidator();
     (bytes32 delegationID, address delegator) = _createDelegation(validationID, 1);
 
     // Initiate removal
