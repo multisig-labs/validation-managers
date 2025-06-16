@@ -222,8 +222,6 @@ contract NFTStakingManagerProofProcessingTest is NFTStakingManagerBase {
     (bytes32 validationID,) = _createValidator();
     _createDelegation(validationID, 1);
 
-    uint32 currentEpoch = nftStakingManager.getEpochByTimestamp(block.timestamp);
-
     // Try to process proof before epoch has ended
     bytes memory uptimeMessage =
       ValidatorMessages.packValidationUptimeMessage(validationID, uint64(EPOCH_DURATION * 90 / 100));

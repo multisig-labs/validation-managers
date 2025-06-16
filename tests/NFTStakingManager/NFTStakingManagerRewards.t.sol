@@ -437,7 +437,7 @@ contract NFTStakingManagerRewardsTest is NFTStakingManagerBase {
 
     // Claim rewards
     vm.prank(delegator);
-    (uint256 totalRewards, uint32[] memory claimedEpochNumbers) =
+    (uint256 totalRewards, ) =
       nftStakingManager.claimDelegatorRewards(delegationID, 1);
 
     // Verify they got epoch 1 rewards
