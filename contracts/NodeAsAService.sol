@@ -273,6 +273,11 @@ contract NodeAsAService is
     return buyerInvoices[_buyer];
   }
 
+  /**
+   * @notice Gets a payment record for a given invoice number
+   * @param _invoiceNumber Invoice number to get the record for
+   * @return Payment record for the given invoice number
+   */
   function getPaymentRecord(uint32 _invoiceNumber) external view returns (PaymentRecord memory) {
     return paymentRecord[_invoiceNumber];
   }
@@ -286,6 +291,15 @@ contract NodeAsAService is
     uint8 decimals = AggregatorV3Interface(avaxPriceFeed).decimals();
     uint256 scalingFactor = 18 - decimals;
     return uint256(answer) * 10 ** scalingFactor;
+  }
+
+  /**
+   * @notice returns the cost per month for validation services
+   * @return price per month in USDC (6 decimals)
+   */
+  function getTotalPricePerMonth() public view returns (uint256) {
+    uint256 monthlyPAYGFee = (payAsYouGoFeePerMonth * getAvaxUsdPrice()) / DECIMAL_SCALING_FACTOR;
+    return licensePricePerMonth + monthlyPAYGFee;
   }
 
   /**

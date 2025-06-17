@@ -528,4 +528,143 @@ contract NodeAsAServiceTest is Base {
     PaymentRecord memory record = nodeAsAService.getPaymentRecord(1);
     assertEq(record.totalAmountPaidInUSDC, expectedPayment);
   }
+
+  /**
+   * @notice Tests getTotalPricePerMonth function returns correct total cost
+   * @dev Verifies that the function correctly calculates license price + PAYG fee in USDC
+   */
+  function test_GetTotalPricePerMonth() public view {
+    // Calculate expected total price manually
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 monthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * avaxPriceInUsd) / 1e30;
+    uint256 expectedTotalPrice = INITIAL_PRICE + monthlyPAYGFee;
+
+    // Get the actual result from the function
+    uint256 actualTotalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Verify they match
+    assertEq(actualTotalPrice, expectedTotalPrice);
+
+    // Also verify the components are correct
+    assertEq(nodeAsAService.licensePricePerMonth(), INITIAL_PRICE);
+    assertEq(nodeAsAService.payAsYouGoFeePerMonth(), INITIAL_PAYASYOUGO_FEE);
+  }
+
+  /**
+   * @notice Tests getTotalPricePerMonth with updated license price
+   * @dev Verifies the function reflects changes when license price is updated
+   */
+  function test_GetTotalPricePerMonthAfterLicensePriceUpdate() public {
+    uint256 newLicensePrice = 150 * 1e6; // 150 USDC per month
+
+    // Update license price
+    vm.prank(protocolManager);
+    nodeAsAService.setLicensePricePerMonth(newLicensePrice);
+
+    // Calculate expected total price with new license price
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 monthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * avaxPriceInUsd) / 1e30;
+    uint256 expectedTotalPrice = newLicensePrice + monthlyPAYGFee;
+
+    // Get the actual result from the function
+    uint256 actualTotalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Verify they match
+    assertEq(actualTotalPrice, expectedTotalPrice);
+  }
+
+  /**
+   * @notice Tests getTotalPricePerMonth with updated PAYG fee
+   * @dev Verifies the function reflects changes when pay-as-you-go fee is updated
+   */
+  function test_GetTotalPricePerMonthAfterPayAsYouGoFeeUpdate() public {
+    uint256 newPayAsYouGoFee = 2.0 ether; // 2.0 AVAX per month
+
+    // Update PAYG fee
+    vm.prank(protocolManager);
+    nodeAsAService.setPayAsYouGoFeePerMonth(newPayAsYouGoFee);
+
+    // Calculate expected total price with new PAYG fee
+    uint256 avaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 monthlyPAYGFee = (newPayAsYouGoFee * avaxPriceInUsd) / 1e30;
+    uint256 expectedTotalPrice = INITIAL_PRICE + monthlyPAYGFee;
+
+    // Get the actual result from the function
+    uint256 actualTotalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Verify they match
+    assertEq(actualTotalPrice, expectedTotalPrice);
+  }
+
+  /**
+   * @notice Tests getTotalPricePerMonth with different AVAX prices
+   * @dev Verifies the function correctly adjusts when AVAX price changes
+   */
+  function test_GetTotalPricePerMonthWithDifferentAvaxPrices() public {
+    // Record initial total price
+    uint256 initialTotalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Change AVAX price
+    uint256 newAvaxPrice = 3000000000; // $30 (8 decimals from Chainlink)
+    avaxPriceFeed.setPrice(newAvaxPrice);
+
+    // Get new total price
+    uint256 newTotalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Calculate expected new total price
+    uint256 newAvaxPriceInUsd = nodeAsAService.getAvaxUsdPrice();
+    uint256 newMonthlyPAYGFee = (INITIAL_PAYASYOUGO_FEE * newAvaxPriceInUsd) / 1e30;
+    uint256 expectedNewTotalPrice = INITIAL_PRICE + newMonthlyPAYGFee;
+
+    // Verify the new total price is correct
+    assertEq(newTotalPrice, expectedNewTotalPrice);
+
+    // Verify prices are different (assuming different AVAX prices result in different totals)
+    if (INITIAL_PAYASYOUGO_FEE > 0) {
+      assertTrue(initialTotalPrice != newTotalPrice);
+    }
+  }
+
+  /**
+   * @notice Tests getTotalPricePerMonth with zero PAYG fee
+   * @dev Verifies the function returns only license price when PAYG fee is zero
+   */
+  function test_GetTotalPricePerMonthWithZeroPayAsYouGoFee() public {
+    // Set PAYG fee to zero
+    vm.prank(protocolManager);
+    nodeAsAService.setPayAsYouGoFeePerMonth(0);
+
+    // Get total price
+    uint256 totalPrice = nodeAsAService.getTotalPricePerMonth();
+
+    // Should equal just the license price
+    assertEq(totalPrice, INITIAL_PRICE);
+    assertEq(totalPrice, nodeAsAService.licensePricePerMonth());
+  }
+
+  /**
+   * @notice Tests that getTotalPricePerMonth matches payment calculation logic
+   * @dev Verifies the function returns the same value used in payForNodeServices
+   */
+  function test_GetTotalPricePerMonthMatchesPaymentLogic() public {
+    uint8 licenseCount = 1;
+    uint8 durationInMonths = 1;
+    bytes32 subnetId = bytes32("test-subnet");
+
+    // Get the total price per month from the function
+    uint256 totalPricePerMonth = nodeAsAService.getTotalPricePerMonth();
+
+    // Calculate expected payment for 1 license for 1 month
+    uint256 expectedPayment = totalPricePerMonth * licenseCount * durationInMonths;
+
+    // Make the actual payment
+    vm.startPrank(user1);
+    usdc.approve(address(nodeAsAService), type(uint256).max);
+    nodeAsAService.payForNodeServices(licenseCount, durationInMonths, subnetId);
+    vm.stopPrank();
+
+    // Verify the payment record matches our calculation
+    PaymentRecord memory record = nodeAsAService.getPaymentRecord(1);
+    assertEq(record.totalAmountPaidInUSDC, expectedPayment);
+  }
 }
