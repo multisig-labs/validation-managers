@@ -163,14 +163,7 @@ contract NodeAsAService is
       revert DurationMustBeGreaterThanZero();
     }
 
-    // Calculate monthly PAYG fee in USDC (6 decimals)
-    // payAsYouGoFeePerMonth is in AVAX (18 decimals)
-    // getAvaxUsdPrice() returns price in USD (18 decimals)
-    // We need result in USDC (6 decimals)
-    // Formula: (AVAX_amount * USD_price_per_AVAX) / scaling_factor = USDC_amount
-    uint256 monthlyPAYGFee = (payAsYouGoFeePerMonth * getAvaxUsdPrice()) / DECIMAL_SCALING_FACTOR;
-
-    uint256 totalMonthlyFee = licensePricePerMonth + monthlyPAYGFee;
+    uint256 totalMonthlyFee = getTotalPricePerMonth();
 
     // Calculate required payment
     uint256 requiredPayment = totalMonthlyFee * licenseCount * durationInMonths;
@@ -298,6 +291,11 @@ contract NodeAsAService is
    * @return price per month in USDC (6 decimals)
    */
   function getTotalPricePerMonth() public view returns (uint256) {
+    // Calculate monthly PAYG fee in USDC (6 decimals)
+    // payAsYouGoFeePerMonth is in AVAX (18 decimals)
+    // getAvaxUsdPrice() returns price in USD (18 decimals)
+    // We need result in USDC (6 decimals)
+    // Formula: (AVAX_amount * USD_price_per_AVAX) / scaling_factor = USDC_amount
     uint256 monthlyPAYGFee = (payAsYouGoFeePerMonth * getAvaxUsdPrice()) / DECIMAL_SCALING_FACTOR;
     return licensePricePerMonth + monthlyPAYGFee;
   }
