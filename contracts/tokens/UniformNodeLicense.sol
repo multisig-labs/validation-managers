@@ -20,4 +20,4 @@ contract UniformNodeLicense is NodeLicense {
     _requireOwned(tokenId);
     return _baseURI();
   }
-} 
+}

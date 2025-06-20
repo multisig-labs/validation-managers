@@ -120,7 +120,7 @@ contract NFTStakingManagerValidatorRemovalTest is NFTStakingManagerBase {
     tokenIDs[0] = nft.mint(delegator);
 
     vm.prank(delegator);
-    bytes32 delegationID = nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
+    nftStakingManager.initiateDelegatorRegistration(validationID, tokenIDs);
 
     vm.startPrank(validator);
     vm.expectRevert(NFTStakingManager.ValidatorHasActiveDelegations.selector);
